@@ -178,7 +178,7 @@ export const useImportWizard = () => {
             buildTransferKey(
               transfer.fromAccountId,
               transfer.toAccountId,
-              getDateKey(transfer.date),
+              getDateKey(transfer.date.getTime()),
               transfer.amount
             ) === key
         );
@@ -189,7 +189,7 @@ export const useImportWizard = () => {
         (transaction) =>
           buildTransactionKey(
             transaction.accountId,
-            getDateKey(transaction.date),
+            getDateKey(transaction.date.getTime()),
             transaction.amount,
             transaction.description || ""
           ) === key
@@ -224,7 +224,11 @@ export const useImportWizard = () => {
     const key = buildBalanceKey(account.id, row.date, balanceValue);
 
     const matchesHistory = (history: BalanceHistory | InvestmentHistory) =>
-      buildBalanceKey(history.accountId, getDateKey(history.date), history.balance) === key;
+      buildBalanceKey(
+        history.accountId,
+        getDateKey(new Date(history.date).getTime()),
+        history.balance
+      ) === key;
 
     const isDuplicate =
       existingBalances.some(matchesHistory) || existingInvestments.some(matchesHistory);
@@ -443,7 +447,7 @@ export const useImportWizard = () => {
           return {
             type: row.type,
             accountId: account.id,
-            category: CATEGORIES.includes(row.category) ? row.category : "Other",
+            category: CATEGORIES.includes(row.category as any) ? row.category as any : "Other Expenses",
             amount: Number(row.amount),
             description: row.description || null,
             date: row.date,

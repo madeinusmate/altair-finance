@@ -52,7 +52,6 @@ export const CsvReviewTable = <Row extends RowWithIssues>({
   useEffect(() => {
     const element = containerRef.current;
     if (!element || typeof ResizeObserver === "undefined") {
-      setViewportHeight(height);
       return undefined;
     }
 

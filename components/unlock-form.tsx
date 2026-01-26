@@ -62,6 +62,24 @@ export const UnlockForm = () => {
               placeholder="Enter your encryption key…"
               value={key}
               onChange={(e) => setKey(e.target.value)}
+              onPaste={async (e) => {
+                e.preventDefault();
+                let pastedText = "";
+                
+                // Try standard clipboard API first
+                try {
+                  pastedText = e.clipboardData.getData("text");
+                } catch (err) {
+                  // Fallback to Electron clipboard API if available
+                  if (typeof window !== "undefined" && (window as any).electron?.clipboard) {
+                    pastedText = (window as any).electron.clipboard.readText();
+                  }
+                }
+                
+                if (pastedText && !isLoading) {
+                  setKey(pastedText);
+                }
+              }}
               disabled={isLoading}
               spellCheck={false}
               autoFocus

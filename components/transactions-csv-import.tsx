@@ -78,7 +78,7 @@ export const TransactionsCsvImport = () => {
             buildTransferKey(
               transfer.fromAccountId,
               transfer.toAccountId,
-              getDateKey(transfer.date),
+              getDateKey(transfer.date.getTime()),
               transfer.amount
             ) === key
         );
@@ -89,7 +89,7 @@ export const TransactionsCsvImport = () => {
         (transaction) =>
           buildTransactionKey(
             transaction.accountId,
-            getDateKey(transaction.date),
+            getDateKey(transaction.date.getTime()),
             transaction.amount,
             transaction.description || ""
           ) === key

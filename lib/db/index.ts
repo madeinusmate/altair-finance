@@ -5,7 +5,29 @@ import * as crypto from "crypto";
 import path from "path";
 import fs from "fs";
 
-const DB_PATH = path.join(process.cwd(), "data", "netly.db");
+type DatabaseInstance = InstanceType<typeof Database>;
+
+const getDbPath = (): string => {
+  // ELECTRON_USER_DATA is set by the Electron main process when spawning Next.js
+  // This works for both the Electron renderer and the spawned Next.js server
+  const electronUserData = process.env.ELECTRON_USER_DATA;
+  
+  console.log(`[DB] getDbPath called`);
+  console.log(`[DB] ELECTRON_USER_DATA env var: ${electronUserData || "(not set)"}`);
+  console.log(`[DB] process.cwd(): ${process.cwd()}`);
+  
+  if (electronUserData) {
+    const dbPath = path.join(electronUserData, "netly.db");
+    console.log(`[DB] Using Electron user data path: ${dbPath}`);
+    return dbPath;
+  }
+  
+  // Fallback for development (running Next.js directly)
+  const devPath = path.join(process.cwd(), "data", "netly.db");
+  console.log(`[DB] Using development path: ${devPath}`);
+  return devPath;
+};
+
 const META_ID = "primary";
 const SCHEMA_VERSION = 1;
 
@@ -16,21 +38,23 @@ const escapeSqlString = (value: string): string => {
   return value.replaceAll("'", "''");
 };
 
-const applyCipherPragmas = (sqlite: Database, encryptionKey: string): void => {
+const applyCipherPragmas = (sqlite: DatabaseInstance, encryptionKey: string): void => {
   sqlite.pragma("cipher = 'sqlcipher'");
   sqlite.pragma("legacy = 4");
   sqlite.pragma(`key = '${escapeSqlString(encryptionKey)}'`);
   sqlite.pragma("journal_mode = WAL");
 };
 
-const openSqlite = (encryptionKey: string): Database => {
+const openSqlite = (encryptionKey: string): DatabaseInstance => {
+  const dbPath = getDbPath();
+  
   // Ensure data directory exists
-  const dataDir = path.dirname(DB_PATH);
+  const dataDir = path.dirname(dbPath);
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
-  const sqlite = new Database(DB_PATH);
+  const sqlite = new Database(dbPath);
   applyCipherPragmas(sqlite, encryptionKey);
   return sqlite;
 };
@@ -145,12 +169,12 @@ export const validateKey = (encryptionKey: string): boolean => {
 };
 
 export const dbFileExists = (): boolean => {
-  return fs.existsSync(DB_PATH);
+  const dbPath = getDbPath();
+  console.log(`[DB] Checking if database exists at: ${dbPath}`);
+  return fs.existsSync(dbPath);
 };
 
-export const getDbPath = (): string => {
-  return DB_PATH;
-};
+export { getDbPath };
 
 export const clearConnectionCache = (): void => {
   connectionCache.clear();

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { dbFileExists, validateKey } from "@/lib/db";
 import { validateEncryptionKey } from "@/lib/encryption";
 
+// Force dynamic to ensure environment variables are read at runtime
+export const dynamic = "force-dynamic";
+
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
   try {
     const { key } = await request.json();

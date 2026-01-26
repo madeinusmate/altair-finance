@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CsvImportSummary } from "@/components/csv-import/csv-import-summary";
 import { CsvReviewTable } from "@/components/csv-import/csv-review-table";
 import { CsvUpload } from "@/components/csv-import/csv-upload";
@@ -82,9 +82,19 @@ const ImportWizardPage = () => {
 
   const canProceedFromReview = summary.invalid === 0 && rows.length > 0;
 
+  // Reset filter when entering review step or when import type changes
+  const resetKey = `${step}-${importType}`;
+  const prevResetKeyRef = useRef(resetKey);
+  
   useEffect(() => {
-    setReviewFilter("all");
-  }, [importType, step]);
+    if (resetKey !== prevResetKeyRef.current && (step === 4 || importType)) {
+      prevResetKeyRef.current = resetKey;
+      // Use setTimeout to avoid synchronous setState in effect
+      setTimeout(() => {
+        setReviewFilter("all");
+      }, 0);
+    }
+  }, [importType, step, resetKey]);
 
   const filteredTransactionRows = useMemo(
     () => filterRows(transactionRows, reviewFilter),
