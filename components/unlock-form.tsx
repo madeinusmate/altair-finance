@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,7 +47,7 @@ export const UnlockForm = () => {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <Alert variant="destructive">
+            <Alert variant="destructive" aria-live="polite">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
@@ -55,26 +56,32 @@ export const UnlockForm = () => {
             <Label htmlFor="encryption-key">Encryption Key</Label>
             <Input
               id="encryption-key"
+              name="encryption-key"
               type="password"
-              placeholder="Enter your encryption key"
+              autoComplete="current-password"
+              placeholder="Enter your encryption key…"
               value={key}
               onChange={(e) => setKey(e.target.value)}
               disabled={isLoading}
+              spellCheck={false}
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
               Minimum 8 characters. This key encrypts all your data locally.
             </p>
           </div>
-          <Button type="submit" className="w-full" disabled={isLoading || key.length < 8}>
+          <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Unlocking...
+                Unlocking…
               </>
             ) : (
               "Unlock"
             )}
+          </Button>
+          <Button type="button" variant="ghost" className="w-full" asChild>
+            <Link href="/recovery">Need Help Unlocking?</Link>
           </Button>
         </form>
       </CardContent>

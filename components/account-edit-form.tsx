@@ -17,6 +17,7 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import { Account, Transaction, BalanceHistory } from "@/lib/db/schema";
 import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import { toast } from "sonner";
+import { ACCOUNT_CATEGORIES, formatCategoryDisplay, type AccountCategory } from "@/lib/account-categories";
 
 interface AccountEditFormProps {
   account: Account;
@@ -36,6 +37,7 @@ export const AccountEditForm = ({
 
   const [name, setName] = useState(account.name);
   const [nature, setNature] = useState<"asset" | "liability">(account.nature);
+  const [category, setCategory] = useState<AccountCategory>(account.category);
   const [currency, setCurrency] = useState(account.currency);
   const [initialBalance, setInitialBalance] = useState(account.initialBalance.toString());
 
@@ -55,6 +57,7 @@ export const AccountEditForm = ({
         name,
         currency,
         nature,
+        category,
         initialBalance: account.type === "investment" ? 0 : parseFloat(initialBalance) || 0,
       });
 
@@ -140,6 +143,22 @@ export const AccountEditForm = ({
             </Select>
           </div>
         )}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="category">Category</Label>
+        <Select value={category} onValueChange={(v) => setCategory(v as AccountCategory)}>
+          <SelectTrigger id="category">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ACCOUNT_CATEGORIES.map((cat) => (
+              <SelectItem key={cat} value={cat}>
+                {formatCategoryDisplay(cat)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {account.type !== "investment" && (

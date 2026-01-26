@@ -53,6 +53,7 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import { formatCategoryDisplay } from "@/lib/account-categories";
 
 const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
@@ -249,6 +250,9 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
               <h1 className="text-3xl font-bold tracking-tight">{account.name}</h1>
               <Badge variant={account.nature === "asset" ? "default" : "destructive"}>
                 {account.nature}
+              </Badge>
+              <Badge variant="outline">
+                {formatCategoryDisplay(account.category)}
               </Badge>
             </div>
             <p className="text-muted-foreground capitalize">

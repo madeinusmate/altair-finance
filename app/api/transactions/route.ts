@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { eq, desc } from "drizzle-orm";
-import { getDb, initializeDb, schema } from "@/lib/db";
+import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { CATEGORIES, Category } from "@/lib/categories";
 
@@ -16,7 +16,6 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     const { searchParams } = new URL(request.url);
     const accountId = searchParams.get("accountId");
 
-    initializeDb(key);
     const db = getDb(key);
 
     let transactions;
@@ -71,7 +70,6 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       );
     }
 
-    initializeDb(key);
     const db = getDb(key);
 
     // Verify account exists and is a transaction account
@@ -147,7 +145,6 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Amount must be a positive number" }, { status: 400 });
     }
 
-    initializeDb(key);
     const db = getDb(key);
 
     // Verify transaction exists
@@ -199,7 +196,6 @@ export const DELETE = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Transaction ID is required" }, { status: 400 });
     }
 
-    initializeDb(key);
     const db = getDb(key);
 
     db.delete(schema.transactions).where(eq(schema.transactions.id, id)).run();

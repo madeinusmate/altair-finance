@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { getDb, initializeDb, schema } from "@/lib/db";
+import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { CATEGORIES, Category } from "@/lib/categories";
 
@@ -36,7 +36,6 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Rows are required" }, { status: 400 });
     }
 
-    initializeDb(key);
     const db = getDb(key);
     const accounts = db.select().from(schema.accounts).all();
     const accountMap = new Map(accounts.map((account) => [account.id, account]));

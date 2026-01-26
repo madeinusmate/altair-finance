@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, initializeDb } from "@/lib/db";
+import { dbFileExists, validateKey } from "@/lib/db";
 import { validateEncryptionKey } from "@/lib/encryption";
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
@@ -13,19 +13,22 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       );
     }
 
-    // Try to initialize and access the database
-    try {
-      initializeDb(key);
-      const db = getDb(key);
-      // The database is now initialized
-      return NextResponse.json({ valid: true });
-    } catch (error) {
-      console.error("Key verification failed:", error);
+    if (!dbFileExists()) {
+      return NextResponse.json(
+        { valid: false, error: "Database not initialized." },
+        { status: 400 }
+      );
+    }
+
+    const isValid = validateKey(key);
+    if (!isValid) {
       return NextResponse.json(
         { valid: false, error: "Invalid encryption key" },
         { status: 401 }
       );
     }
+
+    return NextResponse.json({ valid: true });
   } catch (error) {
     console.error("Auth verification error:", error);
     return NextResponse.json(

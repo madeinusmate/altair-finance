@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
-import { getDb, initializeDb, schema } from "@/lib/db";
+import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { SUPPORTED_CURRENCIES, isSupportedCurrency, type SupportedCurrency } from "@/lib/currencies";
 import { convertAmount, getFxSnapshot } from "@/lib/fx";
+import { ACCOUNT_CATEGORIES, isValidAccountCategory, type AccountCategory } from "@/lib/account-categories";
 
 // GET all accounts
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
@@ -14,7 +15,6 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
   }
 
   try {
-    initializeDb(key);
     const db = getDb(key);
     const accounts = db.select().from(schema.accounts).all();
     return NextResponse.json(accounts);
@@ -33,11 +33,11 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { name, type, nature, currency, initialBalance = 0 } = body;
+    const { name, type, nature, category, currency, initialBalance = 0 } = body;
 
-    if (!name || !type || !nature || !currency) {
+    if (!name || !type || !nature || !category || !currency) {
       return NextResponse.json(
-        { error: "Missing required fields: name, type, nature, currency" },
+        { error: "Missing required fields: name, type, nature, category, currency" },
         { status: 400 }
       );
     }
@@ -59,6 +59,13 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       }
     }
 
+    if (!isValidAccountCategory(category)) {
+      return NextResponse.json(
+        { error: `Category must be one of: ${ACCOUNT_CATEGORIES.join(", ")}` },
+        { status: 400 }
+      );
+    }
+
     if (!SUPPORTED_CURRENCIES.includes(currency)) {
       return NextResponse.json(
         { error: `Currency must be one of: ${SUPPORTED_CURRENCIES.join(", ")}` },
@@ -66,7 +73,6 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       );
     }
 
-    initializeDb(key);
     const db = getDb(key);
     const now = new Date();
     const id = uuidv4();
@@ -76,6 +82,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       name,
       type: type as "balance" | "transaction" | "investment",
       nature: effectiveNature as "asset" | "liability",
+      category: category as AccountCategory,
       currency,
       initialBalance: effectiveInitialBalance,
       createdAt: now,
@@ -113,13 +120,12 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { id, name, currency, nature, initialBalance } = body;
+    const { id, name, currency, nature, category, initialBalance } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Account ID is required" }, { status: 400 });
     }
 
-    initializeDb(key);
     const db = getDb(key);
 
     // Verify account exists
@@ -128,7 +134,7 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
 
-    const updates: Partial<{ name: string; currency: string; nature: string; initialBalance: number; updatedAt: Date }> = {
+    const updates: Partial<{ name: string; currency: string; nature: string; category: AccountCategory; initialBalance: number; updatedAt: Date }> = {
       updatedAt: new Date(),
     };
 
@@ -161,6 +167,16 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
         );
       }
       updates.nature = nature;
+    }
+
+    if (category !== undefined) {
+      if (!isValidAccountCategory(category)) {
+        return NextResponse.json(
+          { error: `Category must be one of: ${ACCOUNT_CATEGORIES.join(", ")}` },
+          { status: 400 }
+        );
+      }
+      updates.category = category as AccountCategory;
     }
 
     if (initialBalance !== undefined) {
@@ -284,7 +300,6 @@ export const DELETE = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Account ID is required" }, { status: 400 });
     }
 
-    initializeDb(key);
     const db = getDb(key);
 
     db.delete(schema.accounts).where(eq(schema.accounts.id, id)).run();

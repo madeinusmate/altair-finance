@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { eq, or, desc } from "drizzle-orm";
-import { getDb, initializeDb, schema } from "@/lib/db";
+import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 
 // GET all transfers or by account
@@ -15,7 +15,6 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     const { searchParams } = new URL(request.url);
     const accountId = searchParams.get("accountId");
 
-    initializeDb(key);
     const db = getDb(key);
 
     let transfers;
@@ -67,7 +66,6 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       );
     }
 
-    initializeDb(key);
     const db = getDb(key);
 
     // Verify both accounts exist
@@ -139,7 +137,6 @@ export const DELETE = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Transfer ID is required" }, { status: 400 });
     }
 
-    initializeDb(key);
     const db = getDb(key);
 
     db.delete(schema.transfers).where(eq(schema.transfers.id, id)).run();

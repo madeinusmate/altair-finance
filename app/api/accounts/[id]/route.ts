@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { getDb, initializeDb, schema } from "@/lib/db";
+import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 
 // GET single account by ID
@@ -15,7 +15,6 @@ export const GET = async (
 
   try {
     const { id } = await params;
-    initializeDb(key);
     const db = getDb(key);
 
     const account = db.select().from(schema.accounts).where(eq(schema.accounts.id, id)).get();

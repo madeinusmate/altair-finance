@@ -9,14 +9,25 @@ import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { state, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (isLoading) {
+      return;
+    }
+    if (state === "new") {
+      router.push("/onboarding");
+      return;
+    }
+    if (state === "corrupt") {
+      router.push("/recovery");
+      return;
+    }
+    if (!isAuthenticated) {
       router.push("/unlock");
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, router, state]);
 
   if (isLoading) {
     return (

@@ -19,6 +19,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { DEFAULT_ACCOUNT_CURRENCY, SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { ACCOUNT_CATEGORIES, formatCategoryDisplay, type AccountCategory } from "@/lib/account-categories";
 
 const NewAccountPage = () => {
   const router = useRouter();
@@ -28,6 +29,7 @@ const NewAccountPage = () => {
   const [name, setName] = useState("");
   const [type, setType] = useState<"balance" | "transaction" | "investment">("balance");
   const [nature, setNature] = useState<"asset" | "liability">("asset");
+  const [category, setCategory] = useState<AccountCategory | "">("");
   const [currency, setCurrency] = useState(DEFAULT_ACCOUNT_CURRENCY);
   const [initialBalance, setInitialBalance] = useState("0");
 
@@ -46,6 +48,7 @@ const NewAccountPage = () => {
         name,
         type,
         nature: effectiveNature,
+        category,
         currency,
         initialBalance: parseFloat(effectiveInitialBalance) || 0,
       });
@@ -172,6 +175,22 @@ const NewAccountPage = () => {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <Select value={category} onValueChange={(v) => setCategory(v as AccountCategory)}>
+                <SelectTrigger id="category">
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACCOUNT_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {formatCategoryDisplay(cat)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="currency">Currency</Label>
@@ -206,7 +225,7 @@ const NewAccountPage = () => {
             </div>
 
             <div className="flex gap-4">
-              <Button type="submit" disabled={isLoading || !name}>
+              <Button type="submit" disabled={isLoading || !name || !category}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

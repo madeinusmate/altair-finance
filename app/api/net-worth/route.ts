@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
-import { getDb, initializeDb, schema } from "@/lib/db";
+import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import {
   TARGET_NET_WORTH_CURRENCIES,
@@ -14,6 +14,7 @@ interface AccountBalance {
   name: string;
   type: "balance" | "transaction" | "investment";
   nature: "asset" | "liability";
+  category: string;
   currency: string;
   balance: number;
   // Investment-specific fields
@@ -48,7 +49,6 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
   }
 
   try {
-    initializeDb(key);
     const db = getDb(key);
 
     // Get all accounts
@@ -146,6 +146,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
           name: account.name,
           type: account.type as "balance" | "transaction" | "investment",
           nature: account.nature as "asset" | "liability",
+          category: account.category,
           currency: account.currency,
           balance,
         };

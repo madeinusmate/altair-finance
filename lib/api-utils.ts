@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, initializeDb } from "./db";
+import { dbFileExists, getDb, validateKey } from "./db";
 import { validateEncryptionKey } from "./encryption";
 
 export const getEncryptionKey = (request: NextRequest): string | null => {
@@ -7,12 +7,18 @@ export const getEncryptionKey = (request: NextRequest): string | null => {
   if (!key || !validateEncryptionKey(key)) {
     return null;
   }
+  if (!dbFileExists()) {
+    return null;
+  }
+  if (!validateKey(key)) {
+    return null;
+  }
   return key;
 };
 
 export const withDb = async <T>(
   request: NextRequest,
-  handler: (db: ReturnType<typeof getDb>, key: string) => Promise<T>
+  handler: (db: ReturnType<typeof getDb>, key: string) => Promise<T | NextResponse>
 ): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
   
@@ -24,10 +30,11 @@ export const withDb = async <T>(
   }
 
   try {
-    // Initialize DB if needed
-    initializeDb(key);
     const db = getDb(key);
     const result = await handler(db, key);
+    if (result instanceof NextResponse) {
+      return result;
+    }
     return NextResponse.json(result);
   } catch (error) {
     console.error("Database error:", error);

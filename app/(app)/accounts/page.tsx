@@ -17,12 +17,14 @@ import {
 import { Plus, Wallet, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown } from "lucide-react";
 import { Account } from "@/lib/db/schema";
 import { Badge } from "@/components/ui/badge";
+import { formatCategoryDisplay, type AccountCategory } from "@/lib/account-categories";
 
 interface AccountWithBalance {
   id: string;
   name: string;
   type: "balance" | "transaction" | "investment";
   nature: "asset" | "liability";
+  category: AccountCategory;
   currency: string;
   balance: number;
   netContributions?: number;
@@ -67,6 +69,7 @@ const AccountsPage = () => {
             name: acc.name,
             type: acc.type as "balance" | "transaction" | "investment",
             nature: acc.nature as "asset" | "liability",
+            category: acc.category,
             currency: acc.currency,
             balance: acc.initialBalance,
             ...(acc.type === "investment" && { netContributions: 0, profitLoss: 0 }),
@@ -172,6 +175,7 @@ const AccountsPage = () => {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Category</TableHead>
                   <TableHead>Nature</TableHead>
                   <TableHead>Currency</TableHead>
                   <TableHead className="text-right">Balance</TableHead>
@@ -205,6 +209,11 @@ const AccountsPage = () => {
                     <TableCell>
                       <Badge variant="outline" className="capitalize">
                         {account.type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {formatCategoryDisplay(account.category)}
                       </Badge>
                     </TableCell>
                     <TableCell>

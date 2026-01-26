@@ -8,12 +8,14 @@ import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight, AlertTr
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TARGET_NET_WORTH_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
+import { formatCategoryDisplay } from "@/lib/account-categories";
 
 interface AccountBalance {
   id: string;
   name: string;
   type: "balance" | "transaction" | "investment";
   nature: "asset" | "liability";
+  category: string;
   currency: string;
   balance: number;
   netContributions?: number;
@@ -300,7 +302,7 @@ const DashboardPage = () => {
                             <div>
                               <p className="text-sm font-medium">{account.name}</p>
                               <p className="text-xs text-muted-foreground capitalize">
-                                {account.type} account • {account.nature}
+                                {account.type} account • {formatCategoryDisplay(account.category)} • {account.nature}
                               </p>
                             </div>
                           </div>

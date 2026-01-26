@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { eq, desc } from "drizzle-orm";
-import { getDb, initializeDb, schema } from "@/lib/db";
+import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 
 // GET balance history by account
@@ -19,7 +19,6 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Account ID is required" }, { status: 400 });
     }
 
-    initializeDb(key);
     const db = getDb(key);
 
     const history = db
@@ -54,7 +53,6 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       );
     }
 
-    initializeDb(key);
     const db = getDb(key);
 
     // Verify account exists and is a balance account
@@ -104,7 +102,6 @@ export const DELETE = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Balance history ID is required" }, { status: 400 });
     }
 
-    initializeDb(key);
     const db = getDb(key);
 
     db.delete(schema.balanceHistory).where(eq(schema.balanceHistory.id, id)).run();

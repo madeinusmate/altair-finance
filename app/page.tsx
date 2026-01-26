@@ -6,18 +6,26 @@ import { useAuth } from "@/lib/auth-context";
 import { Loader2 } from "lucide-react";
 
 const HomePage = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { state, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!isLoading) {
-      if (isAuthenticated) {
+      if (state === "unlocked") {
         router.push("/dashboard");
-      } else {
-        router.push("/unlock");
+        return;
       }
+      if (state === "new") {
+        router.push("/onboarding");
+        return;
+      }
+      if (state === "corrupt") {
+        router.push("/recovery");
+        return;
+      }
+      router.push("/unlock");
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isLoading, router, state]);
 
   return (
     <div className="flex min-h-screen items-center justify-center">

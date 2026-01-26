@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import Database from "better-sqlite3-multiple-ciphers";
 import { drizzle, BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 import * as crypto from "crypto";
@@ -6,9 +6,34 @@ import path from "path";
 import fs from "fs";
 
 const DB_PATH = path.join(process.cwd(), "data", "netly.db");
+const META_ID = "primary";
+const SCHEMA_VERSION = 1;
 
 // Store for database connections keyed by derived key hash
 const connectionCache = new Map<string, BetterSQLite3Database<typeof schema>>();
+
+const escapeSqlString = (value: string): string => {
+  return value.replaceAll("'", "''");
+};
+
+const applyCipherPragmas = (sqlite: Database, encryptionKey: string): void => {
+  sqlite.pragma("cipher = 'sqlcipher'");
+  sqlite.pragma("legacy = 4");
+  sqlite.pragma(`key = '${escapeSqlString(encryptionKey)}'`);
+  sqlite.pragma("journal_mode = WAL");
+};
+
+const openSqlite = (encryptionKey: string): Database => {
+  // Ensure data directory exists
+  const dataDir = path.dirname(DB_PATH);
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  const sqlite = new Database(DB_PATH);
+  applyCipherPragmas(sqlite, encryptionKey);
+  return sqlite;
+};
 
 export const getDb = (encryptionKey: string): BetterSQLite3Database<typeof schema> => {
   const keyHash = crypto.createHash("sha256").update(encryptionKey).digest("hex").slice(0, 16);
@@ -17,25 +42,7 @@ export const getDb = (encryptionKey: string): BetterSQLite3Database<typeof schem
     return connectionCache.get(keyHash)!;
   }
 
-  // Ensure data directory exists
-  const dataDir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-
-  const sqlite = new Database(DB_PATH);
-  
-  // Enable WAL mode for better performance
-  sqlite.pragma("journal_mode = WAL");
-  
-  // Set the encryption key as a pragma (for SQLCipher compatibility)
-  // Note: With standard better-sqlite3, this is a no-op but prepares for SQLCipher upgrade
-  try {
-    sqlite.pragma(`key = '${encryptionKey}'`);
-  } catch {
-    // Ignore if not using SQLCipher
-  }
-
+  const sqlite = openSqlite(encryptionKey);
   const db = drizzle(sqlite, { schema });
   connectionCache.set(keyHash, db);
 
@@ -43,10 +50,8 @@ export const getDb = (encryptionKey: string): BetterSQLite3Database<typeof schem
 };
 
 export const initializeDb = (encryptionKey: string): void => {
-  const db = getDb(encryptionKey);
-  
   // Run migrations inline for simplicity
-  const sqlite = new Database(DB_PATH);
+  const sqlite = openSqlite(encryptionKey);
   
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS accounts (
@@ -54,6 +59,7 @@ export const initializeDb = (encryptionKey: string): void => {
       name TEXT NOT NULL,
       type TEXT NOT NULL CHECK (type IN ('balance', 'transaction', 'investment')),
       nature TEXT NOT NULL CHECK (nature IN ('asset', 'liability')),
+      category TEXT NOT NULL CHECK (category IN ('auto_loan', 'brokerage', 'cash', 'checking', 'credit_card', 'crypto', 'investment', 'line_of_credit', 'mortgage', 'other_asset', 'other_liability', 'personal_loan', 'physical_asset', 'real_estate', 'retirement_401k', 'retirement_ira', 'retirement_other', 'retirement_roth_ira', 'savings', 'student_loan', 'vehicle')),
       currency TEXT NOT NULL,
       initial_balance REAL NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
@@ -106,12 +112,22 @@ export const initializeDb = (encryptionKey: string): void => {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS meta (
+      id TEXT PRIMARY KEY,
+      schema_version INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
     CREATE INDEX IF NOT EXISTS idx_transfers_from_account_id ON transfers(from_account_id);
     CREATE INDEX IF NOT EXISTS idx_transfers_to_account_id ON transfers(to_account_id);
     CREATE INDEX IF NOT EXISTS idx_balance_history_account_id ON balance_history(account_id);
     CREATE INDEX IF NOT EXISTS idx_investment_history_account_id ON investment_history(account_id);
     CREATE INDEX IF NOT EXISTS idx_exchange_rates_base_date ON exchange_rates(base_currency, effective_date);
+
+    INSERT INTO meta (id, schema_version, created_at)
+    SELECT '${META_ID}', ${SCHEMA_VERSION}, strftime('%s','now')
+    WHERE NOT EXISTS (SELECT 1 FROM meta WHERE id = '${META_ID}');
   `);
 
   sqlite.close();
@@ -119,15 +135,25 @@ export const initializeDb = (encryptionKey: string): void => {
 
 export const validateKey = (encryptionKey: string): boolean => {
   try {
-    const db = getDb(encryptionKey);
-    // Try to query the database to validate the key
-    const sqlite = new Database(DB_PATH);
-    sqlite.pragma("journal_mode");
+    const sqlite = openSqlite(encryptionKey);
+    const row = sqlite.prepare("SELECT schema_version FROM meta WHERE id = ?").get(META_ID);
     sqlite.close();
-    return true;
+    return !!row;
   } catch {
     return false;
   }
+};
+
+export const dbFileExists = (): boolean => {
+  return fs.existsSync(DB_PATH);
+};
+
+export const getDbPath = (): string => {
+  return DB_PATH;
+};
+
+export const clearConnectionCache = (): void => {
+  connectionCache.clear();
 };
 
 export { schema };
