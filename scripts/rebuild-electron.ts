@@ -7,9 +7,22 @@ const isElectronInstalled = (): boolean => {
   return fs.existsSync(electronPath);
 };
 
-const rebuildNativeModules = (): void => {
+const rebuildForNodeRuntime = (): void => {
+  console.log("Rebuilding native modules for Node.js runtime...");
+  try {
+    execSync("pnpm rebuild better-sqlite3-multiple-ciphers", {
+      stdio: "inherit",
+      cwd: path.join(__dirname, ".."),
+    });
+    console.log("✓ Node.js runtime modules rebuilt successfully");
+  } catch (error) {
+    console.warn("⚠️  Warning: Failed to rebuild Node.js runtime modules:", error);
+  }
+};
+
+const rebuildForElectron = (): void => {
   if (!isElectronInstalled()) {
-    console.log("Electron not installed, skipping native module rebuild");
+    console.log("Electron not installed, skipping Electron rebuild");
     return;
   }
 
@@ -19,11 +32,13 @@ const rebuildNativeModules = (): void => {
       stdio: "inherit",
       cwd: path.join(__dirname, ".."),
     });
-    console.log("✓ Native modules rebuilt successfully");
+    console.log("✓ Electron modules rebuilt successfully");
   } catch (error) {
-    console.warn("⚠️  Warning: Failed to rebuild native modules:", error);
+    console.warn("⚠️  Warning: Failed to rebuild Electron modules:", error);
     console.warn("   This is usually okay if Electron is not installed yet.");
   }
 };
 
-rebuildNativeModules();
+// Rebuild for both Node.js runtime (Next.js) and Electron
+rebuildForNodeRuntime();
+rebuildForElectron();
