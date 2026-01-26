@@ -106,7 +106,7 @@ const SettingsPage = () => {
             Download an encrypted backup of your local database or import an existing backup.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="flex flex-wrap gap-2">
           <Button onClick={handleExport} disabled={isExporting}>
             {isExporting ? (
               <>

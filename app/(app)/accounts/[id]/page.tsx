@@ -55,6 +55,11 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { formatCategoryDisplay } from "@/lib/account-categories";
 import { calculateTransactionAccountBalance, calculateNetContributions } from "@/lib/accounting";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+
+type UnifiedItem = 
+  | { type: "transaction"; data: Transaction }
+  | { type: "transfer"; data: Transfer };
 
 const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
@@ -88,19 +93,18 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
 
   const fetchData = async () => {
     try {
-      const [accountData, transactionsData, transfersData, balanceData, investmentData, allAccounts] =
+      const [accountData, unifiedData, balanceData, investmentData, allAccounts] =
         await Promise.all([
           apiClient.get<Account>(`/api/accounts/${id}`),
-          apiClient.get<Transaction[]>(`/api/transactions?accountId=${id}`),
-          apiClient.get<Transfer[]>(`/api/transfers?accountId=${id}`),
+          apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>(`/api/transactions-unified?accountId=${id}`),
           apiClient.get<BalanceHistory[]>(`/api/balance-history?accountId=${id}`),
           apiClient.get<InvestmentHistory[]>(`/api/investment-history?accountId=${id}`),
           apiClient.get<Account[]>("/api/accounts"),
         ]);
 
       setAccount(accountData);
-      setTransactions(transactionsData);
-      setTransfers(transfersData);
+      setTransactions(unifiedData.transactions);
+      setTransfers(unifiedData.transfers);
       setBalanceHistory(balanceData);
       setInvestmentHistory(investmentData);
       setAccounts(allAccounts);
@@ -560,14 +564,14 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
       {account.type === "transaction" && (
         <Card>
           <CardHeader>
-            <CardTitle>Transactions</CardTitle>
+            <CardTitle>Transactions & Transfers</CardTitle>
             <CardDescription>
-              {transactions.length} transaction{transactions.length !== 1 ? "s" : ""}
+              {transactions.length + transfers.length} item{(transactions.length + transfers.length) !== 1 ? "s" : ""}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {transactions.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No transactions yet</p>
+            {transactions.length === 0 && transfers.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">No transactions or transfers yet</p>
             ) : (
               <Table>
                 <TableHeader>
@@ -581,51 +585,150 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell>{format(new Date(transaction.date), "MMM d, yyyy")}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {transaction.type === "credit" ? (
-                            <ArrowUpRight className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <ArrowDownRight className="h-4 w-4 text-red-500" />
-                          )}
-                          <span className="capitalize">{transaction.type}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{transaction.category}</Badge>
-                      </TableCell>
-                      <TableCell>{transaction.description || "-"}</TableCell>
-                      <TableCell
-                        className={`text-right font-medium ${
-                          transaction.type === "credit" ? "text-green-600" : "text-red-600"
-                        }`}
-                      >
-                        {transaction.type === "credit" ? "+" : "-"}
-                        {formatCurrency(transaction.amount, account.currency)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEditTransaction(transaction)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteTransaction(transaction.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  <TooltipProvider>
+                    {(() => {
+                      // Create unified array and sort by date descending
+                      const unifiedItems: UnifiedItem[] = [
+                        ...transactions.map((t) => ({ type: "transaction" as const, data: t })),
+                        ...transfers.map((t) => ({ type: "transfer" as const, data: t })),
+                      ].sort((a, b) => {
+                        const dateA = new Date(a.data.date).getTime();
+                        const dateB = new Date(b.data.date).getTime();
+                        return dateB - dateA;
+                      });
+
+                      return unifiedItems.map((item) => {
+                        if (item.type === "transaction") {
+                          const transaction = item.data;
+                          return (
+                            <TableRow key={`transaction-${transaction.id}`}>
+                              <TableCell>{format(new Date(transaction.date), "MMM d, yyyy")}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  {transaction.type === "credit" ? (
+                                    <ArrowUpRight className="h-4 w-4 text-green-500" />
+                                  ) : (
+                                    <ArrowDownRight className="h-4 w-4 text-red-500" />
+                                  )}
+                                  <span className="capitalize">{transaction.type}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{transaction.category}</Badge>
+                              </TableCell>
+                              <TableCell>{transaction.description || "-"}</TableCell>
+                              <TableCell
+                                className={`text-right font-medium ${
+                                  transaction.type === "credit" ? "text-green-600" : "text-red-600"
+                                }`}
+                              >
+                                {transaction.type === "credit" ? "+" : "-"}
+                                {formatCurrency(transaction.amount, account.currency)}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleEditTransaction(transaction)}
+                                    aria-label="Edit transaction"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteTransaction(transaction.id)}
+                                    aria-label="Delete transaction"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        } else {
+                          const transfer = item.data;
+                          const isOutgoing = transfer.fromAccountId === id;
+                          const otherAccount = accounts.find(
+                            (a) => a.id === (isOutgoing ? transfer.toAccountId : transfer.fromAccountId)
+                          );
+                          const isCrossCurrency = account.currency !== otherAccount?.currency;
+                          // Use fromAmount for outgoing, toAmount for incoming (both already in account currency)
+                          const displayAmount = isOutgoing 
+                            ? (transfer.fromAmount ?? transfer.amount)
+                            : (transfer.toAmount ?? transfer.amount);
+                          
+                          return (
+                            <TableRow key={`transfer-${transfer.id}`}>
+                              <TableCell>{format(new Date(transfer.date), "MMM d, yyyy")}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <ArrowLeftRight className="h-4 w-4 text-blue-500" />
+                                  <span>
+                                    {isOutgoing ? "To" : "From"} {otherAccount?.name || "Unknown"}
+                                  </span>
+                                  {isCrossCurrency && otherAccount && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge variant="outline" className="ml-1">
+                                          {otherAccount.currency}
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Cross-currency transfer</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{transfer.category || "Transfer"}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div>
+                                  {transfer.description || "-"}
+                                  {isCrossCurrency && transfer.exchangeRate && (
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      Rate: {transfer.exchangeRate.toFixed(4)}
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell
+                                className={`text-right font-medium ${
+                                  isOutgoing ? "text-red-600" : "text-green-600"
+                                }`}
+                              >
+                                {isOutgoing ? "-" : "+"}
+                                {formatCurrency(displayAmount, account.currency)}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleEditTransfer(transfer)}
+                                    aria-label="Edit transfer"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteTransfer(transfer.id)}
+                                    aria-label="Delete transfer"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
+                      });
+                    })()}
+                  </TooltipProvider>
                 </TableBody>
               </Table>
             )}
@@ -669,143 +772,155 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
       )}
 
       {account.type === "investment" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Value History</CardTitle>
-            <CardDescription>
-              {investmentHistory.length} update{investmentHistory.length !== 1 ? "s" : ""}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {investmentHistory.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No value updates yet. Add your first value update to start tracking performance.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Market Value</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {investmentHistory.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell>{format(new Date(entry.date), "MMM d, yyyy")}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(entry.balance, account.currency)}
-                      </TableCell>
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Value History</CardTitle>
+              <CardDescription>
+                {investmentHistory.length} update{investmentHistory.length !== 1 ? "s" : ""}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {investmentHistory.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">No value updates yet. Add your first value update to start tracking performance.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="text-right">Market Value</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {investmentHistory.map((entry) => (
+                      <TableRow key={entry.id}>
+                        <TableCell>{format(new Date(entry.date), "MMM d, yyyy")}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(entry.balance, account.currency)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {transfers.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Transfers</CardTitle>
+                <CardDescription>
+                  {transfers.length} transfer{transfers.length !== 1 ? "s" : ""}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TooltipProvider>
+                      {transfers
+                        .sort((a, b) => {
+                          const dateA = new Date(a.date).getTime();
+                          const dateB = new Date(b.date).getTime();
+                          return dateB - dateA;
+                        })
+                        .map((transfer) => {
+                          const isOutgoing = transfer.fromAccountId === id;
+                          const otherAccount = accounts.find(
+                            (a) => a.id === (isOutgoing ? transfer.toAccountId : transfer.fromAccountId)
+                          );
+                          const isCrossCurrency = account.currency !== otherAccount?.currency;
+                          // Use fromAmount for outgoing, toAmount for incoming (both already in account currency)
+                          const displayAmount = isOutgoing 
+                            ? (transfer.fromAmount ?? transfer.amount)
+                            : (transfer.toAmount ?? transfer.amount);
+                          
+                          return (
+                            <TableRow key={transfer.id}>
+                              <TableCell>{format(new Date(transfer.date), "MMM d, yyyy")}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <ArrowLeftRight className="h-4 w-4 text-blue-500" />
+                                  <span>
+                                    {isOutgoing ? "To" : "From"} {otherAccount?.name || "Unknown"}
+                                  </span>
+                                  {isCrossCurrency && otherAccount && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge variant="outline" className="ml-1">
+                                          {otherAccount.currency}
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Cross-currency transfer</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{transfer.category || "Transfer"}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div>
+                                  {transfer.description || "-"}
+                                  {isCrossCurrency && transfer.exchangeRate && (
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      Rate: {transfer.exchangeRate.toFixed(4)}
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell
+                                className={`text-right font-medium ${
+                                  isOutgoing ? "text-red-600" : "text-green-600"
+                                }`}
+                              >
+                                {isOutgoing ? "-" : "+"}
+                                {formatCurrency(displayAmount, account.currency)}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleEditTransfer(transfer)}
+                                    aria-label="Edit transfer"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteTransfer(transfer.id)}
+                                    aria-label="Delete transfer"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                    </TooltipProvider>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
-      {account.type !== "balance" && transfers.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Transfers</CardTitle>
-            <CardDescription>
-              {transfers.length} transfer{transfers.length !== 1 ? "s" : ""}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Direction</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {transfers.map((transfer) => {
-                  const isOutgoing = transfer.fromAccountId === id;
-                  const otherAccount = accounts.find(
-                    (a) => a.id === (isOutgoing ? transfer.toAccountId : transfer.fromAccountId)
-                  );
-                  const isCrossCurrency = account.currency !== otherAccount?.currency;
-                  // Use fromAmount for outgoing, toAmount for incoming (both already in account currency)
-                  const displayAmount = isOutgoing 
-                    ? (transfer.fromAmount ?? transfer.amount)
-                    : (transfer.toAmount ?? transfer.amount);
-                  
-                  return (
-                    <TableRow key={transfer.id}>
-                      <TableCell>{format(new Date(transfer.date), "MMM d, yyyy")}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {isOutgoing ? (
-                            <>
-                              <ArrowDownRight className="h-4 w-4 text-red-500" />
-                              <span>To {otherAccount?.name || "Unknown"}</span>
-                              {isCrossCurrency && otherAccount && (
-                                <Badge variant="outline" className="ml-1">
-                                  {otherAccount.currency}
-                                </Badge>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <ArrowUpRight className="h-4 w-4 text-green-500" />
-                              <span>From {otherAccount?.name || "Unknown"}</span>
-                              {isCrossCurrency && otherAccount && (
-                                <Badge variant="outline" className="ml-1">
-                                  {otherAccount.currency}
-                                </Badge>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          {transfer.description || "-"}
-                          {isCrossCurrency && transfer.exchangeRate && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              Rate: {transfer.exchangeRate.toFixed(4)}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell
-                        className={`text-right font-medium ${
-                          isOutgoing ? "text-red-600" : "text-green-600"
-                        }`}
-                      >
-                        {isOutgoing ? "-" : "+"}
-                        {formatCurrency(displayAmount, account.currency)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEditTransfer(transfer)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteTransfer(transfer.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 };

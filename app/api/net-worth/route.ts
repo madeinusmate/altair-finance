@@ -200,9 +200,9 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
 
           if (account.nature === "asset") {
             totalAssets += convertedBalance;
+          } else if (convertedBalance >= 0) {
+            totalAssets += convertedBalance;
           } else {
-            // Liabilities are stored as negative values, so use absolute value for net worth calculation
-            // Net worth = assets - |liabilities|
             totalLiabilities += Math.abs(convertedBalance);
           }
 

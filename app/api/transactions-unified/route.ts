@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, desc } from "drizzle-orm";
+import { eq, or, desc } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 
@@ -36,11 +36,17 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       })(),
       (async () => {
         if (accountId) {
-          // For transfers, only show if fromAccountId matches (per user requirement)
+          // For transfers, show if either fromAccountId or toAccountId matches
+          // This allows account detail pages to show all transfers involving the account
           return db
             .select()
             .from(schema.transfers)
-            .where(eq(schema.transfers.fromAccountId, accountId))
+            .where(
+              or(
+                eq(schema.transfers.fromAccountId, accountId),
+                eq(schema.transfers.toAccountId, accountId)
+              )
+            )
             .orderBy(desc(schema.transfers.date))
             .all();
         } else {
