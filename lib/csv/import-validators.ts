@@ -1,5 +1,7 @@
 import { CATEGORIES, Category } from "@/lib/categories";
 import { Account } from "@/lib/db/schema";
+import { ACCOUNT_CATEGORIES, isValidAccountCategory } from "@/lib/account-categories";
+import { SUPPORTED_CURRENCIES, isSupportedCurrency } from "@/lib/currencies";
 
 type CsvRow = Record<string, string | undefined>;
 
@@ -33,8 +35,22 @@ export type ParsedBalanceRow = {
   warnings: string[];
 };
 
+export type ParsedAccountRow = {
+  id: string;
+  rowNumber: number;
+  name: string;
+  type: string;
+  nature: string;
+  category: string;
+  currency: string;
+  initialBalance: string;
+  errors: string[];
+  warnings: string[];
+};
+
 const TRANSACTION_HEADERS = ["date", "account", "description", "amount", "category", "type", "transfer_account"];
 const BALANCE_HEADERS = ["date", "account", "balance"];
+const ACCOUNT_HEADERS = ["name", "type", "nature", "category", "currency", "initial_balance"];
 
 const normalizeAccountName = (name: string) => name.trim().toLowerCase();
 
@@ -49,6 +65,14 @@ const isIsoDate = (value: string) => {
 const parsePositiveNumber = (value: string) => {
   const numberValue = Number(value);
   if (!Number.isFinite(numberValue) || numberValue <= 0) {
+    return null;
+  }
+  return numberValue;
+};
+
+const parseNumber = (value: string) => {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) {
     return null;
   }
   return numberValue;
@@ -190,5 +214,101 @@ export const validateBalanceRows = (rows: CsvRow[], accounts: Account[]) => {
   return parsedRows;
 };
 
-export const getRequiredHeaders = (type: "transactions" | "balances") =>
-  type === "transactions" ? TRANSACTION_HEADERS : BALANCE_HEADERS;
+export const validateAccountRows = (rows: CsvRow[], existingAccounts: Account[]) => {
+  const accountNameMap = buildAccountNameMap(existingAccounts);
+  const nameSet = new Set<string>();
+  
+  const parsedRows: ParsedAccountRow[] = rows.map((row, index) => {
+    const rowNumber = index + 2; // 1-based row + header
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    const name = (row.name || "").trim();
+    const type = (row.type || "").trim().toLowerCase();
+    const nature = (row.nature || "").trim().toLowerCase();
+    const category = (row.category || "").trim();
+    const currency = (row.currency || "").trim().toUpperCase();
+    const initialBalance = (row.initial_balance || "").trim();
+
+    // Validate name
+    if (!name) {
+      errors.push("Missing account name");
+    } else {
+      const normalizedName = normalizeAccountName(name);
+      // Check for duplicates within CSV
+      if (nameSet.has(normalizedName)) {
+        errors.push(`Duplicate account name in CSV: ${name}`);
+      } else {
+        nameSet.add(normalizedName);
+      }
+      // Check for duplicates against existing accounts
+      if (accountNameMap.has(normalizedName)) {
+        errors.push(`Account already exists: ${name}`);
+      }
+    }
+
+    // Validate type
+    if (!type || !["balance", "transaction", "investment"].includes(type)) {
+      errors.push("Type must be balance, transaction, or investment");
+    }
+
+    // Validate nature
+    if (!nature || !["asset", "liability"].includes(nature)) {
+      errors.push("Nature must be asset or liability");
+    }
+
+    // Validate type-nature combination (investment must be asset)
+    if (type === "investment" && nature !== "asset") {
+      errors.push("Investment accounts must have nature 'asset'");
+    }
+
+    // Validate category
+    if (!category) {
+      errors.push("Missing category");
+    } else if (!isValidAccountCategory(category)) {
+      errors.push(`Invalid category. Must be one of: ${ACCOUNT_CATEGORIES.join(", ")}`);
+    }
+
+    // Validate currency
+    if (!currency) {
+      errors.push("Missing currency");
+    } else if (!isSupportedCurrency(currency)) {
+      errors.push(`Invalid currency. Must be one of: ${SUPPORTED_CURRENCIES.join(", ")}`);
+    }
+
+    // Validate initial balance
+    if (initialBalance === "") {
+      errors.push("Missing initial balance");
+    } else {
+      const balanceValue = parseNumber(initialBalance);
+      if (balanceValue === null) {
+        errors.push("Initial balance must be a valid number");
+      } else {
+        // Investment accounts must have 0 initial balance
+        if (type === "investment" && balanceValue !== 0) {
+          errors.push("Investment accounts must have initial balance of 0");
+        }
+      }
+    }
+
+    return {
+      id: `${index}`,
+      rowNumber,
+      name,
+      type,
+      nature,
+      category,
+      currency,
+      initialBalance,
+      errors,
+      warnings,
+    };
+  });
+
+  return parsedRows;
+};
+
+export const getRequiredHeaders = (type: "transactions" | "balances" | "accounts") => {
+  if (type === "transactions") return TRANSACTION_HEADERS;
+  if (type === "balances") return BALANCE_HEADERS;
+  return ACCOUNT_HEADERS;
+};

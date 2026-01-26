@@ -6,19 +6,22 @@ import {
   buildAccountNameMap,
   getMissingHeaders,
   getRequiredHeaders,
+  ParsedAccountRow,
   ParsedBalanceRow,
   ParsedTransactionRow,
+  validateAccountRows,
   validateBalanceRows,
   validateTransactionRows,
 } from "@/lib/csv/import-validators";
 import { parseCsvFile } from "@/lib/csv/parse";
 
-export type ImportType = "transactions" | "balances";
+export type ImportType = "transactions" | "balances" | "accounts";
 
 export type WizardStep = 1 | 2 | 3 | 4 | 5;
 
 export type TransactionRow = ParsedTransactionRow & { duplicate?: boolean };
 export type BalanceRow = ParsedBalanceRow & { duplicate?: boolean };
+export type AccountRow = ParsedAccountRow & { duplicate?: boolean };
 
 export type CompletionSummary =
   | {
@@ -32,6 +35,10 @@ export type CompletionSummary =
       balances: number;
       investments: number;
       total: number;
+    }
+  | {
+      type: "accounts";
+      accounts: number;
     };
 
 const normalizeAccountName = (name: string) => name.trim().toLowerCase();
@@ -75,6 +82,20 @@ const getBalanceSummary = (rows: BalanceRow[]) => {
   };
 };
 
+const getAccountSummary = (rows: AccountRow[]) => {
+  const total = rows.length;
+  const invalid = rows.filter((row) => row.errors.length > 0).length;
+  const warnings = rows.filter((row) => row.warnings.length > 0).length;
+  const duplicates = rows.filter((row) => row.duplicate).length;
+  return {
+    total,
+    invalid,
+    warnings,
+    duplicates,
+    valid: total - invalid,
+  };
+};
+
 const updateRowsIfChanged = <Row extends { duplicate?: boolean; warnings: string[] }>(
   rows: Row[],
   updateRow: (row: Row) => Row
@@ -99,6 +120,7 @@ export const useImportWizard = () => {
   const [headerErrors, setHeaderErrors] = useState<string[]>([]);
   const [transactionRows, setTransactionRows] = useState<TransactionRow[]>([]);
   const [balanceRows, setBalanceRows] = useState<BalanceRow[]>([]);
+  const [accountRows, setAccountRows] = useState<AccountRow[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -131,6 +153,7 @@ export const useImportWizard = () => {
     setHeaderErrors([]);
     setTransactionRows([]);
     setBalanceRows([]);
+    setAccountRows([]);
     setImportError(null);
     setCompletion(null);
     setExistingTransactions([]);
@@ -154,6 +177,7 @@ export const useImportWizard = () => {
     setCompletion(null);
     setTransactionRows([]);
     setBalanceRows([]);
+    setAccountRows([]);
     setExistingTransactions([]);
     setExistingTransfers([]);
     setExistingBalances([]);
@@ -288,6 +312,12 @@ export const useImportWizard = () => {
     }
   };
 
+  const applyAccountDuplicateFlag = (row: AccountRow) => {
+    // Duplicate checking is done during validation, so this is mainly for consistency
+    // The duplicate flag is set during validation if account name already exists
+    return row;
+  };
+
   useEffect(() => {
     if (importType === "transactions" && transactionRows.length > 0) {
       loadTransactionDuplicates();
@@ -346,9 +376,12 @@ export const useImportWizard = () => {
       if (importType === "transactions") {
         const validated = validateTransactionRows(result.data, accounts);
         setTransactionRows(validated);
-      } else {
+      } else if (importType === "balances") {
         const validated = validateBalanceRows(result.data, accounts);
         setBalanceRows(validated);
+      } else {
+        const validated = validateAccountRows(result.data, accounts);
+        setAccountRows(validated);
       }
       setIsProcessing(false);
       return true;
@@ -413,6 +446,34 @@ export const useImportWizard = () => {
     });
   };
 
+  const updateAccountRow = (rowId: string, key: keyof AccountRow, value: string) => {
+    setAccountRows((currentRows) => {
+      const nextRows = currentRows.map((row) => {
+        if (row.id !== rowId) {
+          return row;
+        }
+        const updatedRow = { ...row, [key]: value };
+        const rawRow = {
+          name: updatedRow.name,
+          type: updatedRow.type,
+          nature: updatedRow.nature,
+          category: updatedRow.category,
+          currency: updatedRow.currency,
+          initial_balance: updatedRow.initialBalance,
+        };
+        const [validated] = validateAccountRows([rawRow], accounts);
+        const updated = {
+          ...validated,
+          id: row.id,
+          rowNumber: row.rowNumber,
+        };
+        return applyAccountDuplicateFlag(updated);
+      });
+
+      return nextRows;
+    });
+  };
+
   const importRows = async () => {
     setImportError(null);
     setIsImporting(true);
@@ -465,7 +526,7 @@ export const useImportWizard = () => {
           transfers: result.transfers,
           total: result.transactions + result.transfers,
         });
-      } else {
+      } else if (importType === "balances") {
         const validRows = balanceRows.filter((row) => row.errors.length === 0);
         if (validRows.length === 0) {
           throw new Error("No valid rows to import.");
@@ -495,6 +556,50 @@ export const useImportWizard = () => {
           investments: result.investments,
           total: result.balances + result.investments,
         });
+      } else if (importType === "accounts") {
+        const validRows = accountRows.filter((row) => row.errors.length === 0);
+        if (validRows.length === 0) {
+          throw new Error("No valid rows to import.");
+        }
+
+        // Check for duplicates against existing accounts
+        const duplicateNames = validRows
+          .map((row) => {
+            const normalizedName = normalizeAccountName(row.name);
+            return accountMap.has(normalizedName) ? row.name : null;
+          })
+          .filter((name): name is string => name !== null);
+
+        if (duplicateNames.length > 0) {
+          throw new Error(`Duplicate accounts found: ${duplicateNames.join(", ")}`);
+        }
+
+        const payload = validRows.map((row) => ({
+          name: row.name,
+          type: row.type as "balance" | "transaction" | "investment",
+          nature: row.nature as "asset" | "liability",
+          category: row.category,
+          currency: row.currency,
+          initialBalance: Number(row.initialBalance),
+        }));
+
+        const result = await apiClient.post<{
+          success: boolean;
+          accounts: number;
+        }>("/api/import/accounts", { rows: payload });
+
+        setCompletion({
+          type: "accounts",
+          accounts: result.accounts,
+        });
+
+        // Refresh accounts list after successful import
+        try {
+          const data = await apiClient.get<Account[]>("/api/accounts");
+          setAccounts(data);
+        } catch (error) {
+          console.error("Failed to refresh accounts:", error);
+        }
       }
 
       setIsImporting(false);
@@ -506,9 +611,12 @@ export const useImportWizard = () => {
     }
   };
 
-  const summary = importType === "transactions"
-    ? getTransactionSummary(transactionRows)
-    : getBalanceSummary(balanceRows);
+  const summary =
+    importType === "transactions"
+      ? getTransactionSummary(transactionRows)
+      : importType === "balances"
+        ? getBalanceSummary(balanceRows)
+        : getAccountSummary(accountRows);
 
   return {
     step,
@@ -522,6 +630,7 @@ export const useImportWizard = () => {
     headerErrors,
     transactionRows,
     balanceRows,
+    accountRows,
     isProcessing,
     isImporting,
     importError,
@@ -532,6 +641,7 @@ export const useImportWizard = () => {
     processFile,
     updateTransactionRow,
     updateBalanceRow,
+    updateAccountRow,
     importRows,
   };
 };

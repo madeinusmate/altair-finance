@@ -14,6 +14,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { CATEGORIES } from "@/lib/categories";
+import { ACCOUNT_CATEGORIES } from "@/lib/account-categories";
+import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import { useImportWizard } from "@/hooks/use-import-wizard";
 
 const steps = [
@@ -57,6 +59,7 @@ const ImportWizardPage = () => {
     headerErrors,
     transactionRows,
     balanceRows,
+    accountRows,
     isProcessing,
     isImporting,
     importError,
@@ -67,18 +70,32 @@ const ImportWizardPage = () => {
     processFile,
     updateTransactionRow,
     updateBalanceRow,
+    updateAccountRow,
     importRows,
   } = useImportWizard();
 
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
 
-  const rows = importType === "transactions" ? transactionRows : balanceRows;
+  const rows =
+    importType === "transactions"
+      ? transactionRows
+      : importType === "balances"
+        ? balanceRows
+        : accountRows;
 
-  const templateUrl = importType === "transactions"
-    ? "/templates/transactions.csv"
-    : "/templates/balances.csv";
+  const templateUrl =
+    importType === "transactions"
+      ? "/templates/transactions.csv"
+      : importType === "balances"
+        ? "/templates/balances.csv"
+        : "/templates/accounts.csv";
 
-  const fileLabel = importType === "transactions" ? "Transactions CSV" : "Balances CSV";
+  const fileLabel =
+    importType === "transactions"
+      ? "Transactions CSV"
+      : importType === "balances"
+        ? "Balances CSV"
+        : "Accounts CSV";
 
   const canProceedFromReview = summary.invalid === 0 && rows.length > 0;
 
@@ -103,6 +120,10 @@ const ImportWizardPage = () => {
   const filteredBalanceRows = useMemo(
     () => filterRows(balanceRows, reviewFilter),
     [reviewFilter, balanceRows]
+  );
+  const filteredAccountRows = useMemo(
+    () => filterRows(accountRows, reviewFilter),
+    [reviewFilter, accountRows]
   );
 
   const handleProcess = async () => {
@@ -153,7 +174,9 @@ const ImportWizardPage = () => {
           <CardContent className="space-y-4">
             <RadioGroup
               value={importType}
-              onValueChange={(value) => setImportType(value as "transactions" | "balances")}
+              onValueChange={(value) =>
+                setImportType(value as "transactions" | "balances" | "accounts")
+              }
               className="gap-4"
             >
               <Label className="flex items-center gap-3 rounded-md border p-4">
@@ -171,6 +194,15 @@ const ImportWizardPage = () => {
                   <p className="font-medium">Balances + Investments</p>
                   <p className="text-sm text-muted-foreground">
                     Import historical balance or investment updates.
+                  </p>
+                </div>
+              </Label>
+              <Label className="flex items-center gap-3 rounded-md border p-4">
+                <RadioGroupItem value="accounts" />
+                <div>
+                  <p className="font-medium">Accounts</p>
+                  <p className="text-sm text-muted-foreground">
+                    Import multiple accounts to quickly bootstrap your account list.
                   </p>
                 </div>
               </Label>
@@ -392,6 +424,86 @@ const ImportWizardPage = () => {
                     ]}
                   />
                 )}
+
+                {importType === "accounts" && (
+                  <CsvReviewTable
+                    rows={filteredAccountRows}
+                    onRowChange={updateAccountRow}
+                    columns={[
+                      { key: "name", label: "Name" },
+                      {
+                        key: "type",
+                        label: "Type",
+                        render: (row, onChange) => (
+                          <Select value={row.type} onValueChange={onChange}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="balance">Balance</SelectItem>
+                              <SelectItem value="transaction">Transaction</SelectItem>
+                              <SelectItem value="investment">Investment</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ),
+                      },
+                      {
+                        key: "nature",
+                        label: "Nature",
+                        render: (row, onChange) => (
+                          <Select value={row.nature} onValueChange={onChange}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select nature" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="asset">Asset</SelectItem>
+                              <SelectItem value="liability">Liability</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ),
+                      },
+                      {
+                        key: "category",
+                        label: "Category",
+                        render: (row, onChange) => (
+                          <Select value={row.category} onValueChange={onChange}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ACCOUNT_CATEGORIES.map((category) => (
+                                <SelectItem key={category} value={category}>
+                                  {category.split("_").map((word) =>
+                                    word.charAt(0).toUpperCase() + word.slice(1)
+                                  ).join(" ")}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ),
+                      },
+                      {
+                        key: "currency",
+                        label: "Currency",
+                        render: (row, onChange) => (
+                          <Select value={row.currency} onValueChange={onChange}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select currency" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {SUPPORTED_CURRENCIES.map((currency) => (
+                                <SelectItem key={currency} value={currency}>
+                                  {currency}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ),
+                      },
+                      { key: "initialBalance", label: "Initial Balance", inputType: "number" },
+                    ]}
+                  />
+                )}
               </>
             )}
 
@@ -437,6 +549,11 @@ const ImportWizardPage = () => {
                 <Badge variant="secondary">Balances: {completion.balances}</Badge>
                 <Badge variant="secondary">Investments: {completion.investments}</Badge>
                 <Badge variant="default">Total imported: {completion.total}</Badge>
+              </div>
+            )}
+            {completion && completion.type === "accounts" && (
+              <div className="space-y-2">
+                <Badge variant="default">Total imported: {completion.accounts} accounts</Badge>
               </div>
             )}
             {!completion && (
