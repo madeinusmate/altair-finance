@@ -34,7 +34,10 @@ export const transfers = sqliteTable("transfers", {
   toAccountId: text("to_account_id")
     .notNull()
     .references(() => accounts.id, { onDelete: "cascade" }),
-  amount: real("amount").notNull(),
+  amount: real("amount").notNull(), // Kept for backward compatibility
+  fromAmount: real("from_amount").notNull(),
+  toAmount: real("to_amount").notNull(),
+  exchangeRate: real("exchange_rate"),
   description: text("description"),
   date: integer("date", { mode: "timestamp" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),

@@ -30,8 +30,8 @@ const getDateKey = (value: number) => new Date(value).toISOString().split("T")[0
 const buildTransactionKey = (accountId: string, date: string, amount: number, description: string) =>
   `${accountId}|${date}|${amount}|${description.trim().toLowerCase()}`;
 
-const buildTransferKey = (fromId: string, toId: string, date: string, amount: number) =>
-  `${fromId}|${toId}|${date}|${amount}`;
+const buildTransferKey = (fromId: string, toId: string, date: string, fromAmount: number, toAmount: number) =>
+  `${fromId}|${toId}|${date}|${fromAmount}|${toAmount}`;
 
 const getSummary = (rows: TransactionRow[]) => {
   const total = rows.length;
@@ -66,20 +66,23 @@ export const TransactionsCsvImport = () => {
       return row;
     }
     const amountValue = Number(row.amount);
+    const fromAmountValue = Number(row.fromAmount);
+    const toAmountValue = Number(row.toAmount);
     const descriptionValue = row.description || "";
     let isDuplicate = false;
 
     if (row.type === "transfer") {
       const transferAccount = accountMap.get(normalizeAccountName(row.transferAccount));
       if (transferAccount) {
-        const key = buildTransferKey(account.id, transferAccount.id, row.date, amountValue);
+        const key = buildTransferKey(account.id, transferAccount.id, row.date, fromAmountValue, toAmountValue);
         isDuplicate = existingTransfers.some(
           (transfer) =>
             buildTransferKey(
               transfer.fromAccountId,
               transfer.toAccountId,
               getDateKey(transfer.date.getTime()),
-              transfer.amount
+              transfer.fromAmount ?? transfer.amount, // Fallback for backward compatibility
+              transfer.toAmount ?? transfer.amount    // Fallback for backward compatibility
             ) === key
         );
       }
@@ -211,6 +214,8 @@ export const TransactionsCsvImport = () => {
           account: updatedRow.account,
           description: updatedRow.description,
           amount: updatedRow.amount,
+          from_amount: updatedRow.fromAmount,
+          to_amount: updatedRow.toAmount,
           category: updatedRow.category,
           type: updatedRow.type,
           transfer_account: updatedRow.transferAccount,
@@ -254,7 +259,8 @@ export const TransactionsCsvImport = () => {
             type: "transfer",
             fromAccountId: account.id,
             toAccountId: transferAccount.id,
-            amount: Number(row.amount),
+            fromAmount: Number(row.fromAmount),
+            toAmount: Number(row.toAmount),
             description: row.description || null,
             date: row.date,
           };

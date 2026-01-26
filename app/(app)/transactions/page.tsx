@@ -32,6 +32,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TransactionForm } from "@/components/transaction-form";
+import { TransferForm } from "@/components/transfer-form";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { ArrowUpRight, ArrowDownRight, Search, ArrowLeftRight, Pencil, Trash2, Plus } from "lucide-react";
 import { Transaction, Account } from "@/lib/db/schema";
@@ -59,6 +61,7 @@ const TransactionsPage = () => {
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
   const [isCreateTransactionDialogOpen, setIsCreateTransactionDialogOpen] = useState(false);
+  const [isCreateTransferDialogOpen, setIsCreateTransferDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   useEffect(() => {
@@ -83,6 +86,12 @@ const TransactionsPage = () => {
   const accountMap = useMemo(() => {
     return new Map(accounts.map((a) => [a.id, a]));
   }, [accounts]);
+
+  // Filter accounts eligible for transfers (transaction and investment only)
+  const transferEligibleAccounts = useMemo(() => 
+    accounts.filter(a => a.type === "transaction" || a.type === "investment"),
+    [accounts]
+  );
 
   const handleEditTransaction = (transaction: Transaction) => {
     setEditingTransaction(transaction);
@@ -122,6 +131,21 @@ const TransactionsPage = () => {
       try {
         const transactionsData = await apiClient.get<Transaction[]>("/api/transactions");
         setTransactions(transactionsData);
+      } catch (err) {
+        toast.error("Failed to refresh transactions");
+      }
+    };
+    fetchData();
+  };
+
+  const handleTransferCreated = () => {
+    setIsCreateTransferDialogOpen(false);
+    // Refresh transactions list
+    const fetchData = async () => {
+      try {
+        const transactionsData = await apiClient.get<Transaction[]>("/api/transactions");
+        setTransactions(transactionsData);
+        toast.success("Transfer created successfully");
       } catch (err) {
         toast.error("Failed to refresh transactions");
       }
@@ -204,26 +228,57 @@ const TransactionsPage = () => {
           <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
           <p className="text-muted-foreground">View all transactions across accounts</p>
         </div>
-        {transactionAccounts.length > 0 && (
-          <Dialog open={isCreateTransactionDialogOpen} onOpenChange={setIsCreateTransactionDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Transaction
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Transaction</DialogTitle>
-                <DialogDescription>Create a new transaction</DialogDescription>
-              </DialogHeader>
-              <TransactionForm
-                accounts={transactionAccounts}
-                onSuccess={handleTransactionCreated}
-              />
-            </DialogContent>
-          </Dialog>
-        )}
+        <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <Dialog open={isCreateTransferDialogOpen} onOpenChange={setIsCreateTransferDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" disabled={transferEligibleAccounts.length < 2}>
+                      <ArrowLeftRight className="mr-2 h-4 w-4" />
+                      Add Transfer
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Create Transfer</DialogTitle>
+                      <DialogDescription>Transfer funds between accounts</DialogDescription>
+                    </DialogHeader>
+                    <TransferForm
+                      accounts={transferEligibleAccounts}
+                      onSuccess={handleTransferCreated}
+                    />
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </TooltipTrigger>
+            {transferEligibleAccounts.length < 2 && (
+              <TooltipContent>
+                <p>Need at least 2 accounts to create a transfer</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+          {transactionAccounts.length > 0 && (
+            <Dialog open={isCreateTransactionDialogOpen} onOpenChange={setIsCreateTransactionDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Transaction
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Transaction</DialogTitle>
+                  <DialogDescription>Create a new transaction</DialogDescription>
+                </DialogHeader>
+                <TransactionForm
+                  accounts={transactionAccounts}
+                  onSuccess={handleTransactionCreated}
+                />
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
       </div>
 
       {transactions.length === 0 ? (

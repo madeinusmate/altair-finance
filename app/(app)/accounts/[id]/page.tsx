@@ -671,6 +671,12 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                   const otherAccount = accounts.find(
                     (a) => a.id === (isOutgoing ? transfer.toAccountId : transfer.fromAccountId)
                   );
+                  const isCrossCurrency = account.currency !== otherAccount?.currency;
+                  // Use fromAmount for outgoing, toAmount for incoming (both already in account currency)
+                  const displayAmount = isOutgoing 
+                    ? (transfer.fromAmount ?? transfer.amount)
+                    : (transfer.toAmount ?? transfer.amount);
+                  
                   return (
                     <TableRow key={transfer.id}>
                       <TableCell>{format(new Date(transfer.date), "MMM d, yyyy")}</TableCell>
@@ -680,23 +686,42 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                             <>
                               <ArrowDownRight className="h-4 w-4 text-red-500" />
                               <span>To {otherAccount?.name || "Unknown"}</span>
+                              {isCrossCurrency && otherAccount && (
+                                <Badge variant="outline" className="ml-1">
+                                  {otherAccount.currency}
+                                </Badge>
+                              )}
                             </>
                           ) : (
                             <>
                               <ArrowUpRight className="h-4 w-4 text-green-500" />
                               <span>From {otherAccount?.name || "Unknown"}</span>
+                              {isCrossCurrency && otherAccount && (
+                                <Badge variant="outline" className="ml-1">
+                                  {otherAccount.currency}
+                                </Badge>
+                              )}
                             </>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>{transfer.description || "-"}</TableCell>
+                      <TableCell>
+                        <div>
+                          {transfer.description || "-"}
+                          {isCrossCurrency && transfer.exchangeRate && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              Rate: {transfer.exchangeRate.toFixed(4)}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell
                         className={`text-right font-medium ${
                           isOutgoing ? "text-red-600" : "text-green-600"
                         }`}
                       >
                         {isOutgoing ? "-" : "+"}
-                        {formatCurrency(transfer.amount, account.currency)}
+                        {formatCurrency(displayAmount, account.currency)}
                       </TableCell>
                     </TableRow>
                   );

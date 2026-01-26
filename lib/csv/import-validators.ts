@@ -17,7 +17,9 @@ export type ParsedTransactionRow = {
   date: string;
   account: string;
   description: string;
-  amount: string;
+  amount: string; // Kept for backward compatibility with debit/credit transactions
+  fromAmount: string;
+  toAmount: string;
   category: string;
   type: string;
   transferAccount: string;
@@ -48,7 +50,9 @@ export type ParsedAccountRow = {
   warnings: string[];
 };
 
-const TRANSACTION_HEADERS = ["date", "account", "description", "amount", "category", "type", "transfer_account"];
+// Headers: amount for debit/credit, from_amount/to_amount for transfers
+// All columns should be present in CSV, but validation checks per-row based on type
+const TRANSACTION_HEADERS = ["date", "account", "description", "amount", "from_amount", "to_amount", "category", "type", "transfer_account"];
 const BALANCE_HEADERS = ["date", "account", "balance"];
 const ACCOUNT_HEADERS = ["name", "type", "nature", "category", "currency", "initial_balance"];
 
@@ -98,7 +102,9 @@ export const validateTransactionRows = (rows: CsvRow[], accounts: Account[]) => 
     const date = (row.date || "").trim();
     const account = (row.account || "").trim();
     const description = (row.description || "").trim();
-    const amount = (row.amount || "").trim();
+    const amount = (row.amount || "").trim(); // For debit/credit transactions
+    const fromAmount = (row.from_amount || "").trim();
+    const toAmount = (row.to_amount || "").trim();
     const category = (row.category || "").trim();
     const type = (row.type || "").trim().toLowerCase();
     const transferAccount = (row.transfer_account || "").trim();
@@ -116,8 +122,19 @@ export const validateTransactionRows = (rows: CsvRow[], accounts: Account[]) => 
       errors.push(`Account not found: ${account}`);
     }
 
-    if (!amount || parsePositiveNumber(amount) === null) {
-      errors.push("Amount must be a positive number");
+    if (type === "transfer") {
+      // For transfers, require from_amount and to_amount
+      if (!fromAmount || parsePositiveNumber(fromAmount) === null) {
+        errors.push("from_amount is required and must be a positive number for transfers");
+      }
+      if (!toAmount || parsePositiveNumber(toAmount) === null) {
+        errors.push("to_amount is required and must be a positive number for transfers");
+      }
+    } else {
+      // For debit/credit, require amount
+      if (!amount || parsePositiveNumber(amount) === null) {
+        errors.push("Amount must be a positive number");
+      }
     }
 
     if (!type || !["debit", "credit", "transfer"].includes(type)) {
@@ -149,6 +166,17 @@ export const validateTransactionRows = (rows: CsvRow[], accounts: Account[]) => 
       if (accountRecord?.type === "balance") {
         errors.push("Transfers cannot use balance accounts");
       }
+      
+      // Validate same-currency transfers: amounts must be equal
+      if (accountRecord && transferRecord) {
+        if (accountRecord.currency === transferRecord.currency) {
+          const fromAmountValue = parsePositiveNumber(fromAmount);
+          const toAmountValue = parsePositiveNumber(toAmount);
+          if (fromAmountValue !== null && toAmountValue !== null && fromAmountValue !== toAmountValue) {
+            errors.push("For same-currency transfers, from_amount and to_amount must be equal");
+          }
+        }
+      }
     }
 
     return {
@@ -157,7 +185,9 @@ export const validateTransactionRows = (rows: CsvRow[], accounts: Account[]) => 
       date,
       account,
       description,
-      amount,
+      amount: type === "transfer" ? fromAmount : amount, // Keep amount for backward compatibility
+      fromAmount: type === "transfer" ? fromAmount : amount,
+      toAmount: type === "transfer" ? toAmount : amount,
       category: normalizedCategory,
       type,
       transferAccount,

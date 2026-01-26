@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import { Account } from "@/lib/db/schema";
 
 interface TransferFormProps {
-  fromAccountId: string;
+  fromAccountId?: string;
   accounts: Account[];
   onSuccess: () => void;
 }
@@ -27,18 +27,65 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFor
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [selectedFromAccountId, setSelectedFromAccountId] = useState<string>("");
   const [toAccountId, setToAccountId] = useState("");
-  const [amount, setAmount] = useState("");
+  const [fromAmount, setFromAmount] = useState("");
+  const [toAmount, setToAmount] = useState("");
+  const [exchangeRate, setExchangeRate] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
-  const fromAccount = accounts.find((a) => a.id === fromAccountId);
+  // Filter eligible accounts: transaction and investment only (exclude balance)
+  const allEligibleAccounts = accounts.filter((a) => a.type !== "balance");
+
+  // Determine current fromAccountId
+  const currentFromAccountId = fromAccountId || selectedFromAccountId;
+
+  // Default to first eligible account when fromAccountId not provided
+  useEffect(() => {
+    if (!fromAccountId && allEligibleAccounts.length > 0 && !selectedFromAccountId) {
+      setSelectedFromAccountId(allEligibleAccounts[0].id);
+    }
+  }, [fromAccountId, allEligibleAccounts, selectedFromAccountId]);
+
+  const fromAccount = accounts.find((a) => a.id === currentFromAccountId);
+  const toAccount = accounts.find((a) => a.id === toAccountId);
   
-  // Filter eligible accounts: exclude the source account and all balance accounts
+  // Filter eligible accounts for "To Account": exclude the source account and all balance accounts
   // Only transaction and investment accounts can participate in transfers
-  const eligibleAccounts = accounts.filter(
-    (a) => a.id !== fromAccountId && a.type !== "balance"
+  const eligibleToAccounts = accounts.filter(
+    (a) => a.id !== currentFromAccountId && a.type !== "balance"
   );
+
+  const isCrossCurrency = useMemo(() => {
+    return fromAccount && toAccount && fromAccount.currency !== toAccount.currency;
+  }, [fromAccount, toAccount]);
+
+  // Auto-calculate toAmount when fromAmount or exchangeRate changes (for cross-currency)
+  useEffect(() => {
+    if (isCrossCurrency && fromAmount && exchangeRate) {
+      const calculated = parseFloat(fromAmount) * parseFloat(exchangeRate);
+      if (!isNaN(calculated)) {
+        setToAmount(calculated.toFixed(2));
+      }
+    } else if (isCrossCurrency && fromAmount && toAmount && !exchangeRate) {
+      // Calculate exchange rate from amounts
+      const calculated = parseFloat(toAmount) / parseFloat(fromAmount);
+      if (!isNaN(calculated)) {
+        setExchangeRate(calculated.toFixed(6));
+      }
+    } else if (!isCrossCurrency && fromAmount) {
+      // Same currency: toAmount must equal fromAmount
+      setToAmount(fromAmount);
+    }
+  }, [fromAmount, exchangeRate, isCrossCurrency, toAmount]);
+
+  // Reset amounts when destination account or source account changes
+  useEffect(() => {
+    setFromAmount("");
+    setToAmount("");
+    setExchangeRate("");
+  }, [toAccountId, currentFromAccountId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,10 +93,22 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFor
     setIsLoading(true);
 
     try {
+      const fromAmountValue = parseFloat(fromAmount);
+      const toAmountValue = parseFloat(toAmount);
+
+      // Validate same-currency transfers
+      if (!isCrossCurrency && fromAmountValue !== toAmountValue) {
+        setError("For same-currency transfers, amounts must be equal");
+        setIsLoading(false);
+        return;
+      }
+
       await apiClient.post("/api/transfers", {
-        fromAccountId,
+        fromAccountId: currentFromAccountId,
         toAccountId,
-        amount: parseFloat(amount),
+        fromAmount: fromAmountValue,
+        toAmount: toAmountValue,
+        exchangeRate: exchangeRate ? parseFloat(exchangeRate) : undefined,
         description: description || null,
         date,
       });
@@ -62,7 +121,7 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFor
   };
 
   // Check if source account is a balance account (shouldn't allow transfers)
-  if (fromAccount?.type === "balance") {
+  if (currentFromAccountId && fromAccount?.type === "balance") {
     return (
       <Alert>
         <AlertCircle className="h-4 w-4" />
@@ -73,12 +132,34 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFor
     );
   }
 
-  if (eligibleAccounts.length === 0) {
+  if (allEligibleAccounts.length === 0) {
     return (
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
           No eligible accounts for transfer. Create a transaction or investment account to transfer funds.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (allEligibleAccounts.length < 2) {
+    return (
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Need at least 2 accounts to create a transfer. Create another transaction or investment account.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (eligibleToAccounts.length === 0 && currentFromAccountId) {
+    return (
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          No eligible destination accounts. You need at least 2 accounts to create a transfer.
         </AlertDescription>
       </Alert>
     );
@@ -93,21 +174,43 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFor
         </Alert>
       )}
 
-      <div className="space-y-2">
-        <Label>From Account</Label>
-        <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
-          {fromAccount?.name} ({fromAccount?.currency})
+      {/* From Account selector - only show when fromAccountId not provided */}
+      {!fromAccountId && (
+        <div className="space-y-2">
+          <Label htmlFor="fromAccount">From Account</Label>
+          <Select value={selectedFromAccountId} onValueChange={setSelectedFromAccountId}>
+            <SelectTrigger id="fromAccount">
+              <SelectValue placeholder="Select source account" />
+            </SelectTrigger>
+            <SelectContent>
+              {allEligibleAccounts.map((account) => (
+                <SelectItem key={account.id} value={account.id}>
+                  {account.name} ({account.currency})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      </div>
+      )}
+
+      {/* From Account display - only show when fromAccountId is provided */}
+      {fromAccountId && (
+        <div className="space-y-2">
+          <Label>From Account</Label>
+          <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
+            {fromAccount?.name} ({fromAccount?.currency})
+          </div>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="toAccount">To Account</Label>
-        <Select value={toAccountId} onValueChange={setToAccountId}>
+        <Select value={toAccountId} onValueChange={setToAccountId} disabled={!currentFromAccountId}>
           <SelectTrigger id="toAccount">
             <SelectValue placeholder="Select destination account" />
           </SelectTrigger>
           <SelectContent>
-            {eligibleAccounts.map((account) => (
+            {eligibleToAccounts.map((account) => (
               <SelectItem key={account.id} value={account.id}>
                 {account.name} ({account.currency})
               </SelectItem>
@@ -118,31 +221,88 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFor
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="amount">Amount ({fromAccount?.currency})</Label>
+          <Label htmlFor="fromAmount">
+            From Amount ({fromAccount?.currency})
+          </Label>
           <Input
-            id="amount"
+            id="fromAmount"
             type="number"
             step="0.01"
             min="0"
             placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            value={fromAmount}
+            onChange={(e) => setFromAmount(e.target.value)}
             disabled={isLoading}
             required
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="date">Date</Label>
+          <Label htmlFor="toAmount">
+            To Amount ({toAccount?.currency || "..."})
+          </Label>
           <Input
-            id="date"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            disabled={isLoading}
+            id="toAmount"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0.00"
+            value={toAmount}
+            onChange={(e) => {
+              setToAmount(e.target.value);
+              // If manually setting toAmount, clear exchange rate to recalculate
+              if (isCrossCurrency && fromAmount) {
+                setExchangeRate("");
+              }
+            }}
+            disabled={isLoading || (!isCrossCurrency && fromAmount !== "")}
             required
           />
+          {!isCrossCurrency && fromAccount && (
+            <p className="text-xs text-muted-foreground">
+              Same currency: amounts must be equal
+            </p>
+          )}
         </div>
+      </div>
+
+      {isCrossCurrency && (
+        <div className="space-y-2">
+          <Label htmlFor="exchangeRate">
+            Exchange Rate (optional - calculated automatically)
+          </Label>
+          <Input
+            id="exchangeRate"
+            type="number"
+            step="0.000001"
+            min="0"
+            placeholder="Auto-calculated"
+            value={exchangeRate}
+            onChange={(e) => {
+              setExchangeRate(e.target.value);
+              // If manually setting exchange rate, clear toAmount to recalculate
+              if (fromAmount) {
+                setToAmount("");
+              }
+            }}
+            disabled={isLoading}
+          />
+          <p className="text-xs text-muted-foreground">
+            Rate: 1 {fromAccount?.currency} = {exchangeRate || "?"} {toAccount?.currency}
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label htmlFor="date">Date</Label>
+        <Input
+          id="date"
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          disabled={isLoading}
+          required
+        />
       </div>
 
       <div className="space-y-2">
@@ -157,7 +317,7 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFor
         />
       </div>
 
-      <Button type="submit" className="w-full" disabled={isLoading || !toAccountId || !amount}>
+      <Button type="submit" className="w-full" disabled={isLoading || !currentFromAccountId || !toAccountId || !fromAmount || !toAmount}>
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

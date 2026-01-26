@@ -59,6 +59,47 @@ const openSqlite = (encryptionKey: string): DatabaseInstance => {
   return sqlite;
 };
 
+const runMigrations = (sqlite: DatabaseInstance): void => {
+  // Migration: Add new columns to transfers table if they don't exist
+  // First check if transfers table exists
+  try {
+    const tableCheck = sqlite.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='transfers'
+    `).get();
+    
+    if (!tableCheck) {
+      // Table doesn't exist yet, skip migration (initializeDb will create it)
+      return;
+    }
+
+    // Check if columns exist by querying pragma_table_info
+    const columns = sqlite.prepare("PRAGMA table_info(transfers)").all() as Array<{ name: string }>;
+    const columnNames = columns.map((col) => col.name);
+
+    if (!columnNames.includes("from_amount")) {
+      sqlite.exec("ALTER TABLE transfers ADD COLUMN from_amount REAL");
+    }
+    if (!columnNames.includes("to_amount")) {
+      sqlite.exec("ALTER TABLE transfers ADD COLUMN to_amount REAL");
+    }
+    if (!columnNames.includes("exchange_rate")) {
+      sqlite.exec("ALTER TABLE transfers ADD COLUMN exchange_rate REAL");
+    }
+
+    // Migrate existing data: populate from_amount and to_amount from amount
+    // Only update rows where from_amount is NULL (not yet migrated)
+    sqlite.exec(`
+      UPDATE transfers 
+      SET from_amount = amount, to_amount = amount, exchange_rate = NULL
+      WHERE (from_amount IS NULL OR to_amount IS NULL) AND amount IS NOT NULL
+    `);
+  } catch (error) {
+    // Ignore migration errors - they might occur if table structure is unexpected
+    console.warn("[DB Migration] Could not run migrations:", error);
+  }
+};
+
 export const getDb = (encryptionKey: string): BetterSQLite3Database<typeof schema> => {
   const keyHash = crypto.createHash("sha256").update(encryptionKey).digest("hex").slice(0, 16);
   
@@ -67,6 +108,11 @@ export const getDb = (encryptionKey: string): BetterSQLite3Database<typeof schem
   }
 
   const sqlite = openSqlite(encryptionKey);
+  
+  // Run migrations before creating drizzle instance
+  // This ensures columns exist before Drizzle tries to query them
+  runMigrations(sqlite);
+  
   const db = drizzle(sqlite, { schema });
   connectionCache.set(keyHash, db);
 
@@ -106,6 +152,9 @@ export const initializeDb = (encryptionKey: string): void => {
       from_account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
       to_account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
       amount REAL NOT NULL,
+      from_amount REAL,
+      to_amount REAL,
+      exchange_rate REAL,
       description TEXT,
       date INTEGER NOT NULL,
       created_at INTEGER NOT NULL
@@ -152,6 +201,29 @@ export const initializeDb = (encryptionKey: string): void => {
     INSERT INTO meta (id, schema_version, created_at)
     SELECT '${META_ID}', ${SCHEMA_VERSION}, strftime('%s','now')
     WHERE NOT EXISTS (SELECT 1 FROM meta WHERE id = '${META_ID}');
+  `);
+
+  // Migration: Add new columns to transfers table if they don't exist
+  // Check if columns exist by querying pragma_table_info
+  const columns = sqlite.prepare("PRAGMA table_info(transfers)").all() as Array<{ name: string }>;
+  const columnNames = columns.map((col) => col.name);
+
+  if (!columnNames.includes("from_amount")) {
+    sqlite.exec("ALTER TABLE transfers ADD COLUMN from_amount REAL");
+  }
+  if (!columnNames.includes("to_amount")) {
+    sqlite.exec("ALTER TABLE transfers ADD COLUMN to_amount REAL");
+  }
+  if (!columnNames.includes("exchange_rate")) {
+    sqlite.exec("ALTER TABLE transfers ADD COLUMN exchange_rate REAL");
+  }
+
+  // Migrate existing data: populate from_amount and to_amount from amount
+  // Only update rows where from_amount is NULL (not yet migrated)
+  sqlite.exec(`
+    UPDATE transfers 
+    SET from_amount = amount, to_amount = amount, exchange_rate = NULL
+    WHERE from_amount IS NULL OR to_amount IS NULL
   `);
 
   sqlite.close();

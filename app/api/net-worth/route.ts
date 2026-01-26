@@ -100,8 +100,9 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
             .where(eq(schema.transfers.toAccountId, account.id))
             .all();
 
-          const transferOut = transfersFrom.reduce((sum, t) => sum + t.amount, 0);
-          const transferIn = transfersTo.reduce((sum, t) => sum + t.amount, 0);
+          // Use fromAmount for outgoing transfers, toAmount for incoming transfers
+          const transferOut = transfersFrom.reduce((sum, t) => sum + (t.fromAmount ?? t.amount), 0);
+          const transferIn = transfersTo.reduce((sum, t) => sum + (t.toAmount ?? t.amount), 0);
 
           netContributions = transferIn - transferOut;
           // Ensure profitLoss is always a number, even if 0
@@ -135,8 +136,9 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
             .where(eq(schema.transfers.toAccountId, account.id))
             .all();
 
-          const transferOut = transfersFrom.reduce((sum, t) => sum + t.amount, 0);
-          const transferIn = transfersTo.reduce((sum, t) => sum + t.amount, 0);
+          // Use fromAmount for outgoing transfers, toAmount for incoming transfers
+          const transferOut = transfersFrom.reduce((sum, t) => sum + (t.fromAmount ?? t.amount), 0);
+          const transferIn = transfersTo.reduce((sum, t) => sum + (t.toAmount ?? t.amount), 0);
 
           balance = account.initialBalance + credits - debits + transferIn - transferOut;
         }

@@ -17,7 +17,8 @@ type ImportTransactionRow =
       type: "transfer";
       fromAccountId: string;
       toAccountId: string;
-      amount: number;
+      fromAmount: number;
+      toAmount: number;
       description?: string | null;
       date: string;
     };
@@ -45,8 +46,11 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     let transferCount = 0;
 
     rows.forEach((row, index) => {
-      if (!row.amount || row.amount <= 0) {
+      if (row.type !== "transfer" && (!row.amount || row.amount <= 0)) {
         throw new Error(`Row ${index + 1}: Amount must be a positive number`);
+      }
+      if (row.type === "transfer" && (!row.fromAmount || row.fromAmount <= 0 || !row.toAmount || row.toAmount <= 0)) {
+        throw new Error(`Row ${index + 1}: Both fromAmount and toAmount must be positive numbers`);
       }
       if (!row.date) {
         throw new Error(`Row ${index + 1}: Date is required`);
@@ -69,12 +73,27 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
           throw new Error(`Row ${index + 1}: Transfers cannot use balance accounts`);
         }
 
+        // Validate same-currency transfers: amounts must be equal
+        if (fromAccount.currency === toAccount.currency) {
+          if (row.fromAmount !== row.toAmount) {
+            throw new Error(`Row ${index + 1}: For same-currency transfers, fromAmount and toAmount must be equal`);
+          }
+        }
+
+        // Calculate exchange rate
+        const exchangeRate = fromAccount.currency !== toAccount.currency 
+          ? row.toAmount / row.fromAmount 
+          : null;
+
         db.insert(schema.transfers)
           .values({
             id: uuidv4(),
             fromAccountId: fromAccount.id,
             toAccountId: toAccount.id,
-            amount: Number(row.amount),
+            amount: Number(row.fromAmount), // Keep for backward compatibility
+            fromAmount: Number(row.fromAmount),
+            toAmount: Number(row.toAmount),
+            exchangeRate: exchangeRate,
             description: row.description || null,
             date: parsedDate,
             createdAt: now,

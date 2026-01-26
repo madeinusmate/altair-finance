@@ -50,11 +50,16 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { fromAccountId, toAccountId, amount, description, date } = body;
+    // Support both old format (amount) and new format (fromAmount/toAmount)
+    const { fromAccountId, toAccountId, amount, fromAmount, toAmount, exchangeRate, description, date } = body;
 
-    if (!fromAccountId || !toAccountId || amount === undefined || !date) {
+    // Determine amounts - prefer new format, fallback to old format for backward compatibility
+    const finalFromAmount = fromAmount !== undefined ? Number(fromAmount) : Number(amount);
+    const finalToAmount = toAmount !== undefined ? Number(toAmount) : Number(amount);
+
+    if (!fromAccountId || !toAccountId || (amount === undefined && fromAmount === undefined) || !date) {
       return NextResponse.json(
-        { error: "Missing required fields: fromAccountId, toAccountId, amount, date" },
+        { error: "Missing required fields: fromAccountId, toAccountId, fromAmount (or amount), toAmount (or amount), date" },
         { status: 400 }
       );
     }
@@ -84,11 +89,14 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "One or both accounts not found" }, { status: 404 });
     }
 
-    if (fromAccount.currency !== toAccount.currency) {
-      return NextResponse.json(
-        { error: "Transfers are only allowed between accounts with the same currency." },
-        { status: 400 }
-      );
+    // Validate same-currency transfers: amounts must be equal
+    if (fromAccount.currency === toAccount.currency) {
+      if (finalFromAmount !== finalToAmount) {
+        return NextResponse.json(
+          { error: "For same-currency transfers, fromAmount and toAmount must be equal" },
+          { status: 400 }
+        );
+      }
     }
 
     // Block transfers involving balance accounts
@@ -100,6 +108,14 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       );
     }
 
+    // Calculate exchange rate if not provided
+    let finalExchangeRate: number | null = null;
+    if (fromAccount.currency !== toAccount.currency) {
+      finalExchangeRate = exchangeRate !== undefined ? Number(exchangeRate) : finalToAmount / finalFromAmount;
+    } else {
+      finalExchangeRate = null; // Same currency, no exchange rate needed
+    }
+
     const now = new Date();
     const id = uuidv4();
 
@@ -107,7 +123,10 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       id,
       fromAccountId,
       toAccountId,
-      amount: Number(amount),
+      amount: finalFromAmount, // Keep for backward compatibility
+      fromAmount: finalFromAmount,
+      toAmount: finalToAmount,
+      exchangeRate: finalExchangeRate,
       description: description || null,
       date: new Date(date),
       createdAt: now,
