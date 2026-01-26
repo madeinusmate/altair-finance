@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { eq, or, desc } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
+import { CATEGORIES, Category } from "@/lib/categories";
 
 // GET all transfers or by account
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
@@ -51,15 +52,22 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
   try {
     const body = await request.json();
     // Support both old format (amount) and new format (fromAmount/toAmount)
-    const { fromAccountId, toAccountId, amount, fromAmount, toAmount, exchangeRate, description, date } = body;
+    const { fromAccountId, toAccountId, amount, fromAmount, toAmount, exchangeRate, category, description, date } = body;
 
     // Determine amounts - prefer new format, fallback to old format for backward compatibility
     const finalFromAmount = fromAmount !== undefined ? Number(fromAmount) : Number(amount);
     const finalToAmount = toAmount !== undefined ? Number(toAmount) : Number(amount);
 
-    if (!fromAccountId || !toAccountId || (amount === undefined && fromAmount === undefined) || !date) {
+    if (!fromAccountId || !toAccountId || (amount === undefined && fromAmount === undefined) || !category || !date) {
       return NextResponse.json(
-        { error: "Missing required fields: fromAccountId, toAccountId, fromAmount (or amount), toAmount (or amount), date" },
+        { error: "Missing required fields: fromAccountId, toAccountId, fromAmount (or amount), toAmount (or amount), category, date" },
+        { status: 400 }
+      );
+    }
+
+    if (!CATEGORIES.includes(category as Category)) {
+      return NextResponse.json(
+        { error: `Category must be one of: ${CATEGORIES.join(", ")}` },
         { status: 400 }
       );
     }
@@ -127,6 +135,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       fromAmount: finalFromAmount,
       toAmount: finalToAmount,
       exchangeRate: finalExchangeRate,
+      category,
       description: description || null,
       date: new Date(date),
       createdAt: now,
@@ -138,6 +147,131 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
   } catch (error) {
     console.error("Error creating transfer:", error);
     return NextResponse.json({ error: "Failed to create transfer" }, { status: 500 });
+  }
+};
+
+// PUT update transfer
+export const PUT = async (request: NextRequest): Promise<NextResponse> => {
+  const key = getEncryptionKey(request);
+  if (!key) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const { id, fromAccountId, toAccountId, amount, fromAmount, toAmount, exchangeRate, category, description, date } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Transfer ID is required" }, { status: 400 });
+    }
+
+    // Determine amounts - prefer new format, fallback to old format for backward compatibility
+    const finalFromAmount = fromAmount !== undefined ? Number(fromAmount) : Number(amount);
+    const finalToAmount = toAmount !== undefined ? Number(toAmount) : Number(amount);
+
+    if (!fromAccountId || !toAccountId || (amount === undefined && fromAmount === undefined) || !category || !date) {
+      return NextResponse.json(
+        { error: "Missing required fields: fromAccountId, toAccountId, fromAmount (or amount), toAmount (or amount), category, date" },
+        { status: 400 }
+      );
+    }
+
+    if (!CATEGORIES.includes(category as Category)) {
+      return NextResponse.json(
+        { error: `Category must be one of: ${CATEGORIES.join(", ")}` },
+        { status: 400 }
+      );
+    }
+
+    if (fromAccountId === toAccountId) {
+      return NextResponse.json(
+        { error: "Source and destination accounts must be different" },
+        { status: 400 }
+      );
+    }
+
+    const db = getDb(key);
+
+    // Verify transfer exists
+    const existingTransfer = db
+      .select()
+      .from(schema.transfers)
+      .where(eq(schema.transfers.id, id))
+      .get();
+
+    if (!existingTransfer) {
+      return NextResponse.json({ error: "Transfer not found" }, { status: 404 });
+    }
+
+    // Verify both accounts exist
+    const fromAccount = db
+      .select()
+      .from(schema.accounts)
+      .where(eq(schema.accounts.id, fromAccountId))
+      .get();
+    const toAccount = db
+      .select()
+      .from(schema.accounts)
+      .where(eq(schema.accounts.id, toAccountId))
+      .get();
+
+    if (!fromAccount || !toAccount) {
+      return NextResponse.json({ error: "One or both accounts not found" }, { status: 404 });
+    }
+
+    // Validate same-currency transfers: amounts must be equal
+    if (fromAccount.currency === toAccount.currency) {
+      if (finalFromAmount !== finalToAmount) {
+        return NextResponse.json(
+          { error: "For same-currency transfers, fromAmount and toAmount must be equal" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Block transfers involving balance accounts
+    if (fromAccount.type === "balance" || toAccount.type === "balance") {
+      return NextResponse.json(
+        { error: "Transfers are not allowed for balance accounts. Only transaction and investment accounts can participate in transfers." },
+        { status: 400 }
+      );
+    }
+
+    // Calculate exchange rate if not provided
+    let finalExchangeRate: number | null = null;
+    if (fromAccount.currency !== toAccount.currency) {
+      finalExchangeRate = exchangeRate !== undefined ? Number(exchangeRate) : finalToAmount / finalFromAmount;
+    } else {
+      finalExchangeRate = null; // Same currency, no exchange rate needed
+    }
+
+    const updatedTransfer = {
+      fromAccountId,
+      toAccountId,
+      amount: finalFromAmount, // Keep for backward compatibility
+      fromAmount: finalFromAmount,
+      toAmount: finalToAmount,
+      exchangeRate: finalExchangeRate,
+      category,
+      description: description || null,
+      date: new Date(date),
+    };
+
+    db.update(schema.transfers)
+      .set(updatedTransfer)
+      .where(eq(schema.transfers.id, id))
+      .run();
+
+    const updated = db
+      .select()
+      .from(schema.transfers)
+      .where(eq(schema.transfers.id, id))
+      .get();
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error("Error updating transfer:", error);
+    return NextResponse.json({ error: "Failed to update transfer" }, { status: 500 });
   }
 };
 

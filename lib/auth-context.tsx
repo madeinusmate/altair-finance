@@ -10,6 +10,7 @@ interface AuthContextType {
   isLoading: boolean;
   unlock: (key: string) => Promise<{ success: boolean; error?: string }>;
   bootstrap: (key: string) => Promise<{ success: boolean; error?: string }>;
+  importDatabase: (file: File, key: string) => Promise<{ success: boolean; error?: string }>;
   lock: () => void;
   getKey: () => string | null;
   refreshStatus: () => Promise<AppState>;
@@ -116,6 +117,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  const importDatabase = useCallback(
+    async (file: File, key: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("key", key);
+
+        const response = await fetch("/api/app/import", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          sessionStorage.setItem(SESSION_KEY, key);
+          setState("unlocked");
+          return { success: true };
+        }
+
+        return {
+          success: false,
+          error: data.error || "Failed to import database",
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: "Failed to import database",
+        };
+      }
+    },
+    []
+  );
+
   const lock = useCallback(() => {
     sessionStorage.removeItem(SESSION_KEY);
     setState("locked");
@@ -133,6 +167,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isLoading: state === "loading",
         unlock,
         bootstrap,
+        importDatabase,
         lock,
         getKey,
         refreshStatus,

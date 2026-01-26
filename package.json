@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "main": "electron/dist/main.js",
-  "author":"@madeinusmate",
-  "license":"MIT",
+  "author": "@madeinusmate",
+  "license": "MIT",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --webpack",
@@ -45,6 +45,7 @@
     "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@types/yauzl": "^2.10.3",
     "archiver": "^7.0.1",
     "better-sqlite3": "^12.6.2",
     "better-sqlite3-multiple-ciphers": "^12.6.2",
@@ -71,6 +72,7 @@
     "uuid": "^13.0.0",
     "vaul": "^1.1.2",
     "wait-on": "^9.0.3",
+    "yauzl": "^3.2.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -121,7 +123,9 @@
       {
         "from": "node-bin/darwin/arm64/node",
         "to": "node/arm64/node",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "publish": null,
@@ -134,7 +138,7 @@
           "arch": [
             "arm64"
           ]
-        }        
+        }
       ]
     }
   }

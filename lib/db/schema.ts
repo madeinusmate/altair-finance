@@ -38,6 +38,7 @@ export const transfers = sqliteTable("transfers", {
   fromAmount: real("from_amount").notNull(),
   toAmount: real("to_amount").notNull(),
   exchangeRate: real("exchange_rate"),
+  category: text("category").notNull().default("Transfer"),
   description: text("description"),
   date: integer("date", { mode: "timestamp" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),

@@ -15,25 +15,56 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
-import { Account } from "@/lib/db/schema";
+import { Account, Transfer } from "@/lib/db/schema";
+import { CATEGORIES } from "@/lib/categories";
+import { toast } from "sonner";
 
 interface TransferFormProps {
   fromAccountId?: string;
   accounts: Account[];
   onSuccess: () => void;
+  transfer?: Transfer;
+  mode?: "create" | "edit";
 }
 
-export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFormProps) => {
+export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mode = "create" }: TransferFormProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedFromAccountId, setSelectedFromAccountId] = useState<string>("");
-  const [toAccountId, setToAccountId] = useState("");
-  const [fromAmount, setFromAmount] = useState("");
-  const [toAmount, setToAmount] = useState("");
-  const [exchangeRate, setExchangeRate] = useState("");
-  const [description, setDescription] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [selectedFromAccountId, setSelectedFromAccountId] = useState<string>(
+    transfer?.fromAccountId || ""
+  );
+  const [toAccountId, setToAccountId] = useState(transfer?.toAccountId || "");
+  const [fromAmount, setFromAmount] = useState(
+    transfer ? (transfer.fromAmount ?? transfer.amount).toString() : ""
+  );
+  const [toAmount, setToAmount] = useState(
+    transfer ? (transfer.toAmount ?? transfer.amount).toString() : ""
+  );
+  const [exchangeRate, setExchangeRate] = useState(
+    transfer?.exchangeRate ? transfer.exchangeRate.toString() : ""
+  );
+  const [category, setCategory] = useState<string>(
+    transfer?.category || CATEGORIES[0]
+  );
+  const [description, setDescription] = useState(transfer?.description || "");
+  const [date, setDate] = useState(
+    transfer ? new Date(transfer.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
+  );
+
+  // Pre-populate form when transfer is provided
+  useEffect(() => {
+    if (transfer) {
+      setSelectedFromAccountId(transfer.fromAccountId);
+      setToAccountId(transfer.toAccountId);
+      setFromAmount((transfer.fromAmount ?? transfer.amount).toString());
+      setToAmount((transfer.toAmount ?? transfer.amount).toString());
+      setExchangeRate(transfer.exchangeRate ? transfer.exchangeRate.toString() : "");
+      setCategory(transfer.category || CATEGORIES[0]);
+      setDescription(transfer.description || "");
+      setDate(new Date(transfer.date).toISOString().split("T")[0]);
+    }
+  }, [transfer]);
 
   // Filter eligible accounts: transaction and investment only (exclude balance)
   const allEligibleAccounts = accounts.filter((a) => a.type !== "balance");
@@ -80,12 +111,14 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFor
     }
   }, [fromAmount, exchangeRate, isCrossCurrency, toAmount]);
 
-  // Reset amounts when destination account or source account changes
+  // Reset amounts when destination account or source account changes (only in create mode)
   useEffect(() => {
-    setFromAmount("");
-    setToAmount("");
-    setExchangeRate("");
-  }, [toAccountId, currentFromAccountId]);
+    if (mode === "create") {
+      setFromAmount("");
+      setToAmount("");
+      setExchangeRate("");
+    }
+  }, [toAccountId, currentFromAccountId, mode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,15 +136,32 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFor
         return;
       }
 
-      await apiClient.post("/api/transfers", {
-        fromAccountId: currentFromAccountId,
-        toAccountId,
-        fromAmount: fromAmountValue,
-        toAmount: toAmountValue,
-        exchangeRate: exchangeRate ? parseFloat(exchangeRate) : undefined,
-        description: description || null,
-        date,
-      });
+      if (mode === "edit" && transfer) {
+        await apiClient.put("/api/transfers", {
+          id: transfer.id,
+          fromAccountId: currentFromAccountId,
+          toAccountId,
+          fromAmount: fromAmountValue,
+          toAmount: toAmountValue,
+          exchangeRate: exchangeRate ? parseFloat(exchangeRate) : undefined,
+          category,
+          description: description || null,
+          date,
+        });
+        toast.success("Transfer updated successfully");
+      } else {
+        await apiClient.post("/api/transfers", {
+          fromAccountId: currentFromAccountId,
+          toAccountId,
+          fromAmount: fromAmountValue,
+          toAmount: toAmountValue,
+          exchangeRate: exchangeRate ? parseFloat(exchangeRate) : undefined,
+          category,
+          description: description || null,
+          date,
+        });
+        toast.success("Transfer created successfully");
+      }
 
       onSuccess();
     } catch (err) {
@@ -174,11 +224,15 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFor
         </Alert>
       )}
 
-      {/* From Account selector - only show when fromAccountId not provided */}
-      {!fromAccountId && (
+      {/* From Account selector - show when fromAccountId not provided or in edit mode */}
+      {(!fromAccountId || mode === "edit") && (
         <div className="space-y-2">
           <Label htmlFor="fromAccount">From Account</Label>
-          <Select value={selectedFromAccountId} onValueChange={setSelectedFromAccountId}>
+          <Select 
+            value={selectedFromAccountId} 
+            onValueChange={setSelectedFromAccountId}
+            disabled={mode === "edit"}
+          >
             <SelectTrigger id="fromAccount">
               <SelectValue placeholder="Select source account" />
             </SelectTrigger>
@@ -193,8 +247,8 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFor
         </div>
       )}
 
-      {/* From Account display - only show when fromAccountId is provided */}
-      {fromAccountId && (
+      {/* From Account display - only show when fromAccountId is provided and in create mode */}
+      {fromAccountId && mode === "create" && (
         <div className="space-y-2">
           <Label>From Account</Label>
           <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
@@ -213,6 +267,22 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFor
             {eligibleToAccounts.map((account) => (
               <SelectItem key={account.id} value={account.id}>
                 {account.name} ({account.currency})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="category">Category</Label>
+        <Select value={category} onValueChange={setCategory}>
+          <SelectTrigger id="category">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CATEGORIES.map((cat) => (
+              <SelectItem key={cat} value={cat}>
+                {cat}
               </SelectItem>
             ))}
           </SelectContent>
@@ -317,14 +387,14 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess }: TransferFor
         />
       </div>
 
-      <Button type="submit" className="w-full" disabled={isLoading || !currentFromAccountId || !toAccountId || !fromAmount || !toAmount}>
+      <Button type="submit" className="w-full" disabled={isLoading || !currentFromAccountId || !toAccountId || !fromAmount || !toAmount || !category}>
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Transferring...
+            {mode === "edit" ? "Updating..." : "Transferring..."}
           </>
         ) : (
-          "Create Transfer"
+          mode === "edit" ? "Update Transfer" : "Create Transfer"
         )}
       </Button>
     </form>

@@ -59,7 +59,7 @@ const openSqlite = (encryptionKey: string): DatabaseInstance => {
   return sqlite;
 };
 
-const runMigrations = (sqlite: DatabaseInstance): void => {
+export const runMigrations = (sqlite: DatabaseInstance): void => {
   // Migration: Add new columns to transfers table if they don't exist
   // First check if transfers table exists
   try {
@@ -86,6 +86,9 @@ const runMigrations = (sqlite: DatabaseInstance): void => {
     if (!columnNames.includes("exchange_rate")) {
       sqlite.exec("ALTER TABLE transfers ADD COLUMN exchange_rate REAL");
     }
+    if (!columnNames.includes("category")) {
+      sqlite.exec("ALTER TABLE transfers ADD COLUMN category TEXT NOT NULL DEFAULT 'Transfer'");
+    }
 
     // Migrate existing data: populate from_amount and to_amount from amount
     // Only update rows where from_amount is NULL (not yet migrated)
@@ -93,6 +96,13 @@ const runMigrations = (sqlite: DatabaseInstance): void => {
       UPDATE transfers 
       SET from_amount = amount, to_amount = amount, exchange_rate = NULL
       WHERE (from_amount IS NULL OR to_amount IS NULL) AND amount IS NOT NULL
+    `);
+
+    // Migrate existing transfers: set category to 'Transfer' if NULL
+    sqlite.exec(`
+      UPDATE transfers 
+      SET category = 'Transfer'
+      WHERE category IS NULL
     `);
   } catch (error) {
     // Ignore migration errors - they might occur if table structure is unexpected
@@ -155,6 +165,7 @@ export const initializeDb = (encryptionKey: string): void => {
       from_amount REAL,
       to_amount REAL,
       exchange_rate REAL,
+      category TEXT NOT NULL DEFAULT 'Transfer',
       description TEXT,
       date INTEGER NOT NULL,
       created_at INTEGER NOT NULL
@@ -217,6 +228,9 @@ export const initializeDb = (encryptionKey: string): void => {
   if (!columnNames.includes("exchange_rate")) {
     sqlite.exec("ALTER TABLE transfers ADD COLUMN exchange_rate REAL");
   }
+  if (!columnNames.includes("category")) {
+    sqlite.exec("ALTER TABLE transfers ADD COLUMN category TEXT NOT NULL DEFAULT 'Transfer'");
+  }
 
   // Migrate existing data: populate from_amount and to_amount from amount
   // Only update rows where from_amount is NULL (not yet migrated)
@@ -224,6 +238,13 @@ export const initializeDb = (encryptionKey: string): void => {
     UPDATE transfers 
     SET from_amount = amount, to_amount = amount, exchange_rate = NULL
     WHERE from_amount IS NULL OR to_amount IS NULL
+  `);
+
+  // Migrate existing transfers: set category to 'Transfer' if NULL
+  sqlite.exec(`
+    UPDATE transfers 
+    SET category = 'Transfer'
+    WHERE category IS NULL
   `);
 
   sqlite.close();
@@ -253,3 +274,16 @@ export const clearConnectionCache = (): void => {
 };
 
 export { schema };
+
+// Re-export import utilities for convenience
+export {
+  validateImportedDatabase,
+  getDatabaseStats,
+  backupDatabase,
+  forceCloseConnections,
+  extractZipFile,
+  type DatabaseStats,
+  type ValidationResult,
+} from "./import-utils";
+
+export { META_ID, SCHEMA_VERSION };

@@ -1,4 +1,5 @@
-date,account,description,amount,category,type,transfer_account
-2025-01-15,Checking,Paycheck,2500.00,Income,credit,
-2025-01-16,Checking,Rent,1200.00,Bills,debit,
-2025-01-17,Checking,Transfer to Savings,300.00,,transfer,Savings
+date,account,description,amount,from_amount,to_amount,category,type,transfer_account
+2025-01-15,Checking,Paycheck,2500.00,,,Income,credit,
+2025-01-16,Checking,Rent,1200.00,,,Bills,debit,
+2025-01-17,Checking,Transfer to Savings,300.00,300.00,300.00,,transfer,Savings
+2025-01-18,Checking,Transfer to EUR Account,1000.00,1000.00,920.00,,transfer,EUR Account

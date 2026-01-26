@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, KeyRound, AlertCircle } from "lucide-react";
+import { Loader2, KeyRound, AlertCircle, Upload } from "lucide-react";
+import { DatabaseImportWizard } from "@/components/database-import-wizard";
 
 const getStrength = (value: string): { label: string; tone: "muted" | "warning" | "success" } => {
   if (value.length < 8) {
@@ -35,6 +36,7 @@ export const OnboardingForm = () => {
   const [confirmKey, setConfirmKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showImportWizard, setShowImportWizard] = useState(false);
   const { bootstrap } = useAuth();
   const router = useRouter();
 
@@ -141,7 +143,20 @@ export const OnboardingForm = () => {
             Keep this key safe. Losing it means losing access to your data.
           </p>
         </form>
+        <div className="mt-4 pt-4 border-t">
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            onClick={() => setShowImportWizard(true)}
+            disabled={isLoading}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Import Existing Database
+          </Button>
+        </div>
       </CardContent>
+      <DatabaseImportWizard open={showImportWizard} onOpenChange={setShowImportWizard} />
     </Card>
   );
 };

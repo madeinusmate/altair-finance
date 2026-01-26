@@ -8,6 +8,7 @@ import {
   type SupportedCurrency,
 } from "@/lib/currencies";
 import { convertAmount, getFxSnapshot } from "@/lib/fx";
+import { calculateTransactionAccountBalance } from "@/lib/accounting";
 
 interface AccountBalance {
   id: string;
@@ -108,7 +109,9 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
           // Ensure profitLoss is always a number, even if 0
           profitLoss = balance - netContributions;
         } else {
-          // For transaction accounts: initialBalance + sum(credits) - sum(debits) + transfers
+          // For transaction accounts: calculate balance based on account nature (asset vs liability)
+          // Assets: credits increase, debits decrease, transfers in increase, transfers out decrease
+          // Liabilities: credits decrease debt, debits increase debt, transfers in decrease debt, transfers out increase debt
           const transactions = db
             .select()
             .from(schema.transactions)
@@ -140,7 +143,14 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
           const transferOut = transfersFrom.reduce((sum, t) => sum + (t.fromAmount ?? t.amount), 0);
           const transferIn = transfersTo.reduce((sum, t) => sum + (t.toAmount ?? t.amount), 0);
 
-          balance = account.initialBalance + credits - debits + transferIn - transferOut;
+          balance = calculateTransactionAccountBalance(
+            account.initialBalance,
+            credits,
+            debits,
+            transferIn,
+            transferOut,
+            account.nature as "asset" | "liability"
+          );
         }
 
         const accountBalance: AccountBalance = {
@@ -191,7 +201,9 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
           if (account.nature === "asset") {
             totalAssets += convertedBalance;
           } else {
-            totalLiabilities += convertedBalance;
+            // Liabilities are stored as negative values, so use absolute value for net worth calculation
+            // Net worth = assets - |liabilities|
+            totalLiabilities += Math.abs(convertedBalance);
           }
 
           if (account.type === "investment" && account.profitLoss !== undefined) {

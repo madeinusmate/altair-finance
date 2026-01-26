@@ -45,6 +45,26 @@ const normalizeAccountName = (name: string) => name.trim().toLowerCase();
 
 const getDateKey = (value: number) => new Date(value).toISOString().split("T")[0];
 
+// Safely convert a date (string, Date, or number) to a timestamp
+const safeDateToTimestamp = (date: string | Date | number | null | undefined): number => {
+  if (!date) {
+    return 0;
+  }
+  if (typeof date === "number") {
+    return date;
+  }
+  if (date instanceof Date) {
+    return date.getTime();
+  }
+  // It's a string, convert to Date first
+  const dateObj = new Date(date);
+  if (Number.isNaN(dateObj.getTime())) {
+    console.warn("Invalid date value:", date);
+    return 0;
+  }
+  return dateObj.getTime();
+};
+
 const buildTransactionKey = (accountId: string, date: string, amount: number, description: string) =>
   `${accountId}|${date}|${amount}|${description.trim().toLowerCase()}`;
 
@@ -185,98 +205,142 @@ export const useImportWizard = () => {
   };
 
   const applyTransactionDuplicateFlag = (row: TransactionRow) => {
-    const account = accountMap.get(normalizeAccountName(row.account));
-    if (!account) {
-      return row;
-    }
-    const amountValue = Number(row.amount);
-    const fromAmountValue = Number(row.fromAmount);
-    const toAmountValue = Number(row.toAmount);
-    const descriptionValue = row.description || "";
-    let isDuplicate = false;
-
-    if (row.type === "transfer") {
-      const transferAccount = accountMap.get(normalizeAccountName(row.transferAccount));
-      if (transferAccount) {
-        const key = buildTransferKey(account.id, transferAccount.id, row.date, fromAmountValue, toAmountValue);
-        isDuplicate = existingTransfers.some(
-          (transfer) =>
-            buildTransferKey(
-              transfer.fromAccountId,
-              transfer.toAccountId,
-              getDateKey(transfer.date.getTime()),
-              transfer.fromAmount ?? transfer.amount, // Fallback for backward compatibility
-              transfer.toAmount ?? transfer.amount    // Fallback for backward compatibility
-            ) === key
-        );
+    try {
+      const account = accountMap.get(normalizeAccountName(row.account));
+      if (!account) {
+        return row;
       }
-    } else {
-      const key = buildTransactionKey(account.id, row.date, amountValue, descriptionValue);
-      isDuplicate = existingTransactions.some(
-        (transaction) =>
-          buildTransactionKey(
-            transaction.accountId,
-            getDateKey(transaction.date.getTime()),
-            transaction.amount,
-            transaction.description || ""
-          ) === key
-      );
-    }
+      const amountValue = Number(row.amount);
+      const fromAmountValue = Number(row.fromAmount);
+      const toAmountValue = Number(row.toAmount);
+      const descriptionValue = row.description || "";
+      let isDuplicate = false;
 
-    const warningMessage = "Possible duplicate";
-    const hasWarning = row.warnings.includes(warningMessage);
-    if (isDuplicate && !hasWarning) {
-      return {
-        ...row,
-        duplicate: true,
-        warnings: [...row.warnings, warningMessage],
-      };
+      if (row.type === "transfer") {
+        const transferAccount = accountMap.get(normalizeAccountName(row.transferAccount));
+        if (transferAccount) {
+          const key = buildTransferKey(account.id, transferAccount.id, row.date, fromAmountValue, toAmountValue);
+          isDuplicate = existingTransfers.some((transfer) => {
+            try {
+              const transferDate = safeDateToTimestamp(transfer.date);
+              if (transferDate === 0) {
+                return false; // Skip invalid dates
+              }
+              return (
+                buildTransferKey(
+                  transfer.fromAccountId,
+                  transfer.toAccountId,
+                  getDateKey(transferDate),
+                  transfer.fromAmount ?? transfer.amount, // Fallback for backward compatibility
+                  transfer.toAmount ?? transfer.amount    // Fallback for backward compatibility
+                ) === key
+              );
+            } catch (error) {
+              console.warn("Error checking transfer duplicate:", error, transfer);
+              return false;
+            }
+          });
+        }
+      } else {
+        const key = buildTransactionKey(account.id, row.date, amountValue, descriptionValue);
+        isDuplicate = existingTransactions.some((transaction) => {
+          try {
+            const transactionDate = safeDateToTimestamp(transaction.date);
+            if (transactionDate === 0) {
+              return false; // Skip invalid dates
+            }
+            return (
+              buildTransactionKey(
+                transaction.accountId,
+                getDateKey(transactionDate),
+                transaction.amount,
+                transaction.description || ""
+              ) === key
+            );
+          } catch (error) {
+            console.warn("Error checking transaction duplicate:", error, transaction);
+            return false;
+          }
+        });
+      }
+
+      const warningMessage = "Possible duplicate";
+      const hasWarning = row.warnings.includes(warningMessage);
+      if (isDuplicate && !hasWarning) {
+        return {
+          ...row,
+          duplicate: true,
+          warnings: [...row.warnings, warningMessage],
+        };
+      }
+      if (!isDuplicate && hasWarning) {
+        return {
+          ...row,
+          duplicate: false,
+          warnings: row.warnings.filter((warning) => warning !== warningMessage),
+        };
+      }
+      return { ...row, duplicate: isDuplicate };
+    } catch (error) {
+      console.error("Error in applyTransactionDuplicateFlag:", error, row);
+      // Return row without duplicate flag on error
+      return { ...row, duplicate: false };
     }
-    if (!isDuplicate && hasWarning) {
-      return {
-        ...row,
-        duplicate: false,
-        warnings: row.warnings.filter((warning) => warning !== warningMessage),
-      };
-    }
-    return { ...row, duplicate: isDuplicate };
   };
 
   const applyBalanceDuplicateFlag = (row: BalanceRow) => {
-    const account = accountMap.get(normalizeAccountName(row.account));
-    if (!account) {
-      return row;
-    }
-    const balanceValue = Number(row.balance);
-    const key = buildBalanceKey(account.id, row.date, balanceValue);
+    try {
+      const account = accountMap.get(normalizeAccountName(row.account));
+      if (!account) {
+        return row;
+      }
+      const balanceValue = Number(row.balance);
+      const key = buildBalanceKey(account.id, row.date, balanceValue);
 
-    const matchesHistory = (history: BalanceHistory | InvestmentHistory) =>
-      buildBalanceKey(
-        history.accountId,
-        getDateKey(new Date(history.date).getTime()),
-        history.balance
-      ) === key;
-
-    const isDuplicate =
-      existingBalances.some(matchesHistory) || existingInvestments.some(matchesHistory);
-
-    const warningMessage = "Possible duplicate";
-    const hasWarning = row.warnings.includes(warningMessage);
-    if (isDuplicate && !hasWarning) {
-      return {
-        ...row,
-        duplicate: true,
-        warnings: [...row.warnings, warningMessage],
+      const matchesHistory = (history: BalanceHistory | InvestmentHistory) => {
+        try {
+          const historyDate = safeDateToTimestamp(history.date);
+          if (historyDate === 0) {
+            return false; // Skip invalid dates
+          }
+          return (
+            buildBalanceKey(
+              history.accountId,
+              getDateKey(historyDate),
+              history.balance
+            ) === key
+          );
+        } catch (error) {
+          console.warn("Error checking balance duplicate:", error, history);
+          return false;
+        }
       };
+
+      const isDuplicate =
+        existingBalances.some(matchesHistory) || existingInvestments.some(matchesHistory);
+
+      const warningMessage = "Possible duplicate";
+      const hasWarning = row.warnings.includes(warningMessage);
+      if (isDuplicate && !hasWarning) {
+        return {
+          ...row,
+          duplicate: true,
+          warnings: [...row.warnings, warningMessage],
+        };
+      }
+      if (!isDuplicate && hasWarning) {
+        return {
+          ...row,
+          duplicate: false,
+          warnings: row.warnings.filter((warning) => warning !== warningMessage),
+        };
+      }
+      return { ...row, duplicate: isDuplicate };
+    } catch (error) {
+      console.error("Error in applyBalanceDuplicateFlag:", error, row);
+      // Return row without duplicate flag on error
+      return { ...row, duplicate: false };
     }
-    if (!isDuplicate && hasWarning) {
-      return {
-        ...row,
-        duplicate: false,
-        warnings: row.warnings.filter((warning) => warning !== warningMessage),
-      };
-    }
-    return { ...row, duplicate: isDuplicate };
   };
 
   const loadTransactionDuplicates = async () => {
@@ -285,10 +349,30 @@ export const useImportWizard = () => {
         apiClient.get<Transaction[]>("/api/transactions"),
         apiClient.get<Transfer[]>("/api/transfers"),
       ]);
-      setExistingTransactions(transactions);
-      setExistingTransfers(transfers);
+      // Validate and filter out any invalid transactions/transfers
+      const validTransactions = transactions.filter((t) => {
+        try {
+          const date = safeDateToTimestamp(t.date);
+          return date !== 0 && !Number.isNaN(t.amount);
+        } catch {
+          return false;
+        }
+      });
+      const validTransfers = transfers.filter((t) => {
+        try {
+          const date = safeDateToTimestamp(t.date);
+          return date !== 0;
+        } catch {
+          return false;
+        }
+      });
+      setExistingTransactions(validTransactions);
+      setExistingTransfers(validTransfers);
     } catch (error) {
-      console.error(error);
+      console.error("Error loading transaction duplicates:", error);
+      // Set empty arrays on error to prevent crashes
+      setExistingTransactions([]);
+      setExistingTransfers([]);
     }
   };
 
@@ -308,10 +392,32 @@ export const useImportWizard = () => {
       );
       const balanceResults = await Promise.all(balancePromises);
       const investmentResults = await Promise.all(investmentPromises);
-      setExistingBalances(balanceResults.flat());
-      setExistingInvestments(investmentResults.flat());
+      
+      // Validate and filter out any invalid balance/investment history entries
+      const validBalances = balanceResults.flat().filter((h) => {
+        try {
+          const date = safeDateToTimestamp(h.date);
+          return date !== 0 && !Number.isNaN(h.balance);
+        } catch {
+          return false;
+        }
+      });
+      const validInvestments = investmentResults.flat().filter((h) => {
+        try {
+          const date = safeDateToTimestamp(h.date);
+          return date !== 0 && !Number.isNaN(h.balance);
+        } catch {
+          return false;
+        }
+      });
+      
+      setExistingBalances(validBalances);
+      setExistingInvestments(validInvestments);
     } catch (error) {
-      console.error(error);
+      console.error("Error loading balance duplicates:", error);
+      // Set empty arrays on error to prevent crashes
+      setExistingBalances([]);
+      setExistingInvestments([]);
     }
   };
 
@@ -337,9 +443,14 @@ export const useImportWizard = () => {
     if (transactionRows.length === 0) {
       return;
     }
-    setTransactionRows((currentRows) =>
-      updateRowsIfChanged(currentRows, applyTransactionDuplicateFlag)
-    );
+    try {
+      setTransactionRows((currentRows) =>
+        updateRowsIfChanged(currentRows, applyTransactionDuplicateFlag)
+      );
+    } catch (error) {
+      console.error("Error updating transaction duplicate flags:", error);
+      // Don't crash the app, just log the error
+    }
   }, [existingTransactions, existingTransfers, importType, transactionRows.length]);
 
   useEffect(() => {
@@ -349,9 +460,14 @@ export const useImportWizard = () => {
     if (balanceRows.length === 0) {
       return;
     }
-    setBalanceRows((currentRows) =>
-      updateRowsIfChanged(currentRows, applyBalanceDuplicateFlag)
-    );
+    try {
+      setBalanceRows((currentRows) =>
+        updateRowsIfChanged(currentRows, applyBalanceDuplicateFlag)
+      );
+    } catch (error) {
+      console.error("Error updating balance duplicate flags:", error);
+      // Don't crash the app, just log the error
+    }
   }, [existingBalances, existingInvestments, importType, balanceRows.length]);
 
   const processFile = async () => {
@@ -396,59 +512,77 @@ export const useImportWizard = () => {
   };
 
   const updateTransactionRow = (rowId: string, key: keyof TransactionRow, value: string) => {
-    setTransactionRows((currentRows) => {
-      const nextRows = currentRows.map((row) => {
-        if (row.id !== rowId) {
-          return row;
-        }
-        const updatedRow = { ...row, [key]: value };
-        const rawRow = {
-          date: updatedRow.date,
-          account: updatedRow.account,
-          description: updatedRow.description,
-          amount: updatedRow.amount,
-          from_amount: updatedRow.fromAmount,
-          to_amount: updatedRow.toAmount,
-          category: updatedRow.category,
-          type: updatedRow.type,
-          transfer_account: updatedRow.transferAccount,
-        };
-        const [validated] = validateTransactionRows([rawRow], accounts);
-        const updated = {
-          ...validated,
-          id: row.id,
-          rowNumber: row.rowNumber,
-        };
-        return applyTransactionDuplicateFlag(updated);
-      });
+    try {
+      setTransactionRows((currentRows) => {
+        const nextRows = currentRows.map((row) => {
+          if (row.id !== rowId) {
+            return row;
+          }
+          try {
+            const updatedRow = { ...row, [key]: value };
+            const rawRow = {
+              date: updatedRow.date,
+              account: updatedRow.account,
+              description: updatedRow.description,
+              amount: updatedRow.amount,
+              from_amount: updatedRow.fromAmount,
+              to_amount: updatedRow.toAmount,
+              category: updatedRow.category,
+              type: updatedRow.type,
+              transfer_account: updatedRow.transferAccount,
+            };
+            const [validated] = validateTransactionRows([rawRow], accounts);
+            const updated = {
+              ...validated,
+              id: row.id,
+              rowNumber: row.rowNumber,
+            };
+            return applyTransactionDuplicateFlag(updated);
+          } catch (error) {
+            console.error("Error updating transaction row:", error, row);
+            return row; // Return original row on error
+          }
+        });
 
-      return nextRows;
-    });
+        return nextRows;
+      });
+    } catch (error) {
+      console.error("Error in updateTransactionRow:", error);
+    }
   };
 
   const updateBalanceRow = (rowId: string, key: keyof BalanceRow, value: string) => {
-    setBalanceRows((currentRows) => {
-      const nextRows = currentRows.map((row) => {
-        if (row.id !== rowId) {
-          return row;
-        }
-        const updatedRow = { ...row, [key]: value };
-        const rawRow = {
-          date: updatedRow.date,
-          account: updatedRow.account,
-          balance: updatedRow.balance,
-        };
-        const [validated] = validateBalanceRows([rawRow], accounts);
-        const updated = {
-          ...validated,
-          id: row.id,
-          rowNumber: row.rowNumber,
-        };
-        return applyBalanceDuplicateFlag(updated);
-      });
+    try {
+      setBalanceRows((currentRows) => {
+        const nextRows = currentRows.map((row) => {
+          if (row.id !== rowId) {
+            return row;
+          }
+          try {
+            const updatedRow = { ...row, [key]: value };
+            const rawRow = {
+              date: updatedRow.date,
+              account: updatedRow.account,
+              balance: updatedRow.balance,
+            };
+            const [validated] = validateBalanceRows([rawRow], accounts);
+            const updated = {
+              ...validated,
+              id: row.id,
+              rowNumber: row.rowNumber,
+            };
+            return applyBalanceDuplicateFlag(updated);
+          } catch (error) {
+            console.error("Error updating balance row:", error, row);
+            return row; // Return original row on error
+          }
+        });
 
-      return nextRows;
-    });
+        return nextRows;
+      });
+    } catch (error) {
+      console.error("Error in updateBalanceRow:", error);
+    }
   };
 
   const updateAccountRow = (rowId: string, key: keyof AccountRow, value: string) => {

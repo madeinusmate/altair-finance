@@ -4,14 +4,16 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Database, Info, Loader2 } from "lucide-react";
+import { Database, Info, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DatabaseDeleteDialog } from "@/components/database-delete-dialog";
+import { DatabaseImportWizard } from "@/components/database-import-wizard";
 import { useAuth } from "@/lib/auth-context";
 
 const SettingsPage = () => {
   const [isExporting, setIsExporting] = useState(false);
-  const { getKey } = useAuth();
+  const [showImportWizard, setShowImportWizard] = useState(false);
+  const { getKey, isAuthenticated } = useAuth();
 
   const handleExport = async () => {
     const key = getKey();
@@ -98,11 +100,13 @@ const SettingsPage = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Database className="h-5 w-5" />
-            Database Export
+            Database Export & Import
           </CardTitle>
-          <CardDescription>Download an encrypted backup of your local database.</CardDescription>
+          <CardDescription>
+            Download an encrypted backup of your local database or import an existing backup.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <Button onClick={handleExport} disabled={isExporting}>
             {isExporting ? (
               <>
@@ -113,8 +117,22 @@ const SettingsPage = () => {
               "Export Database"
             )}
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowImportWizard(true)}
+            disabled={!isAuthenticated}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Import Database
+          </Button>
+          {!isAuthenticated && (
+            <p className="text-xs text-muted-foreground">
+              Unlock the app before importing a database.
+            </p>
+          )}
         </CardContent>
       </Card>
+      <DatabaseImportWizard open={showImportWizard} onOpenChange={setShowImportWizard} />
 
       <Card>
         <CardHeader>

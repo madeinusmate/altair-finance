@@ -54,6 +54,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { formatCategoryDisplay } from "@/lib/account-categories";
+import { calculateTransactionAccountBalance, calculateNetContributions } from "@/lib/accounting";
 
 const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
@@ -82,6 +83,8 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   const [isEditAccountDialogOpen, setIsEditAccountDialogOpen] = useState(false);
   const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [isEditTransferDialogOpen, setIsEditTransferDialogOpen] = useState(false);
+  const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
 
   const fetchData = async () => {
     try {
@@ -171,6 +174,27 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
     setIsEditTransactionDialogOpen(true);
   };
 
+  const handleDeleteTransfer = async (transferId: string) => {
+    try {
+      await apiClient.delete(`/api/transfers?id=${transferId}`);
+      fetchData();
+      toast.success("Transfer deleted");
+    } catch {
+      toast.error("Failed to delete transfer");
+    }
+  };
+
+  const handleEditTransfer = (transfer: Transfer) => {
+    setEditingTransfer(transfer);
+    setIsEditTransferDialogOpen(true);
+  };
+
+  const handleTransferUpdated = () => {
+    setIsEditTransferDialogOpen(false);
+    setEditingTransfer(null);
+    fetchData();
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -208,32 +232,44 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
     );
   }
 
-  // Calculate net contributions from transfers (for investment accounts)
+  // Calculate transfers for balance calculation
+  // Use fromAmount/toAmount if available, fallback to amount for backward compatibility
   const transferIn = transfers
     .filter((t) => t.toAccountId === id)
-    .reduce((acc, t) => acc + t.amount, 0);
+    .reduce((acc, t) => acc + (t.toAmount ?? t.amount), 0);
   const transferOut = transfers
     .filter((t) => t.fromAccountId === id)
-    .reduce((acc, t) => acc + t.amount, 0);
-  const netContributions = transferIn - transferOut;
+    .reduce((acc, t) => acc + (t.fromAmount ?? t.amount), 0);
 
   // Calculate current balance based on account type
   let currentBalance: number;
   let profitLoss: number | undefined;
+  let netContributions: number | undefined;
 
   if (account.type === "balance") {
     currentBalance = balanceHistory[0]?.balance ?? account.initialBalance;
   } else if (account.type === "investment") {
     currentBalance = investmentHistory[0]?.balance ?? 0;
+    // Investment accounts are always assets, so use standard calculation
+    netContributions = transferIn - transferOut;
     profitLoss = currentBalance - netContributions;
   } else {
-    // Transaction account
-    const transactionBalance = transactions.reduce((acc, t) => {
-      if (t.type === "credit") return acc + t.amount;
-      if (t.type === "debit") return acc - t.amount;
-      return acc;
-    }, account.initialBalance);
-    currentBalance = transactionBalance + netContributions;
+    // Transaction account: calculate balance based on account nature (asset vs liability)
+    const credits = transactions
+      .filter((t) => t.type === "credit")
+      .reduce((sum, t) => sum + t.amount, 0);
+    const debits = transactions
+      .filter((t) => t.type === "debit")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    currentBalance = calculateTransactionAccountBalance(
+      account.initialBalance,
+      credits,
+      debits,
+      transferIn,
+      transferOut,
+      account.nature as "asset" | "liability"
+    );
   }
 
   return (
@@ -331,7 +367,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {formatCurrency(netContributions, account.currency)}
+                  {formatCurrency(netContributions ?? 0, account.currency)}
                 </div>
               </CardContent>
             </Card>
@@ -460,25 +496,45 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
 
         {/* Transfer button only for transaction and investment accounts */}
         {account.type !== "balance" && (
-          <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <ArrowLeftRight className="mr-2 h-4 w-4" />
-                Transfer
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Transfer Funds</DialogTitle>
-                <DialogDescription>Transfer money between accounts</DialogDescription>
-              </DialogHeader>
-              <TransferForm
-                fromAccountId={id}
-                accounts={accounts}
-                onSuccess={handleTransferCreated}
-              />
-            </DialogContent>
-          </Dialog>
+          <>
+            <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <ArrowLeftRight className="mr-2 h-4 w-4" />
+                  Transfer
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Transfer Funds</DialogTitle>
+                  <DialogDescription>Transfer money between accounts</DialogDescription>
+                </DialogHeader>
+                <TransferForm
+                  fromAccountId={id}
+                  accounts={accounts}
+                  onSuccess={handleTransferCreated}
+                />
+              </DialogContent>
+            </Dialog>
+
+            {/* Edit Transfer Dialog */}
+            {editingTransfer && (
+              <Dialog open={isEditTransferDialogOpen} onOpenChange={setIsEditTransferDialogOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Edit Transfer</DialogTitle>
+                    <DialogDescription>Update transfer details</DialogDescription>
+                  </DialogHeader>
+                  <TransferForm
+                    accounts={accounts}
+                    transfer={editingTransfer}
+                    mode="edit"
+                    onSuccess={handleTransferUpdated}
+                  />
+                </DialogContent>
+              </Dialog>
+            )}
+          </>
         )}
       </div>
 
@@ -663,6 +719,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                   <TableHead>Direction</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
+                  <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -722,6 +779,24 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                       >
                         {isOutgoing ? "-" : "+"}
                         {formatCurrency(displayAmount, account.currency)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditTransfer(transfer)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteTransfer(transfer.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

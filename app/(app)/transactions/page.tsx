@@ -33,12 +33,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { TransactionForm } from "@/components/transaction-form";
 import { TransferForm } from "@/components/transfer-form";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { ArrowUpRight, ArrowDownRight, Search, ArrowLeftRight, Pencil, Trash2, Plus } from "lucide-react";
-import { Transaction, Account } from "@/lib/db/schema";
+import { Transaction, Account, Transfer } from "@/lib/db/schema";
 import { CATEGORIES } from "@/lib/categories";
 import { format } from "date-fns";
+
+type UnifiedItem = 
+  | { type: "transaction"; data: Transaction }
+  | { type: "transfer"; data: Transfer };
 
 const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
@@ -51,27 +55,31 @@ const formatCurrency = (amount: number, currency: string): string => {
 
 const TransactionsPage = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all"); // "all" | "debit" | "credit" | "transfer"
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
   const [isCreateTransactionDialogOpen, setIsCreateTransactionDialogOpen] = useState(false);
   const [isCreateTransferDialogOpen, setIsCreateTransferDialogOpen] = useState(false);
+  const [isEditTransferDialogOpen, setIsEditTransferDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [transactionsData, accountsData] = await Promise.all([
-          apiClient.get<Transaction[]>("/api/transactions"),
+        const [unifiedData, accountsData] = await Promise.all([
+          apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified"),
           apiClient.get<Account[]>("/api/accounts"),
         ]);
-        setTransactions(transactionsData);
+        setTransactions(unifiedData.transactions);
+        setTransfers(unifiedData.transfers);
         setAccounts(accountsData);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch transactions");
@@ -101,11 +109,12 @@ const TransactionsPage = () => {
   const handleTransactionUpdated = () => {
     setIsEditTransactionDialogOpen(false);
     setEditingTransaction(null);
-    // Refresh transactions
+    // Refresh unified data
     const fetchData = async () => {
       try {
-        const transactionsData = await apiClient.get<Transaction[]>("/api/transactions");
-        setTransactions(transactionsData);
+        const unifiedData = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified");
+        setTransactions(unifiedData.transactions);
+        setTransfers(unifiedData.transfers);
       } catch (err) {
         toast.error("Failed to refresh transactions");
       }
@@ -116,8 +125,9 @@ const TransactionsPage = () => {
   const handleDeleteTransaction = async (transactionId: string) => {
     try {
       await apiClient.delete(`/api/transactions?id=${transactionId}`);
-      const transactionsData = await apiClient.get<Transaction[]>("/api/transactions");
-      setTransactions(transactionsData);
+      const unifiedData = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified");
+      setTransactions(unifiedData.transactions);
+      setTransfers(unifiedData.transfers);
       toast.success("Transaction deleted");
     } catch {
       toast.error("Failed to delete transaction");
@@ -126,11 +136,12 @@ const TransactionsPage = () => {
 
   const handleTransactionCreated = () => {
     setIsCreateTransactionDialogOpen(false);
-    // Refresh transactions
+    // Refresh unified data
     const fetchData = async () => {
       try {
-        const transactionsData = await apiClient.get<Transaction[]>("/api/transactions");
-        setTransactions(transactionsData);
+        const unifiedData = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified");
+        setTransactions(unifiedData.transactions);
+        setTransfers(unifiedData.transfers);
       } catch (err) {
         toast.error("Failed to refresh transactions");
       }
@@ -140,11 +151,12 @@ const TransactionsPage = () => {
 
   const handleTransferCreated = () => {
     setIsCreateTransferDialogOpen(false);
-    // Refresh transactions list
+    // Refresh unified data
     const fetchData = async () => {
       try {
-        const transactionsData = await apiClient.get<Transaction[]>("/api/transactions");
-        setTransactions(transactionsData);
+        const unifiedData = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified");
+        setTransactions(unifiedData.transactions);
+        setTransfers(unifiedData.transfers);
         toast.success("Transfer created successfully");
       } catch (err) {
         toast.error("Failed to refresh transactions");
@@ -153,35 +165,120 @@ const TransactionsPage = () => {
     fetchData();
   };
 
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter((t) => {
-      const account = accountMap.get(t.accountId);
+  const handleEditTransfer = (transfer: Transfer) => {
+    setEditingTransfer(transfer);
+    setIsEditTransferDialogOpen(true);
+  };
 
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        const matchesDescription = t.description?.toLowerCase().includes(query);
-        const matchesCategory = t.category.toLowerCase().includes(query);
-        const matchesAccount = account?.name.toLowerCase().includes(query);
-        if (!matchesDescription && !matchesCategory && !matchesAccount) {
+  const handleTransferUpdated = () => {
+    setIsEditTransferDialogOpen(false);
+    setEditingTransfer(null);
+    // Refresh unified data
+    const fetchData = async () => {
+      try {
+        const unifiedData = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified");
+        setTransactions(unifiedData.transactions);
+        setTransfers(unifiedData.transfers);
+      } catch (err) {
+        toast.error("Failed to refresh transfers");
+      }
+    };
+    fetchData();
+  };
+
+  const handleDeleteTransfer = async (transferId: string) => {
+    try {
+      await apiClient.delete(`/api/transfers?id=${transferId}`);
+      const unifiedData = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified");
+      setTransactions(unifiedData.transactions);
+      setTransfers(unifiedData.transfers);
+      toast.success("Transfer deleted");
+    } catch {
+      toast.error("Failed to delete transfer");
+    }
+  };
+
+  // Create unified items array
+  const unifiedItems = useMemo((): UnifiedItem[] => {
+    const items: UnifiedItem[] = [
+      ...transactions.map((t) => ({ type: "transaction" as const, data: t })),
+      ...transfers.map((t) => ({ type: "transfer" as const, data: t })),
+    ];
+    return items;
+  }, [transactions, transfers]);
+
+  // Unified filtering logic
+  const filteredItems = useMemo(() => {
+    return unifiedItems.filter((item) => {
+      if (item.type === "transaction") {
+        const t = item.data;
+        const account = accountMap.get(t.accountId);
+
+        if (searchQuery) {
+          const query = searchQuery.toLowerCase();
+          const matchesDescription = t.description?.toLowerCase().includes(query);
+          const matchesCategory = t.category.toLowerCase().includes(query);
+          const matchesAccount = account?.name.toLowerCase().includes(query);
+          if (!matchesDescription && !matchesCategory && !matchesAccount) {
+            return false;
+          }
+        }
+
+        if (categoryFilter !== "all" && t.category !== categoryFilter) {
           return false;
         }
-      }
 
-      if (categoryFilter !== "all" && t.category !== categoryFilter) {
-        return false;
-      }
+        if (typeFilter !== "all" && typeFilter !== "transfer" && t.type !== typeFilter) {
+          return false;
+        }
 
-      if (typeFilter !== "all" && t.type !== typeFilter) {
-        return false;
-      }
+        if (typeFilter === "transfer") {
+          return false; // Hide transactions when filtering for transfers
+        }
 
-      if (accountFilter !== "all" && t.accountId !== accountFilter) {
-        return false;
-      }
+        if (accountFilter !== "all" && t.accountId !== accountFilter) {
+          return false;
+        }
 
-      return true;
+        return true;
+      } else {
+        // Transfer filtering
+        const t = item.data;
+        const fromAccount = accountMap.get(t.fromAccountId);
+        const toAccount = accountMap.get(t.toAccountId);
+
+        if (searchQuery) {
+          const query = searchQuery.toLowerCase();
+          const matchesDescription = t.description?.toLowerCase().includes(query);
+          const matchesCategory = t.category?.toLowerCase().includes(query);
+          const matchesFromAccount = fromAccount?.name.toLowerCase().includes(query);
+          const matchesToAccount = toAccount?.name.toLowerCase().includes(query);
+          if (!matchesDescription && !matchesCategory && !matchesFromAccount && !matchesToAccount) {
+            return false;
+          }
+        }
+
+        if (categoryFilter !== "all" && t.category !== categoryFilter) {
+          return false;
+        }
+
+        if (typeFilter !== "all" && typeFilter !== "transfer") {
+          return false; // Hide transfers when filtering for debit/credit
+        }
+
+        if (accountFilter !== "all" && t.fromAccountId !== accountFilter) {
+          return false; // Only show transfers where fromAccount matches (per user requirement)
+        }
+
+        return true;
+      }
+    }).sort((a, b) => {
+      // Sort by date descending
+      const dateA = new Date(a.data.date).getTime();
+      const dateB = new Date(b.data.date).getTime();
+      return dateB - dateA;
     });
-  }, [transactions, searchQuery, categoryFilter, typeFilter, accountFilter, accountMap]);
+  }, [unifiedItems, searchQuery, categoryFilter, typeFilter, accountFilter, accountMap]);
 
   if (isLoading) {
     return (
@@ -281,13 +378,13 @@ const TransactionsPage = () => {
         </div>
       </div>
 
-      {transactions.length === 0 ? (
+      {unifiedItems.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No transactions yet</h3>
             <p className="text-muted-foreground text-center max-w-sm">
-              Add transactions to your accounts to see them here.
+              Add transactions or transfers to your accounts to see them here.
             </p>
           </CardContent>
         </Card>
@@ -296,8 +393,7 @@ const TransactionsPage = () => {
           <CardHeader>
             <CardTitle>All Transactions</CardTitle>
             <CardDescription>
-              {filteredTransactions.length} of {transactions.length} transaction
-              {transactions.length !== 1 ? "s" : ""}
+              {filteredItems.length} of {unifiedItems.length} item{unifiedItems.length !== 1 ? "s" : ""}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -318,7 +414,7 @@ const TransactionsPage = () => {
                 <SelectContent>
                   <SelectItem value="all">All Accounts</SelectItem>
                   {accounts
-                    .filter((a) => a.type === "transaction")
+                    .filter((a) => a.type === "transaction" || a.type === "investment")
                     .map((account) => (
                       <SelectItem key={account.id} value={account.id}>
                         {account.name}
@@ -347,11 +443,12 @@ const TransactionsPage = () => {
                   <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="debit">Debit</SelectItem>
                   <SelectItem value="credit">Credit</SelectItem>
+                  <SelectItem value="transfer">Transfer</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {filteredTransactions.length === 0 ? (
+            {filteredItems.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">
                 No transactions match your filters
               </p>
@@ -360,7 +457,7 @@ const TransactionsPage = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
-                    <TableHead>Account</TableHead>
+                    <TableHead>Account(s)</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Description</TableHead>
@@ -369,66 +466,169 @@ const TransactionsPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTransactions.map((transaction) => {
-                    const account = accountMap.get(transaction.accountId);
-                    return (
-                      <TableRow key={transaction.id}>
-                        <TableCell>
-                          {format(new Date(transaction.date), "MMM d, yyyy")}
-                        </TableCell>
-                        <TableCell>
-                          <Link
-                            href={`/accounts/${transaction.accountId}`}
-                            className="hover:underline"
-                          >
-                            {account?.name || "Unknown"}
-                          </Link>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {transaction.type === "credit" ? (
-                              <ArrowUpRight className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <ArrowDownRight className="h-4 w-4 text-red-500" />
-                            )}
-                            <span className="capitalize">{transaction.type}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{transaction.category}</Badge>
-                        </TableCell>
-                        <TableCell className="max-w-[200px] truncate">
-                          {transaction.description || "-"}
-                        </TableCell>
-                        <TableCell
-                          className={`text-right font-medium ${
-                            transaction.type === "credit" ? "text-green-600" : "text-red-600"
-                          }`}
-                        >
-                          {transaction.type === "credit" ? "+" : "-"}
-                          {formatCurrency(transaction.amount, account?.currency || "USD")}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEditTransaction(transaction)}
+                  <TooltipProvider>
+                    {filteredItems.map((item) => {
+                      if (item.type === "transaction") {
+                        const transaction = item.data;
+                        const account = accountMap.get(transaction.accountId);
+                        return (
+                          <TableRow key={`transaction-${transaction.id}`}>
+                            <TableCell>
+                              {format(new Date(transaction.date), "MMM d, yyyy")}
+                            </TableCell>
+                            <TableCell>
+                              <Link
+                                href={`/accounts/${transaction.accountId}`}
+                                className="hover:underline"
+                              >
+                                {account?.name || "Unknown"}
+                              </Link>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {transaction.type === "credit" ? (
+                                  <ArrowUpRight className="h-4 w-4 text-green-500" />
+                                ) : (
+                                  <ArrowDownRight className="h-4 w-4 text-red-500" />
+                                )}
+                                <span className="capitalize">{transaction.type}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{transaction.category}</Badge>
+                            </TableCell>
+                            <TableCell className="max-w-[200px] truncate">
+                              {transaction.description || "-"}
+                            </TableCell>
+                            <TableCell
+                              className={`text-right font-medium ${
+                                transaction.type === "credit" ? "text-green-600" : "text-red-600"
+                              }`}
                             >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteTransaction(transaction.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                              {transaction.type === "credit" ? "+" : "-"}
+                              {formatCurrency(transaction.amount, account?.currency || "USD")}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditTransaction(transaction)}
+                                  aria-label="Edit transaction"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteTransaction(transaction.id)}
+                                  aria-label="Delete transaction"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      } else {
+                        const transfer = item.data;
+                        const fromAccount = accountMap.get(transfer.fromAccountId);
+                        const toAccount = accountMap.get(transfer.toAccountId);
+                        const isCrossCurrency = fromAccount?.currency !== toAccount?.currency;
+                        
+                        return (
+                          <TableRow key={`transfer-${transfer.id}`}>
+                            <TableCell>
+                              {format(new Date(transfer.date), "MMM d, yyyy")}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Link
+                                  href={`/accounts/${transfer.fromAccountId}`}
+                                  className="hover:underline"
+                                >
+                                  {fromAccount?.name || "Unknown"}
+                                </Link>
+                                <ArrowLeftRight className="h-3 w-3 text-muted-foreground mx-1" />
+                                <Link
+                                  href={`/accounts/${transfer.toAccountId}`}
+                                  className="hover:underline"
+                                >
+                                  {toAccount?.name || "Unknown"}
+                                </Link>
+                                {isCrossCurrency && toAccount && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge variant="outline" className="ml-2">
+                                        {toAccount.currency}
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Cross-currency transfer</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <ArrowLeftRight className="h-4 w-4 text-blue-500" />
+                                <span>Transfer</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{transfer.category || "Transfer"}</Badge>
+                            </TableCell>
+                            <TableCell className="max-w-[200px] truncate">
+                              <div>
+                                {transfer.description || "-"}
+                                {isCrossCurrency && transfer.exchangeRate && (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    Rate: {transfer.exchangeRate.toFixed(4)}
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {formatCurrency(transfer.fromAmount ?? transfer.amount, fromAccount?.currency || "USD")}
+                              {isCrossCurrency && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="text-xs text-muted-foreground cursor-help">
+                                      → {formatCurrency(transfer.toAmount ?? transfer.amount, toAccount?.currency || "USD")}
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Amount in destination currency</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEditTransfer(transfer)}
+                                  aria-label="Edit transfer"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteTransfer(transfer.id)}
+                                  aria-label="Delete transfer"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
+                    })}
+                  </TooltipProvider>
                 </TableBody>
               </Table>
             )}
@@ -450,6 +650,24 @@ const TransactionsPage = () => {
               transaction={editingTransaction}
               mode="edit"
               onSuccess={handleTransactionUpdated}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Edit Transfer Dialog */}
+      {editingTransfer && (
+        <Dialog open={isEditTransferDialogOpen} onOpenChange={setIsEditTransferDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Transfer</DialogTitle>
+              <DialogDescription>Update transfer details</DialogDescription>
+            </DialogHeader>
+            <TransferForm
+              accounts={accounts}
+              transfer={editingTransfer}
+              mode="edit"
+              onSuccess={handleTransferUpdated}
             />
           </DialogContent>
         </Dialog>
