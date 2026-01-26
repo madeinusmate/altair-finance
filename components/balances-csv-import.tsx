@@ -111,7 +111,11 @@ export const BalancesCsvImport = () => {
     const key = buildBalanceKey(account.id, row.date, balanceValue);
 
     const matchesHistory = (history: BalanceHistory | InvestmentHistory) =>
-      buildBalanceKey(history.accountId, getDateKey(history.date), history.balance) === key;
+      buildBalanceKey(
+        history.accountId,
+        getDateKey(new Date(history.date).getTime()),
+        history.balance
+      ) === key;
 
     const isDuplicate =
       existingBalances.some(matchesHistory) || existingInvestments.some(matchesHistory);

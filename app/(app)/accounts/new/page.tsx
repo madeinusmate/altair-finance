@@ -18,7 +18,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { DEFAULT_ACCOUNT_CURRENCY, SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { DEFAULT_ACCOUNT_CURRENCY, SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
 import { ACCOUNT_CATEGORIES, formatCategoryDisplay, type AccountCategory } from "@/lib/account-categories";
 
 const NewAccountPage = () => {
@@ -30,7 +30,7 @@ const NewAccountPage = () => {
   const [type, setType] = useState<"balance" | "transaction" | "investment">("balance");
   const [nature, setNature] = useState<"asset" | "liability">("asset");
   const [category, setCategory] = useState<AccountCategory | "">("");
-  const [currency, setCurrency] = useState(DEFAULT_ACCOUNT_CURRENCY);
+  const [currency, setCurrency] = useState<SupportedCurrency>(DEFAULT_ACCOUNT_CURRENCY);
   const [initialBalance, setInitialBalance] = useState("0");
 
   // Investment accounts are always assets with zero initial balance
@@ -194,7 +194,7 @@ const NewAccountPage = () => {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="currency">Currency</Label>
-                <Select value={currency} onValueChange={setCurrency}>
+                <Select value={currency} onValueChange={(v) => setCurrency(v as SupportedCurrency)}>
                   <SelectTrigger id="currency">
                     <SelectValue />
                   </SelectTrigger>

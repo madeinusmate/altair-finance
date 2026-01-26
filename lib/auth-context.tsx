@@ -52,7 +52,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [getSessionKey]);
 
   useEffect(() => {
-    void refreshStatus();
+    const initializeStatus = async () => {
+      await refreshStatus();
+    };
+    void initializeStatus();
   }, [refreshStatus]);
 
   const unlock = useCallback(async (key: string): Promise<{ success: boolean; error?: string }> => {

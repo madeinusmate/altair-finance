@@ -5,7 +5,19 @@ import * as crypto from "crypto";
 import path from "path";
 import fs from "fs";
 
-const DB_PATH = path.join(process.cwd(), "data", "netly.db");
+type DatabaseInstance = InstanceType<typeof Database>;
+
+const resolveDbPath = (): string => {
+  const isElectron = typeof process !== "undefined" && process.versions?.electron;
+  
+  if (isElectron && process.env.ELECTRON_USER_DATA) {
+    return path.join(process.env.ELECTRON_USER_DATA, "netly.db");
+  }
+  
+  return path.join(process.cwd(), "data", "netly.db");
+};
+
+const DB_PATH = resolveDbPath();
 const META_ID = "primary";
 const SCHEMA_VERSION = 1;
 
@@ -16,14 +28,14 @@ const escapeSqlString = (value: string): string => {
   return value.replaceAll("'", "''");
 };
 
-const applyCipherPragmas = (sqlite: Database, encryptionKey: string): void => {
+const applyCipherPragmas = (sqlite: DatabaseInstance, encryptionKey: string): void => {
   sqlite.pragma("cipher = 'sqlcipher'");
   sqlite.pragma("legacy = 4");
   sqlite.pragma(`key = '${escapeSqlString(encryptionKey)}'`);
   sqlite.pragma("journal_mode = WAL");
 };
 
-const openSqlite = (encryptionKey: string): Database => {
+const openSqlite = (encryptionKey: string): DatabaseInstance => {
   // Ensure data directory exists
   const dataDir = path.dirname(DB_PATH);
   if (!fs.existsSync(dataDir)) {

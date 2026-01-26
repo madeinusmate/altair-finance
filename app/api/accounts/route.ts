@@ -134,7 +134,7 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
 
-    const updates: Partial<{ name: string; currency: string; nature: string; category: AccountCategory; initialBalance: number; updatedAt: Date }> = {
+    const updates: Partial<{ name: string; currency: SupportedCurrency; nature: "asset" | "liability"; category: AccountCategory; initialBalance: number; updatedAt: Date }> = {
       updatedAt: new Date(),
     };
 
@@ -152,7 +152,7 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
           { status: 400 }
         );
       }
-      updates.currency = currency;
+      updates.currency = currency as SupportedCurrency;
     }
 
     if (nature !== undefined) {
@@ -166,7 +166,7 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
           { status: 400 }
         );
       }
-      updates.nature = nature;
+      updates.nature = nature as "asset" | "liability";
     }
 
     if (category !== undefined) {

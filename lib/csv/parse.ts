@@ -1,4 +1,4 @@
-import Papa from "papaparse";
+import Papa, { type ParseResult, type ParseError } from "papaparse";
 
 const normalizeHeader = (header: string) => header.trim().toLowerCase().replace(/\s+/g, "_");
 
@@ -11,16 +11,16 @@ export const parseCsvFile = <T extends Record<string, string>>(file: File) =>
     Papa.parse<T>(file, {
       header: true,
       skipEmptyLines: true,
-      transformHeader: (header) => normalizeHeader(header),
-      complete: (results) => {
-        const errors = results.errors.map((error) => error.message);
+      transformHeader: (header: string) => normalizeHeader(header),
+      complete: (results: ParseResult<T>) => {
+        const errors = results.errors.map((error: ParseError) => error.message);
         resolve({
           data: results.data,
           headers: results.meta.fields || [],
           errors,
         });
       },
-      error: (error) => {
+      error: (error: Error) => {
         reject(error);
       },
     });
