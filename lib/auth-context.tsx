@@ -36,6 +36,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           ...(key ? { "X-Encryption-Key": key } : {}),
         },
       });
+      
+      // Handle non-OK responses by treating as new (fresh install)
+      if (!response.ok) {
+        console.error("Status API returned error:", response.status);
+        sessionStorage.removeItem(SESSION_KEY);
+        setState("new");
+        return "new";
+      }
+      
       const data = await response.json();
       const nextState = data.state as AppState;
 
@@ -45,9 +54,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       setState(nextState);
       return nextState;
-    } catch {
-      setState("locked");
-      return "locked";
+    } catch (error) {
+      // On network error or other failure, treat as new install
+      console.error("Failed to fetch status:", error);
+      sessionStorage.removeItem(SESSION_KEY);
+      setState("new");
+      return "new";
     }
   }, [getSessionKey]);
 

@@ -46,3 +46,4 @@ next-env.d.ts
 # electron
 /dist/
 /electron/dist/
+/node-bin/

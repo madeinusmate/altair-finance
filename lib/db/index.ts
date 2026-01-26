@@ -7,17 +7,27 @@ import fs from "fs";
 
 type DatabaseInstance = InstanceType<typeof Database>;
 
-const resolveDbPath = (): string => {
-  const isElectron = typeof process !== "undefined" && process.versions?.electron;
+const getDbPath = (): string => {
+  // ELECTRON_USER_DATA is set by the Electron main process when spawning Next.js
+  // This works for both the Electron renderer and the spawned Next.js server
+  const electronUserData = process.env.ELECTRON_USER_DATA;
   
-  if (isElectron && process.env.ELECTRON_USER_DATA) {
-    return path.join(process.env.ELECTRON_USER_DATA, "netly.db");
+  console.log(`[DB] getDbPath called`);
+  console.log(`[DB] ELECTRON_USER_DATA env var: ${electronUserData || "(not set)"}`);
+  console.log(`[DB] process.cwd(): ${process.cwd()}`);
+  
+  if (electronUserData) {
+    const dbPath = path.join(electronUserData, "netly.db");
+    console.log(`[DB] Using Electron user data path: ${dbPath}`);
+    return dbPath;
   }
   
-  return path.join(process.cwd(), "data", "netly.db");
+  // Fallback for development (running Next.js directly)
+  const devPath = path.join(process.cwd(), "data", "netly.db");
+  console.log(`[DB] Using development path: ${devPath}`);
+  return devPath;
 };
 
-const DB_PATH = resolveDbPath();
 const META_ID = "primary";
 const SCHEMA_VERSION = 1;
 
@@ -36,13 +46,15 @@ const applyCipherPragmas = (sqlite: DatabaseInstance, encryptionKey: string): vo
 };
 
 const openSqlite = (encryptionKey: string): DatabaseInstance => {
+  const dbPath = getDbPath();
+  
   // Ensure data directory exists
-  const dataDir = path.dirname(DB_PATH);
+  const dataDir = path.dirname(dbPath);
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
-  const sqlite = new Database(DB_PATH);
+  const sqlite = new Database(dbPath);
   applyCipherPragmas(sqlite, encryptionKey);
   return sqlite;
 };
@@ -157,12 +169,12 @@ export const validateKey = (encryptionKey: string): boolean => {
 };
 
 export const dbFileExists = (): boolean => {
-  return fs.existsSync(DB_PATH);
+  const dbPath = getDbPath();
+  console.log(`[DB] Checking if database exists at: ${dbPath}`);
+  return fs.existsSync(dbPath);
 };
 
-export const getDbPath = (): string => {
-  return DB_PATH;
-};
+export { getDbPath };
 
 export const clearConnectionCache = (): void => {
   connectionCache.clear();
