@@ -89,9 +89,12 @@ const SettingsPage = () => {
           <CardTitle>Data import</CardTitle>
           <CardDescription>Import transactions, transfers, balances, and investments.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-wrap gap-2">
           <Button asChild>
             <Link href="/settings/import">Open CSV import wizard</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/settings/imports">View import history</Link>
           </Button>
         </CardContent>
       </Card>

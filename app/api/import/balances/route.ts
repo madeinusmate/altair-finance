@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
+import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 
@@ -18,6 +19,8 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
   try {
     const body = await request.json();
     const rows = Array.isArray(body?.rows) ? (body.rows as ImportBalanceRow[]) : null;
+    const filename = body?.filename as string | undefined;
+    const fileHash = body?.fileHash as string | undefined;
 
     if (!rows || rows.length === 0) {
       return NextResponse.json({ error: "Rows are required" }, { status: 400 });
@@ -30,6 +33,47 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     const now = new Date();
     let balanceCount = 0;
     let investmentCount = 0;
+
+    // Create import record if filename and fileHash are provided
+    let importId: string | undefined;
+    let isDuplicate = false;
+    
+    if (filename && fileHash) {
+      try {
+        // Check for duplicate file hash
+        const existingImport = db
+          .select()
+          .from(schema.imports)
+          .where(eq(schema.imports.fileHash, fileHash))
+          .get();
+        
+        if (existingImport) {
+          isDuplicate = true;
+          // Warn but allow import - create new import record
+        }
+
+        importId = uuidv4();
+        const validRows = rows.filter((row) => {
+          // Basic validation - will be validated again below
+          return row.accountId && row.balance > 0 && row.date;
+        });
+
+        db.insert(schema.imports)
+          .values({
+            id: importId,
+            type: "balances",
+            filename: filename,
+            fileHash: fileHash,
+            rowCount: validRows.length,
+            createdAt: now,
+          })
+          .run();
+      } catch (error) {
+        console.warn("Failed to create import record:", error);
+        // Continue without import tracking - import should still proceed
+        importId = undefined;
+      }
+    }
 
     rows.forEach((row, index) => {
       if (!row.balance || row.balance <= 0) {
@@ -56,6 +100,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
             balance: Number(row.balance),
             date: parsedDate,
             createdAt: now,
+            importId: importId || null,
           })
           .run();
         balanceCount += 1;
@@ -67,6 +112,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
             balance: Number(row.balance),
             date: parsedDate,
             createdAt: now,
+            importId: importId || null,
           })
           .run();
         investmentCount += 1;
@@ -79,6 +125,8 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       success: true,
       balances: balanceCount,
       investments: investmentCount,
+      importId: importId || null,
+      isDuplicate: isDuplicate,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to import balances";

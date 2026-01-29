@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
+import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { isValidTransactionCategory } from "@/lib/db/category-helpers";
@@ -32,6 +33,8 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
   try {
     const body = await request.json();
     const rows = Array.isArray(body?.rows) ? (body.rows as ImportTransactionRow[]) : null;
+    const filename = body?.filename as string | undefined;
+    const fileHash = body?.fileHash as string | undefined;
 
     if (!rows || rows.length === 0) {
       return NextResponse.json({ error: "Rows are required" }, { status: 400 });
@@ -44,6 +47,51 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     const now = new Date();
     let transactionCount = 0;
     let transferCount = 0;
+
+    // Create import record if filename and fileHash are provided
+    let importId: string | undefined;
+    let isDuplicate = false;
+    
+    if (filename && fileHash) {
+      try {
+        // Check for duplicate file hash
+        const existingImport = db
+          .select()
+          .from(schema.imports)
+          .where(eq(schema.imports.fileHash, fileHash))
+          .get();
+        
+        if (existingImport) {
+          isDuplicate = true;
+          // Warn but allow import - create new import record
+        }
+
+        importId = uuidv4();
+        const validRows = rows.filter((row) => {
+          // Basic validation - will be validated again below
+          if (row.type === "transfer") {
+            return row.fromAccountId && row.toAccountId && row.fromAmount > 0 && row.toAmount > 0 && row.date;
+          } else {
+            return row.accountId && row.amount > 0 && row.date && row.category;
+          }
+        });
+
+        db.insert(schema.imports)
+          .values({
+            id: importId,
+            type: "transactions",
+            filename: filename,
+            fileHash: fileHash,
+            rowCount: validRows.length,
+            createdAt: now,
+          })
+          .run();
+      } catch (error) {
+        console.warn("Failed to create import record:", error);
+        // Continue without import tracking - import should still proceed
+        importId = undefined;
+      }
+    }
 
     rows.forEach((row, index) => {
       if (row.type !== "transfer" && (!row.amount || row.amount <= 0)) {
@@ -97,6 +145,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
             description: row.description || null,
             date: parsedDate,
             createdAt: now,
+            importId: importId || null,
           })
           .run();
         transferCount += 1;
@@ -127,6 +176,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
             description: row.description || null,
             date: parsedDate,
             createdAt: now,
+            importId: importId || null,
           })
           .run();
         transactionCount += 1;
@@ -137,6 +187,8 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       success: true,
       transactions: transactionCount,
       transfers: transferCount,
+      importId: importId || null,
+      isDuplicate: isDuplicate,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to import transactions";

@@ -13,7 +13,8 @@ import {
   validateBalanceRows,
   validateTransactionRows,
 } from "@/lib/csv/import-validators";
-import { parseCsvFile } from "@/lib/csv/parse";
+import { parseCsvFile, parseCsvString, countCsvRows } from "@/lib/csv/parse";
+import { calculateFileHash } from "@/lib/csv/file-hash";
 
 export type ImportType = "transactions" | "balances" | "accounts";
 
@@ -137,6 +138,7 @@ export const useImportWizard = () => {
   const [importType, setImportTypeState] = useState<ImportType>("transactions");
   const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | undefined>();
+  const [pasteContent, setPasteContent] = useState<string>("");
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [headerErrors, setHeaderErrors] = useState<string[]>([]);
   const [transactionRows, setTransactionRows] = useState<TransactionRow[]>([]);
@@ -181,6 +183,7 @@ export const useImportWizard = () => {
   const resetImportState = () => {
     setFile(null);
     setFileName(undefined);
+    setPasteContent("");
     setParseErrors([]);
     setHeaderErrors([]);
     setTransactionRows([]);
@@ -201,8 +204,36 @@ export const useImportWizard = () => {
   };
 
   const selectFile = (selectedFile: File) => {
+    console.log("selectFile called with:", selectedFile.name);
     setFile(selectedFile);
     setFileName(selectedFile.name);
+    console.log("setFileName called with:", selectedFile.name);
+    setPasteContent(""); // Clear paste content when file is selected (paste priority)
+    setParseErrors([]);
+    setHeaderErrors([]);
+    setImportError(null);
+    setCompletion(null);
+    setTransactionRows([]);
+    setBalanceRows([]);
+    setAccountRows([]);
+    setExistingTransactions([]);
+    setExistingTransfers([]);
+    setExistingBalances([]);
+    setExistingInvestments([]);
+  };
+
+  const selectPaste = (content: string) => {
+    setPasteContent(content);
+    // Update fileName to show row count for paste content
+    if (content.trim()) {
+      const rowCount = countCsvRows(content);
+      setFileName(`Pasted CSV (${rowCount} rows)`);
+      // Clear file selection when paste is used (paste priority)
+      setFile(null);
+    } else {
+      // Only clear fileName if we're explicitly clearing paste (not when file is selected)
+      // Don't clear fileName here - let selectFile handle it
+    }
     setParseErrors([]);
     setHeaderErrors([]);
     setImportError(null);
@@ -483,7 +514,8 @@ export const useImportWizard = () => {
   }, [existingBalances, existingInvestments, importType, balanceRows.length]);
 
   const processFile = async () => {
-    if (!file) {
+    // Check if we have either file or paste content
+    if (!file && !pasteContent?.trim()) {
       return false;
     }
 
@@ -493,7 +525,29 @@ export const useImportWizard = () => {
     setImportError(null);
 
     try {
-      const result = await parseCsvFile<Record<string, string>>(file);
+      let result: {
+        data: Record<string, string>[];
+        headers: string[];
+        errors: string[];
+      };
+
+      // Use file if available, otherwise use paste content
+      if (file) {
+        result = await parseCsvFile<Record<string, string>>(file);
+      } else if (pasteContent?.trim()) {
+        // Enforce 5,000 row limit (already checked in parseCsvString, but double-check)
+        const rowCount = countCsvRows(pasteContent);
+        if (rowCount > 5000) {
+          setParseErrors([`CSV contains too many rows (${rowCount}). Maximum allowed is 5,000 rows.`]);
+          setIsProcessing(false);
+          return false;
+        }
+        result = await parseCsvString<Record<string, string>>(pasteContent, importType);
+      } else {
+        setIsProcessing(false);
+        return false;
+      }
+
       if (result.errors.length > 0) {
         setParseErrors(result.errors);
       }
@@ -517,7 +571,7 @@ export const useImportWizard = () => {
       setIsProcessing(false);
       return true;
     } catch (error) {
-      setParseErrors([error instanceof Error ? error.message : "Failed to parse CSV file"]);
+      setParseErrors([error instanceof Error ? error.message : "Failed to parse CSV"]);
       setIsProcessing(false);
       return false;
     }
@@ -667,10 +721,57 @@ export const useImportWizard = () => {
           };
         });
 
+        // Calculate file hash for tracking
+        let fileHash: string | undefined;
+        const currentFileName = fileName || "Unknown";
+        
+        if (validRows.length > 0) {
+          try {
+            const firstRow = validRows[0];
+            const lastRow = validRows[validRows.length - 1];
+            const firstRowData: Record<string, string> = {
+              date: firstRow.date,
+              account: firstRow.account,
+              description: firstRow.description || "",
+              amount: String(firstRow.amount || firstRow.fromAmount || ""),
+              type: firstRow.type,
+            };
+            const lastRowData: Record<string, string> = {
+              date: lastRow.date,
+              account: lastRow.account,
+              description: lastRow.description || "",
+              amount: String(lastRow.amount || lastRow.fromAmount || ""),
+              type: lastRow.type,
+            };
+            
+            fileHash = await calculateFileHash(
+              currentFileName,
+              validRows.length,
+              firstRowData,
+              lastRowData
+            );
+          } catch (error) {
+            console.warn("Failed to calculate file hash:", error);
+            // Continue without file hash - import tracking is optional
+          }
+        }
+
         const result = await apiClient.post<{
           transactions: number;
           transfers: number;
-        }>("/api/import/transactions", { rows: payload });
+          importId?: string | null;
+          isDuplicate?: boolean;
+        }>("/api/import/transactions", { 
+          rows: payload,
+          filename: currentFileName,
+          fileHash: fileHash,
+        });
+
+        // Show warning if duplicate detected
+        if (result.isDuplicate) {
+          console.warn("Duplicate import detected - file hash matches existing import");
+          // Could show a toast notification here in the future
+        }
 
         setCompletion({
           type: "transactions",
@@ -697,10 +798,53 @@ export const useImportWizard = () => {
           };
         });
 
+        // Calculate file hash for tracking
+        let fileHash: string | undefined;
+        const currentFileName = fileName || "Unknown";
+        
+        if (validRows.length > 0) {
+          try {
+            const firstRow = validRows[0];
+            const lastRow = validRows[validRows.length - 1];
+            const firstRowData: Record<string, string> = {
+              date: firstRow.date,
+              account: firstRow.account,
+              balance: String(firstRow.balance),
+            };
+            const lastRowData: Record<string, string> = {
+              date: lastRow.date,
+              account: lastRow.account,
+              balance: String(lastRow.balance),
+            };
+            
+            fileHash = await calculateFileHash(
+              currentFileName,
+              validRows.length,
+              firstRowData,
+              lastRowData
+            );
+          } catch (error) {
+            console.warn("Failed to calculate file hash:", error);
+            // Continue without file hash - import tracking is optional
+          }
+        }
+
         const result = await apiClient.post<{
           balances: number;
           investments: number;
-        }>("/api/import/balances", { rows: payload });
+          importId?: string | null;
+          isDuplicate?: boolean;
+        }>("/api/import/balances", { 
+          rows: payload,
+          filename: currentFileName,
+          fileHash: fileHash,
+        });
+
+        // Show warning if duplicate detected
+        if (result.isDuplicate) {
+          console.warn("Duplicate import detected - file hash matches existing import");
+          // Could show a toast notification here in the future
+        }
 
         setCompletion({
           type: "balances",
@@ -778,6 +922,8 @@ export const useImportWizard = () => {
     file,
     fileName,
     selectFile,
+    pasteContent,
+    selectPaste,
     parseErrors,
     headerErrors,
     transactionRows,

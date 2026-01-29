@@ -56,6 +56,8 @@ const ImportWizardPage = () => {
     setImportType,
     fileName,
     selectFile,
+    pasteContent,
+    selectPaste,
     parseErrors,
     headerErrors,
     transactionRows,
@@ -74,6 +76,10 @@ const ImportWizardPage = () => {
     updateAccountRow,
     importRows,
   } = useImportWizard();
+
+  useEffect(() => {
+    console.log("ImportWizardPage: fileName changed to:", fileName);
+  }, [fileName]);
 
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
   const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
@@ -251,7 +257,10 @@ const ImportWizardPage = () => {
               label={fileLabel}
               templateUrl={templateUrl}
               fileName={fileName}
+              importType={importType}
+              pasteContent={pasteContent}
               onFileSelected={selectFile}
+              onPasteChange={selectPaste}
               onClear={resetImportState}
             />
 
@@ -272,7 +281,7 @@ const ImportWizardPage = () => {
               <Button variant="outline" onClick={() => setStep(1)}>
                 Back
               </Button>
-              <Button onClick={handleProcess} disabled={!fileName}>
+              <Button onClick={handleProcess} disabled={!fileName && !pasteContent?.trim()}>
                 Process file
               </Button>
             </div>

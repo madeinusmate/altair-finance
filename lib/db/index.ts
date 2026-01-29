@@ -60,9 +60,31 @@ const openSqlite = (encryptionKey: string): DatabaseInstance => {
 };
 
 export const runMigrations = (sqlite: DatabaseInstance): void => {
-  // Migration: Add new columns to transfers table if they don't exist
-  // First check if transfers table exists
   try {
+    // Migration: Create imports table if it doesn't exist
+    const importsTableCheck = sqlite.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='imports'
+    `).get();
+    
+    if (!importsTableCheck) {
+      sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS imports (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL CHECK (type IN ('transactions', 'balances')),
+          filename TEXT NOT NULL,
+          file_hash TEXT NOT NULL,
+          row_count INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_imports_type ON imports(type);
+        CREATE INDEX IF NOT EXISTS idx_imports_created_at ON imports(created_at);
+        CREATE INDEX IF NOT EXISTS idx_imports_file_hash ON imports(file_hash);
+      `);
+    }
+
+    // Migration: Add new columns to transfers table if they don't exist
+    // First check if transfers table exists
     const tableCheck = sqlite.prepare(`
       SELECT name FROM sqlite_master 
       WHERE type='table' AND name='transfers'
@@ -104,6 +126,28 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
       SET category = 'Transfer'
       WHERE category IS NULL
     `);
+
+    // Migration: Add import_id columns to existing tables
+    try {
+      const tables = ["transactions", "transfers", "balance_history", "investment_history"];
+      for (const tableName of tables) {
+        const tableCheck = sqlite.prepare(`
+          SELECT name FROM sqlite_master 
+          WHERE type='table' AND name=?
+        `).get(tableName);
+        
+        if (tableCheck) {
+          const columns = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+          const columnNames = columns.map((col) => col.name);
+          
+          if (!columnNames.includes("import_id")) {
+            sqlite.exec(`ALTER TABLE ${tableName} ADD COLUMN import_id TEXT REFERENCES imports(id) ON DELETE SET NULL`);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("[DB Migration] Could not add import_id columns:", error);
+    }
   } catch (error) {
     // Ignore migration errors - they might occur if table structure is unexpected
     console.warn("[DB Migration] Could not run migrations:", error);
@@ -206,6 +250,15 @@ export const initializeDb = (encryptionKey: string): void => {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS imports (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL CHECK (type IN ('transactions', 'balances')),
+      filename TEXT NOT NULL,
+      file_hash TEXT NOT NULL,
+      row_count INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS exchange_rates (
       id TEXT PRIMARY KEY,
       base_currency TEXT NOT NULL,
@@ -227,6 +280,9 @@ export const initializeDb = (encryptionKey: string): void => {
     CREATE INDEX IF NOT EXISTS idx_balance_history_account_id ON balance_history(account_id);
     CREATE INDEX IF NOT EXISTS idx_investment_history_account_id ON investment_history(account_id);
     CREATE INDEX IF NOT EXISTS idx_exchange_rates_base_date ON exchange_rates(base_currency, effective_date);
+    CREATE INDEX IF NOT EXISTS idx_imports_type ON imports(type);
+    CREATE INDEX IF NOT EXISTS idx_imports_created_at ON imports(created_at);
+    CREATE INDEX IF NOT EXISTS idx_imports_file_hash ON imports(file_hash);
 
     INSERT INTO meta (id, schema_version, created_at)
     SELECT '${META_ID}', ${SCHEMA_VERSION}, strftime('%s','now')
@@ -265,6 +321,28 @@ export const initializeDb = (encryptionKey: string): void => {
     SET category = 'Transfer'
     WHERE category IS NULL
   `);
+
+  // Migration: Add import_id columns to existing tables
+  try {
+    const tables = ["transactions", "transfers", "balance_history", "investment_history"];
+    for (const tableName of tables) {
+      const tableCheck = sqlite.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name=?
+      `).get(tableName);
+      
+      if (tableCheck) {
+        const columns = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+        const columnNames = columns.map((col) => col.name);
+        
+        if (!columnNames.includes("import_id")) {
+          sqlite.exec(`ALTER TABLE ${tableName} ADD COLUMN import_id TEXT REFERENCES imports(id) ON DELETE SET NULL`);
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("[DB Migration] Could not add import_id columns:", error);
+  }
 
   // Seed default categories if tables are empty
   seedDefaultCategories(sqlite);

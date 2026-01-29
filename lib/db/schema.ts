@@ -31,6 +31,15 @@ export const accounts = sqliteTable("accounts", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+export const imports = sqliteTable("imports", {
+  id: text("id").primaryKey(),
+  type: text("type", { enum: ["transactions", "balances"] }).notNull(),
+  filename: text("filename").notNull(),
+  fileHash: text("file_hash").notNull(),
+  rowCount: integer("row_count").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
 export const transactions = sqliteTable("transactions", {
   id: text("id").primaryKey(),
   accountId: text("account_id")
@@ -42,6 +51,7 @@ export const transactions = sqliteTable("transactions", {
   description: text("description"),
   date: integer("date", { mode: "timestamp" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  importId: text("import_id").references(() => imports.id, { onDelete: "set null" }),
 });
 
 export const transfers = sqliteTable("transfers", {
@@ -60,6 +70,7 @@ export const transfers = sqliteTable("transfers", {
   description: text("description"),
   date: integer("date", { mode: "timestamp" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  importId: text("import_id").references(() => imports.id, { onDelete: "set null" }),
 });
 
 export const balanceHistory = sqliteTable("balance_history", {
@@ -70,6 +81,7 @@ export const balanceHistory = sqliteTable("balance_history", {
   balance: real("balance").notNull(),
   date: integer("date", { mode: "timestamp" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  importId: text("import_id").references(() => imports.id, { onDelete: "set null" }),
 });
 
 export const investmentHistory = sqliteTable("investment_history", {
@@ -80,6 +92,7 @@ export const investmentHistory = sqliteTable("investment_history", {
   balance: real("balance").notNull(),
   date: integer("date", { mode: "timestamp" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  importId: text("import_id").references(() => imports.id, { onDelete: "set null" }),
 });
 
 export const exchangeRates = sqliteTable("exchange_rates", {
@@ -103,6 +116,8 @@ export type AccountCategory = typeof accountCategories.$inferSelect;
 export type NewAccountCategory = typeof accountCategories.$inferInsert;
 export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
+export type Import = typeof imports.$inferSelect;
+export type NewImport = typeof imports.$inferInsert;
 export type Transaction = typeof transactions.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
 export type Transfer = typeof transfers.$inferSelect;
