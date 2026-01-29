@@ -1,6 +1,4 @@
-import { CATEGORIES, Category } from "@/lib/categories";
 import { Account } from "@/lib/db/schema";
-import { ACCOUNT_CATEGORIES, isValidAccountCategory } from "@/lib/account-categories";
 import { SUPPORTED_CURRENCIES, isSupportedCurrency } from "@/lib/currencies";
 
 type CsvRow = Record<string, string | undefined>;
@@ -93,7 +91,7 @@ export const buildAccountNameMap = (accounts: Account[]) => {
   return map;
 };
 
-export const validateTransactionRows = (rows: CsvRow[], accounts: Account[]) => {
+export const validateTransactionRows = (rows: CsvRow[], accounts: Account[], validCategories: string[] = []) => {
   const accountMap = buildAccountNameMap(accounts);
   const parsedRows: ParsedTransactionRow[] = rows.map((row, index) => {
     const rowNumber = index + 2; // 1-based row + header
@@ -142,12 +140,19 @@ export const validateTransactionRows = (rows: CsvRow[], accounts: Account[]) => 
     }
 
     const shouldValidateCategory = type !== "transfer";
+    const isValidCategory = validCategories.length > 0 
+      ? validCategories.includes(category)
+      : true; // If no categories provided, accept any (for backward compatibility)
     const normalizedCategory =
-      shouldValidateCategory && category && CATEGORIES.includes(category as Category)
+      shouldValidateCategory && category && isValidCategory
         ? category
-        : "Other";
-    if (shouldValidateCategory && (!category || !CATEGORIES.includes(category as Category))) {
-      warnings.push("Category defaulted to Other");
+        : validCategories.length > 0 && validCategories.includes("Other Expenses")
+          ? "Other Expenses"
+          : validCategories.length > 0 && validCategories.includes("Other")
+            ? "Other"
+            : "Other Expenses";
+    if (shouldValidateCategory && (!category || !isValidCategory)) {
+      warnings.push(`Category defaulted to ${normalizedCategory}`);
     }
 
     if (type === "transfer") {
@@ -244,7 +249,7 @@ export const validateBalanceRows = (rows: CsvRow[], accounts: Account[]) => {
   return parsedRows;
 };
 
-export const validateAccountRows = (rows: CsvRow[], existingAccounts: Account[]) => {
+export const validateAccountRows = (rows: CsvRow[], existingAccounts: Account[], validCategoryIdentifiers: string[] = []) => {
   const accountNameMap = buildAccountNameMap(existingAccounts);
   const nameSet = new Set<string>();
   
@@ -294,8 +299,8 @@ export const validateAccountRows = (rows: CsvRow[], existingAccounts: Account[])
     // Validate category
     if (!category) {
       errors.push("Missing category");
-    } else if (!isValidAccountCategory(category)) {
-      errors.push(`Invalid category. Must be one of: ${ACCOUNT_CATEGORIES.join(", ")}`);
+    } else if (validCategoryIdentifiers.length > 0 && !validCategoryIdentifiers.includes(category)) {
+      errors.push(`Invalid category. Must be one of: ${validCategoryIdentifiers.join(", ")}`);
     }
 
     // Validate currency

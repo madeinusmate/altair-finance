@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api-client";
-import { CATEGORIES } from "@/lib/categories";
 import { Account, Transaction, Transfer } from "@/lib/db/schema";
+import { useAuth } from "@/lib/auth-context";
 import { CsvUpload } from "@/components/csv-import/csv-upload";
 import { CsvReviewTable } from "@/components/csv-import/csv-review-table";
 import { CsvImportSummary } from "@/components/csv-import/csv-import-summary";
@@ -48,7 +48,9 @@ const getSummary = (rows: TransactionRow[]) => {
 };
 
 export const TransactionsCsvImport = () => {
+  const { getKey } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
   const [rows, setRows] = useState<TransactionRow[]>([]);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [headerErrors, setHeaderErrors] = useState<string[]>([]);
@@ -119,17 +121,24 @@ export const TransactionsCsvImport = () => {
   };
 
   useEffect(() => {
-    const loadAccounts = async () => {
+    const loadData = async () => {
+      const key = getKey();
+      if (!key) return;
+
       try {
-        const data = await apiClient.get<Account[]>("/api/accounts");
-        setAccounts(data);
+        const [accountsData, categoriesData] = await Promise.all([
+          apiClient.get<Account[]>("/api/accounts"),
+          apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
+        ]);
+        setAccounts(accountsData);
+        setTransactionCategories(categoriesData.categories.map((c) => c.name));
       } catch (error) {
         console.error(error);
       }
     };
 
-    loadAccounts();
-  }, []);
+    loadData();
+  }, [getKey]);
 
   useEffect(() => {
     if (rows.length === 0) {
@@ -195,7 +204,7 @@ export const TransactionsCsvImport = () => {
         return;
       }
 
-      const validated = validateTransactionRows(result.data, accounts);
+      const validated = validateTransactionRows(result.data, accounts, transactionCategories);
       setRows(validated);
     } catch (error) {
       setParseErrors([error instanceof Error ? error.message : "Failed to parse CSV file"]);
@@ -220,7 +229,7 @@ export const TransactionsCsvImport = () => {
           type: updatedRow.type,
           transfer_account: updatedRow.transferAccount,
         };
-        const [validated] = validateTransactionRows([rawRow], accounts);
+        const [validated] = validateTransactionRows([rawRow], accounts, transactionCategories);
         const updated = {
           ...validated,
           id: row.id,
@@ -362,7 +371,7 @@ export const TransactionsCsvImport = () => {
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        {CATEGORIES.map((category) => (
+                        {transactionCategories.map((category) => (
                           <SelectItem key={category} value={category}>
                             {category}
                           </SelectItem>

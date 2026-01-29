@@ -17,14 +17,14 @@ import {
 import { Plus, Wallet, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown } from "lucide-react";
 import { Account } from "@/lib/db/schema";
 import { Badge } from "@/components/ui/badge";
-import { formatCategoryDisplay, type AccountCategory } from "@/lib/account-categories";
+import { formatCategoryDisplay } from "@/lib/account-categories";
 
 interface AccountWithBalance {
   id: string;
   name: string;
   type: "balance" | "transaction" | "investment";
   nature: "asset" | "liability";
-  category: AccountCategory;
+  category: string;
   currency: string;
   balance: number;
   netContributions?: number;

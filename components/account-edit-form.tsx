@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,8 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import { Account, Transaction, BalanceHistory } from "@/lib/db/schema";
 import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import { toast } from "sonner";
-import { ACCOUNT_CATEGORIES, formatCategoryDisplay, type AccountCategory } from "@/lib/account-categories";
+import { useAuth } from "@/lib/auth-context";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface AccountEditFormProps {
   account: Account;
@@ -34,12 +35,38 @@ export const AccountEditForm = ({
 }: AccountEditFormProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { getKey } = useAuth();
+  const [categories, setCategories] = useState<Array<{ identifier: string; name: string }>>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   const [name, setName] = useState(account.name);
   const [nature, setNature] = useState<"asset" | "liability">(account.nature);
-  const [category, setCategory] = useState<AccountCategory>(account.category);
+  const [category, setCategory] = useState<string>(account.category);
   const [currency, setCurrency] = useState(account.currency);
   const [initialBalance, setInitialBalance] = useState(account.initialBalance.toString());
+
+  // Fetch categories from API
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const key = getKey();
+      if (!key) {
+        setCategoriesLoading(false);
+        return;
+      }
+
+      try {
+        const data = await apiClient.get<{ categories: Array<{ identifier: string; name: string }> }>("/api/account-categories");
+        setCategories(data.categories);
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+        toast.error("Failed to load categories");
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, [getKey]);
 
   // Show warning if editing initial balance with existing history
   const hasHistory =
@@ -147,18 +174,22 @@ export const AccountEditForm = ({
 
       <div className="space-y-2">
         <Label htmlFor="category">Category</Label>
-        <Select value={category} onValueChange={(v) => setCategory(v as AccountCategory)}>
-          <SelectTrigger id="category">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ACCOUNT_CATEGORIES.map((cat) => (
-              <SelectItem key={cat} value={cat}>
-                {formatCategoryDisplay(cat)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {categoriesLoading ? (
+          <Skeleton className="h-9 w-full" />
+        ) : (
+          <Select value={category} onValueChange={setCategory} disabled={categoriesLoading || categories.length === 0}>
+            <SelectTrigger id="category">
+              <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select category"} />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((cat) => (
+                <SelectItem key={cat.identifier} value={cat.identifier}>
+                  {cat.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {account.type !== "investment" && (

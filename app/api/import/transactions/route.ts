@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
-import { CATEGORIES, Category } from "@/lib/categories";
+import { isValidTransactionCategory } from "@/lib/db/category-helpers";
 
 type ImportTransactionRow =
   | {
@@ -111,8 +111,10 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
         if (!["debit", "credit"].includes(row.type)) {
           throw new Error(`Row ${index + 1}: Type must be debit or credit`);
         }
-        if (!row.category || !CATEGORIES.includes(row.category as Category)) {
-          throw new Error(`Row ${index + 1}: Invalid category`);
+        if (!row.category || !isValidTransactionCategory(db, row.category)) {
+          const validCategories = db.select().from(schema.transactionCategories).all();
+          const categoryNames = validCategories.map((c) => c.name).join(", ");
+          throw new Error(`Row ${index + 1}: Invalid category. Valid categories: ${categoryNames}`);
         }
 
         db.insert(schema.transactions)

@@ -15,9 +15,10 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
-import { CATEGORIES } from "@/lib/categories";
 import { Transaction, Account } from "@/lib/db/schema";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface TransactionFormProps {
   accountId?: string;
@@ -38,11 +39,42 @@ export const TransactionForm = ({
 }: TransactionFormProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { getKey } = useAuth();
+  const [categories, setCategories] = useState<string[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   // Account selection state (only used when accountId is not provided)
   const transactionAccounts = accounts?.filter(a => a.type === "transaction") || [];
   const defaultAccountId = transactionAccounts.length > 0 ? transactionAccounts[0].id : "";
   const [selectedAccountId, setSelectedAccountId] = useState<string>(defaultAccountId);
+
+  // Fetch categories from API
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const key = getKey();
+      if (!key) {
+        setCategoriesLoading(false);
+        return;
+      }
+
+      try {
+        const data = await apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories");
+        const categoryNames = data.categories.map((c) => c.name);
+        setCategories(categoryNames);
+        // Set default category if not set
+        if (!transaction?.category && categoryNames.length > 0) {
+          setCategory(categoryNames[0]);
+        }
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+        toast.error("Failed to load categories");
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, [getKey, transaction]);
 
   // Update selected account when accounts change
   useEffect(() => {
@@ -60,7 +92,7 @@ export const TransactionForm = ({
     transaction?.type || "debit"
   );
   const [category, setCategory] = useState<string>(
-    transaction?.category || CATEGORIES[0]
+    transaction?.category || ""
   );
   const [amount, setAmount] = useState(
     transaction?.amount.toString() || ""
@@ -170,18 +202,22 @@ export const TransactionForm = ({
 
         <div className="space-y-2">
           <Label htmlFor="category">Category</Label>
-          <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger id="category">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CATEGORIES.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {categoriesLoading ? (
+            <Skeleton className="h-9 w-full" />
+          ) : (
+            <Select value={category} onValueChange={setCategory} disabled={categoriesLoading || categories.length === 0}>
+              <SelectTrigger id="category">
+                <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select category"} />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 

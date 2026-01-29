@@ -16,8 +16,9 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Account, Transfer } from "@/lib/db/schema";
-import { CATEGORIES } from "@/lib/categories";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface TransferFormProps {
   fromAccountId?: string;
@@ -30,6 +31,9 @@ interface TransferFormProps {
 export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mode = "create" }: TransferFormProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { getKey } = useAuth();
+  const [categories, setCategories] = useState<string[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   const [selectedFromAccountId, setSelectedFromAccountId] = useState<string>(
     transfer?.fromAccountId || ""
@@ -45,8 +49,36 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
     transfer?.exchangeRate ? transfer.exchangeRate.toString() : ""
   );
   const [category, setCategory] = useState<string>(
-    transfer?.category || CATEGORIES[0]
+    transfer?.category || ""
   );
+
+  // Fetch categories from API
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const key = getKey();
+      if (!key) {
+        setCategoriesLoading(false);
+        return;
+      }
+
+      try {
+        const data = await apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories");
+        const categoryNames = data.categories.map((c) => c.name);
+        setCategories(categoryNames);
+        // Set default category if not set
+        if (!transfer?.category && categoryNames.length > 0) {
+          setCategory(categoryNames[0]);
+        }
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+        toast.error("Failed to load categories");
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, [getKey, transfer]);
   const [description, setDescription] = useState(transfer?.description || "");
   const [date, setDate] = useState(
     transfer ? new Date(transfer.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
@@ -60,7 +92,7 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
       setFromAmount((transfer.fromAmount ?? transfer.amount).toString());
       setToAmount((transfer.toAmount ?? transfer.amount).toString());
       setExchangeRate(transfer.exchangeRate ? transfer.exchangeRate.toString() : "");
-      setCategory(transfer.category || CATEGORIES[0]);
+      setCategory(transfer.category || "");
       setDescription(transfer.description || "");
       setDate(new Date(transfer.date).toISOString().split("T")[0]);
     }
@@ -275,18 +307,22 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
 
       <div className="space-y-2">
         <Label htmlFor="category">Category</Label>
-        <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger id="category">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {CATEGORIES.map((cat) => (
-              <SelectItem key={cat} value={cat}>
-                {cat}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {categoriesLoading ? (
+          <Skeleton className="h-9 w-full" />
+        ) : (
+          <Select value={category} onValueChange={setCategory} disabled={categoriesLoading || categories.length === 0}>
+            <SelectTrigger id="category">
+              <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select category"} />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

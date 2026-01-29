@@ -28,8 +28,9 @@ export type AccountCategory = (typeof ACCOUNT_CATEGORIES)[number];
 
 /**
  * Format a category value for display (e.g., "credit_card" -> "Credit Card")
+ * Accepts string for compatibility with database-stored categories
  */
-export const formatCategoryDisplay = (category: AccountCategory): string => {
+export const formatCategoryDisplay = (category: string): string => {
   return category
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))

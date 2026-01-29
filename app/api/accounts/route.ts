@@ -5,7 +5,7 @@ import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { SUPPORTED_CURRENCIES, isSupportedCurrency, type SupportedCurrency } from "@/lib/currencies";
 import { convertAmount, getFxSnapshot } from "@/lib/fx";
-import { ACCOUNT_CATEGORIES, isValidAccountCategory, type AccountCategory } from "@/lib/account-categories";
+import { isValidAccountCategoryIdentifier } from "@/lib/db/category-helpers";
 
 // GET all accounts
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
@@ -59,9 +59,13 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       }
     }
 
-    if (!isValidAccountCategory(category)) {
+    const db = getDb(key);
+
+    if (!isValidAccountCategoryIdentifier(db, category)) {
+      const validCategories = db.select().from(schema.accountCategories).all();
+      const categoryIdentifiers = validCategories.map((c) => c.identifier).join(", ");
       return NextResponse.json(
-        { error: `Category must be one of: ${ACCOUNT_CATEGORIES.join(", ")}` },
+        { error: `Invalid category. Valid categories: ${categoryIdentifiers}` },
         { status: 400 }
       );
     }
@@ -73,7 +77,6 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       );
     }
 
-    const db = getDb(key);
     const now = new Date();
     const id = uuidv4();
 
@@ -82,7 +85,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       name,
       type: type as "balance" | "transaction" | "investment",
       nature: effectiveNature as "asset" | "liability",
-      category: category as AccountCategory,
+      category: category,
       currency,
       initialBalance: effectiveInitialBalance,
       createdAt: now,
@@ -134,7 +137,7 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
 
-    const updates: Partial<{ name: string; currency: SupportedCurrency; nature: "asset" | "liability"; category: AccountCategory; initialBalance: number; updatedAt: Date }> = {
+    const updates: Partial<{ name: string; currency: SupportedCurrency; nature: "asset" | "liability"; category: string; initialBalance: number; updatedAt: Date }> = {
       updatedAt: new Date(),
     };
 
@@ -170,13 +173,15 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
     }
 
     if (category !== undefined) {
-      if (!isValidAccountCategory(category)) {
+      if (!isValidAccountCategoryIdentifier(db, category)) {
+        const validCategories = db.select().from(schema.accountCategories).all();
+        const categoryIdentifiers = validCategories.map((c) => c.identifier).join(", ");
         return NextResponse.json(
-          { error: `Category must be one of: ${ACCOUNT_CATEGORIES.join(", ")}` },
+          { error: `Invalid category. Valid categories: ${categoryIdentifiers}` },
           { status: 400 }
         );
       }
-      updates.category = category as AccountCategory;
+      updates.category = category;
     }
 
     if (initialBalance !== undefined) {

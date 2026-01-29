@@ -13,10 +13,10 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { CATEGORIES } from "@/lib/categories";
-import { ACCOUNT_CATEGORIES } from "@/lib/account-categories";
 import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import { useImportWizard } from "@/hooks/use-import-wizard";
+import { useAuth } from "@/lib/auth-context";
+import { apiClient } from "@/lib/api-client";
 
 const steps = [
   { id: 1, label: "Select type" },
@@ -48,6 +48,7 @@ const filterRows = <Row extends { errors: string[]; warnings: string[]; duplicat
 };
 
 const ImportWizardPage = () => {
+  const { getKey } = useAuth();
   const {
     step,
     setStep,
@@ -75,6 +76,31 @@ const ImportWizardPage = () => {
   } = useImportWizard();
 
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
+  const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
+  const [accountCategoryIdentifiers, setAccountCategoryIdentifiers] = useState<string[]>([]);
+  const [accountCategoryNames, setAccountCategoryNames] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      const key = getKey();
+      if (!key) return;
+
+      try {
+        const [txData, acctData] = await Promise.all([
+          apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
+          apiClient.get<{ categories: Array<{ identifier: string; name: string }> }>("/api/account-categories"),
+        ]);
+        setTransactionCategories(txData.categories.map((c) => c.name));
+        setAccountCategoryIdentifiers(acctData.categories.map((c) => c.identifier));
+        const nameMap = new Map(acctData.categories.map((c) => [c.identifier, c.name]));
+        setAccountCategoryNames(nameMap);
+      } catch (error) {
+        console.error("Error loading categories:", error);
+      }
+    };
+
+    loadCategories();
+  }, [getKey]);
 
   const rows =
     importType === "transactions"
@@ -342,7 +368,7 @@ const ImportWizardPage = () => {
                               <SelectValue placeholder="Select category" />
                             </SelectTrigger>
                             <SelectContent>
-                              {CATEGORIES.map((category) => (
+                              {transactionCategories.map((category) => (
                                 <SelectItem key={category} value={category}>
                                   {category}
                                 </SelectItem>
@@ -471,9 +497,9 @@ const ImportWizardPage = () => {
                               <SelectValue placeholder="Select category" />
                             </SelectTrigger>
                             <SelectContent>
-                              {ACCOUNT_CATEGORIES.map((category) => (
-                                <SelectItem key={category} value={category}>
-                                  {category.split("_").map((word) =>
+                              {accountCategoryIdentifiers.map((identifier) => (
+                                <SelectItem key={identifier} value={identifier}>
+                                  {accountCategoryNames.get(identifier) || identifier.split("_").map((word) =>
                                     word.charAt(0).toUpperCase() + word.slice(1)
                                   ).join(" ")}
                                 </SelectItem>

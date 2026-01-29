@@ -13,6 +13,7 @@
     "reset-db": "tsx scripts/reset-db.ts",
     "extract-statements": "tsx scripts/extract-statements.ts",
     "combine-csvs": "tsx scripts/combine-csvs.ts",
+    "compress-pdf": "tsx scripts/compress-pdf.ts",
     "dev:electron": "tsx scripts/dev-electron.ts",
     "build:electron": "pnpm build && pnpm build:electron-files && node scripts/prepare-electron-build.js && node scripts/download-node.js && pnpm exec electron-builder install-app-deps && pnpm exec electron-builder",
     "build:electron-files": "tsc -p electron/tsconfig.json",

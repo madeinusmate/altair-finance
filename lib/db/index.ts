@@ -134,12 +134,31 @@ export const initializeDb = (encryptionKey: string): void => {
   const sqlite = openSqlite(encryptionKey);
   
   sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS transaction_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      color TEXT,
+      icon TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS account_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      identifier TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      color TEXT,
+      icon TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS accounts (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       type TEXT NOT NULL CHECK (type IN ('balance', 'transaction', 'investment')),
       nature TEXT NOT NULL CHECK (nature IN ('asset', 'liability')),
-      category TEXT NOT NULL CHECK (category IN ('auto_loan', 'brokerage', 'cash', 'checking', 'credit_card', 'crypto', 'investment', 'line_of_credit', 'mortgage', 'other_asset', 'other_liability', 'personal_loan', 'physical_asset', 'real_estate', 'retirement_401k', 'retirement_ira', 'retirement_other', 'retirement_roth_ira', 'savings', 'student_loan', 'vehicle')),
+      category TEXT NOT NULL,
       currency TEXT NOT NULL,
       initial_balance REAL NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
@@ -247,7 +266,86 @@ export const initializeDb = (encryptionKey: string): void => {
     WHERE category IS NULL
   `);
 
+  // Seed default categories if tables are empty
+  seedDefaultCategories(sqlite);
+
   sqlite.close();
+};
+
+const seedDefaultCategories = (sqlite: DatabaseInstance): void => {
+  const now = Math.floor(Date.now() / 1000);
+
+  // Seed transaction categories
+  const transactionCategoryCount = sqlite.prepare("SELECT COUNT(*) as count FROM transaction_categories").get() as { count: number };
+  if (transactionCategoryCount.count === 0) {
+    const defaultTransactionCategories = [
+      "Shopping",
+      "Travel",
+      "ATM Withdrawal",
+      "Investment",
+      "Salary",
+      "Entertainment",
+      "Health & Personal Care",
+      "Food & Drink",
+      "Taxes",
+      "Rent & Utilities",
+      "Subscriptions",
+      "Home Improvement",
+      "Other Income",
+      "Auto & Transport",
+      "Fees",
+      "Other Expenses",
+      "Capital Gain Income",
+      "Utilities",
+      "Wedding",
+    ];
+
+    const insertTxCategory = sqlite.prepare(`
+      INSERT INTO transaction_categories (name, created_at, updated_at)
+      VALUES (?, ?, ?)
+    `);
+
+    for (const name of defaultTransactionCategories) {
+      insertTxCategory.run(name, now, now);
+    }
+  }
+
+  // Seed account categories
+  const accountCategoryCount = sqlite.prepare("SELECT COUNT(*) as count FROM account_categories").get() as { count: number };
+  if (accountCategoryCount.count === 0) {
+    const defaultAccountCategories: Array<{ identifier: string; name: string }> = [
+      { identifier: "auto_loan", name: "Auto Loan" },
+      { identifier: "brokerage", name: "Brokerage" },
+      { identifier: "cash", name: "Cash" },
+      { identifier: "checking", name: "Checking" },
+      { identifier: "credit_card", name: "Credit Card" },
+      { identifier: "crypto", name: "Crypto" },
+      { identifier: "investment", name: "Investment" },
+      { identifier: "line_of_credit", name: "Line of Credit" },
+      { identifier: "mortgage", name: "Mortgage" },
+      { identifier: "other_asset", name: "Other Asset" },
+      { identifier: "other_liability", name: "Other Liability" },
+      { identifier: "personal_loan", name: "Personal Loan" },
+      { identifier: "physical_asset", name: "Physical Asset" },
+      { identifier: "real_estate", name: "Real Estate" },
+      { identifier: "retirement_401k", name: "Retirement 401k" },
+      { identifier: "retirement_ira", name: "Retirement IRA" },
+      { identifier: "retirement_other", name: "Retirement Other" },
+      { identifier: "retirement_roth_ira", name: "Retirement Roth IRA" },
+      { identifier: "savings", name: "Savings" },
+      { identifier: "student_loan", name: "Student Loan" },
+      { identifier: "vehicle", name: "Vehicle" },
+    ];
+
+    const insertAcctCategory = sqlite.prepare(`
+      INSERT INTO account_categories (identifier, name, created_at, updated_at)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    for (const { identifier, name } of defaultAccountCategories) {
+      insertAcctCategory.run(identifier, name, now, now);
+    }
+  }
 };
 
 export const validateKey = (encryptionKey: string): boolean => {

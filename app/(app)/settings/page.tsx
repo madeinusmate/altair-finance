@@ -98,6 +98,18 @@ const SettingsPage = () => {
 
       <Card>
         <CardHeader>
+          <CardTitle>Categories</CardTitle>
+          <CardDescription>Manage transaction and account categories.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild>
+            <Link href="/settings/categories">Manage Categories</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Database className="h-5 w-5" />
             Database Export & Import

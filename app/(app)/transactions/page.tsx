@@ -37,8 +37,8 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { toast } from "sonner";
 import { ArrowUpRight, ArrowDownRight, Search, ArrowLeftRight, Pencil, Trash2, Plus } from "lucide-react";
 import { Transaction, Account, Transfer } from "@/lib/db/schema";
-import { CATEGORIES } from "@/lib/categories";
 import { format } from "date-fns";
+import { useAuth } from "@/lib/auth-context";
 
 type UnifiedItem = 
   | { type: "transaction"; data: Transaction }
@@ -54,9 +54,11 @@ const formatCurrency = (amount: number, currency: string): string => {
 };
 
 const TransactionsPage = () => {
+  const { getKey } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,14 +75,22 @@ const TransactionsPage = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      const key = getKey();
+      if (!key) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const [unifiedData, accountsData] = await Promise.all([
+        const [unifiedData, accountsData, categoriesData] = await Promise.all([
           apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified"),
           apiClient.get<Account[]>("/api/accounts"),
+          apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
         ]);
         setTransactions(unifiedData.transactions);
         setTransfers(unifiedData.transfers);
         setAccounts(accountsData);
+        setTransactionCategories(categoriesData.categories.map((c) => c.name));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch transactions");
       } finally {
@@ -89,7 +99,7 @@ const TransactionsPage = () => {
     };
 
     fetchData();
-  }, []);
+  }, [getKey]);
 
   const accountMap = useMemo(() => {
     return new Map(accounts.map((a) => [a.id, a]));
@@ -428,7 +438,7 @@ const TransactionsPage = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
-                  {CATEGORIES.map((cat) => (
+                  {transactionCategories.map((cat) => (
                     <SelectItem key={cat} value={cat}>
                       {cat}
                     </SelectItem>

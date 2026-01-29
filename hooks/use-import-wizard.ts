@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api-client";
-import { CATEGORIES } from "@/lib/categories";
 import { Account, BalanceHistory, InvestmentHistory, Transaction, Transfer } from "@/lib/db/schema";
+import { useAuth } from "@/lib/auth-context";
 import {
   buildAccountNameMap,
   getMissingHeaders,
@@ -132,6 +132,7 @@ const updateRowsIfChanged = <Row extends { duplicate?: boolean; warnings: string
 };
 
 export const useImportWizard = () => {
+  const { getKey } = useAuth();
   const [step, setStep] = useState<WizardStep>(1);
   const [importType, setImportTypeState] = useState<ImportType>("transactions");
   const [file, setFile] = useState<File | null>(null);
@@ -146,6 +147,8 @@ export const useImportWizard = () => {
   const [importError, setImportError] = useState<string | null>(null);
   const [completion, setCompletion] = useState<CompletionSummary | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
+  const [accountCategoryIdentifiers, setAccountCategoryIdentifiers] = useState<string[]>([]);
   const [existingTransactions, setExistingTransactions] = useState<Transaction[]>([]);
   const [existingTransfers, setExistingTransfers] = useState<Transfer[]>([]);
   const [existingBalances, setExistingBalances] = useState<BalanceHistory[]>([]);
@@ -154,17 +157,26 @@ export const useImportWizard = () => {
   const accountMap = useMemo(() => buildAccountNameMap(accounts), [accounts]);
 
   useEffect(() => {
-    const loadAccounts = async () => {
+    const loadData = async () => {
+      const key = getKey();
+      if (!key) return;
+
       try {
-        const data = await apiClient.get<Account[]>("/api/accounts");
-        setAccounts(data);
+        const [accountsData, txCategoriesData, acctCategoriesData] = await Promise.all([
+          apiClient.get<Account[]>("/api/accounts"),
+          apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
+          apiClient.get<{ categories: Array<{ identifier: string }> }>("/api/account-categories"),
+        ]);
+        setAccounts(accountsData);
+        setTransactionCategories(txCategoriesData.categories.map((c) => c.name));
+        setAccountCategoryIdentifiers(acctCategoriesData.categories.map((c) => c.identifier));
       } catch (error) {
         console.error(error);
       }
     };
 
-    loadAccounts();
-  }, []);
+    loadData();
+  }, [getKey]);
 
   const resetImportState = () => {
     setFile(null);
@@ -493,13 +505,13 @@ export const useImportWizard = () => {
       }
 
       if (importType === "transactions") {
-        const validated = validateTransactionRows(result.data, accounts);
+        const validated = validateTransactionRows(result.data, accounts, transactionCategories);
         setTransactionRows(validated);
       } else if (importType === "balances") {
         const validated = validateBalanceRows(result.data, accounts);
         setBalanceRows(validated);
       } else {
-        const validated = validateAccountRows(result.data, accounts);
+        const validated = validateAccountRows(result.data, accounts, accountCategoryIdentifiers);
         setAccountRows(validated);
       }
       setIsProcessing(false);
@@ -531,7 +543,7 @@ export const useImportWizard = () => {
               type: updatedRow.type,
               transfer_account: updatedRow.transferAccount,
             };
-            const [validated] = validateTransactionRows([rawRow], accounts);
+            const [validated] = validateTransactionRows([rawRow], accounts, transactionCategories);
             const updated = {
               ...validated,
               id: row.id,
@@ -600,7 +612,7 @@ export const useImportWizard = () => {
           currency: updatedRow.currency,
           initial_balance: updatedRow.initialBalance,
         };
-        const [validated] = validateAccountRows([rawRow], accounts);
+        const [validated] = validateAccountRows([rawRow], accounts, accountCategoryIdentifiers);
         const updated = {
           ...validated,
           id: row.id,
@@ -648,7 +660,7 @@ export const useImportWizard = () => {
           return {
             type: row.type,
             accountId: account.id,
-            category: CATEGORIES.includes(row.category as any) ? row.category as any : "Other Expenses",
+            category: transactionCategories.includes(row.category) ? row.category : (transactionCategories.includes("Other Expenses") ? "Other Expenses" : transactionCategories[0] || "Other Expenses"),
             amount: Number(row.amount),
             description: row.description || null,
             date: row.date,

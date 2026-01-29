@@ -1,12 +1,30 @@
 import { sqliteTable, text, real, integer } from "drizzle-orm/sqlite-core";
-import { ACCOUNT_CATEGORIES, type AccountCategory } from "@/lib/account-categories";
+
+export const transactionCategories = sqliteTable("transaction_categories", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull().unique(),
+  color: text("color"),
+  icon: text("icon"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export const accountCategories = sqliteTable("account_categories", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  identifier: text("identifier").notNull().unique(),
+  name: text("name").notNull(),
+  color: text("color"),
+  icon: text("icon"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
 
 export const accounts = sqliteTable("accounts", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   type: text("type", { enum: ["balance", "transaction", "investment"] }).notNull(),
   nature: text("nature", { enum: ["asset", "liability"] }).notNull(),
-  category: text("category", { enum: ACCOUNT_CATEGORIES as unknown as [AccountCategory, ...AccountCategory[]] }).notNull(),
+  category: text("category").notNull(),
   currency: text("currency").notNull(),
   initialBalance: real("initial_balance").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
@@ -79,9 +97,12 @@ export const meta = sqliteTable("meta", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+export type TransactionCategory = typeof transactionCategories.$inferSelect;
+export type NewTransactionCategory = typeof transactionCategories.$inferInsert;
+export type AccountCategory = typeof accountCategories.$inferSelect;
+export type NewAccountCategory = typeof accountCategories.$inferInsert;
 export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
-export type { AccountCategory } from "@/lib/account-categories";
 export type Transaction = typeof transactions.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
 export type Transfer = typeof transfers.$inferSelect;

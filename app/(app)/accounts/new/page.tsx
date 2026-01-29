@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
@@ -19,19 +19,49 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { DEFAULT_ACCOUNT_CURRENCY, SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
-import { ACCOUNT_CATEGORIES, formatCategoryDisplay, type AccountCategory } from "@/lib/account-categories";
+import { useAuth } from "@/lib/auth-context";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const NewAccountPage = () => {
   const router = useRouter();
+  const { getKey } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Array<{ identifier: string; name: string }>>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
   
   const [name, setName] = useState("");
   const [type, setType] = useState<"balance" | "transaction" | "investment">("balance");
   const [nature, setNature] = useState<"asset" | "liability">("asset");
-  const [category, setCategory] = useState<AccountCategory | "">("");
+  const [category, setCategory] = useState<string>("");
   const [currency, setCurrency] = useState<SupportedCurrency>(DEFAULT_ACCOUNT_CURRENCY);
   const [initialBalance, setInitialBalance] = useState("0");
+
+  // Fetch categories from API
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const key = getKey();
+      if (!key) {
+        setCategoriesLoading(false);
+        return;
+      }
+
+      try {
+        const data = await apiClient.get<{ categories: Array<{ identifier: string; name: string }> }>("/api/account-categories");
+        setCategories(data.categories);
+        if (data.categories.length > 0) {
+          setCategory(data.categories[0].identifier);
+        }
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+        toast.error("Failed to load categories");
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, [getKey]);
 
   // Investment accounts are always assets with zero initial balance
   const isInvestment = type === "investment";
@@ -177,18 +207,22 @@ const NewAccountPage = () => {
 
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
-              <Select value={category} onValueChange={(v) => setCategory(v as AccountCategory)}>
-                <SelectTrigger id="category">
-                  <SelectValue placeholder="Select a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ACCOUNT_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {formatCategoryDisplay(cat)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {categoriesLoading ? (
+                <Skeleton className="h-9 w-full" />
+              ) : (
+                <Select value={category} onValueChange={setCategory} disabled={categoriesLoading || categories.length === 0}>
+                  <SelectTrigger id="category">
+                    <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select a category"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.identifier} value={cat.identifier}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

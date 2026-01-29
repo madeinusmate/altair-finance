@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { SUPPORTED_CURRENCIES, isSupportedCurrency } from "@/lib/currencies";
-import { ACCOUNT_CATEGORIES, isValidAccountCategory } from "@/lib/account-categories";
+import { isValidAccountCategoryIdentifier } from "@/lib/db/category-helpers";
 
 type ImportAccountRow = {
   name: string;
@@ -56,9 +56,11 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
         throw new Error(`Row ${index + 1}: Investment accounts must have nature 'asset'`);
       }
 
-      if (!row.category || !isValidAccountCategory(row.category)) {
+      if (!row.category || !isValidAccountCategoryIdentifier(db, row.category)) {
+        const validCategories = db.select().from(schema.accountCategories).all();
+        const categoryIdentifiers = validCategories.map((c) => c.identifier).join(", ");
         throw new Error(
-          `Row ${index + 1}: Category must be one of: ${ACCOUNT_CATEGORIES.join(", ")}`
+          `Row ${index + 1}: Invalid category. Valid categories: ${categoryIdentifiers}`
         );
       }
 
@@ -111,7 +113,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
         name: row.name.trim(),
         type: row.type,
         nature: effectiveNature,
-        category: row.category as typeof ACCOUNT_CATEGORIES[number],
+        category: row.category,
         currency: row.currency,
         initialBalance: effectiveInitialBalance,
         createdAt: now,

@@ -292,7 +292,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                 {account.nature}
               </Badge>
               <Badge variant="outline">
-                {formatCategoryDisplay(account.category)}
+                {formatCategoryDisplay(String(account.category))}
               </Badge>
             </div>
             <p className="text-muted-foreground capitalize">

@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { eq, desc } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
-import { CATEGORIES, Category } from "@/lib/categories";
+import { isValidTransactionCategory } from "@/lib/db/category-helpers";
 
 // GET all transactions or by account
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
@@ -63,14 +63,16 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Type must be 'debit' or 'credit'" }, { status: 400 });
     }
 
-    if (!CATEGORIES.includes(category as Category)) {
+    const db = getDb(key);
+
+    if (!isValidTransactionCategory(db, category)) {
+      const validCategories = db.select().from(schema.transactionCategories).all();
+      const categoryNames = validCategories.map((c) => c.name).join(", ");
       return NextResponse.json(
-        { error: `Category must be one of: ${CATEGORIES.join(", ")}` },
+        { error: `Invalid category. Valid categories: ${categoryNames}` },
         { status: 400 }
       );
     }
-
-    const db = getDb(key);
 
     // Verify account exists and is a transaction account
     const account = db.select().from(schema.accounts).where(eq(schema.accounts.id, accountId)).get();
@@ -133,9 +135,13 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Type must be 'debit' or 'credit'" }, { status: 400 });
     }
 
-    if (!CATEGORIES.includes(category as Category)) {
+    const db = getDb(key);
+
+    if (!isValidTransactionCategory(db, category)) {
+      const validCategories = db.select().from(schema.transactionCategories).all();
+      const categoryNames = validCategories.map((c) => c.name).join(", ");
       return NextResponse.json(
-        { error: `Category must be one of: ${CATEGORIES.join(", ")}` },
+        { error: `Invalid category. Valid categories: ${categoryNames}` },
         { status: 400 }
       );
     }
@@ -144,8 +150,6 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
     if (isNaN(amountValue) || amountValue <= 0) {
       return NextResponse.json({ error: "Amount must be a positive number" }, { status: 400 });
     }
-
-    const db = getDb(key);
 
     // Verify transaction exists
     const existingTransaction = db
