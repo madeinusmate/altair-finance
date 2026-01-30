@@ -6,7 +6,7 @@ import { getEncryptionKey } from "@/lib/api-utils";
 // GET import by id
 export const GET = async (
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
   if (!key) {
@@ -14,11 +14,12 @@ export const GET = async (
   }
 
   try {
+    const { id } = await params;
     const db = getDb(key);
     const importRecord = db
       .select()
       .from(schema.imports)
-      .where(eq(schema.imports.id, params.id))
+      .where(eq(schema.imports.id, id))
       .get();
 
     if (!importRecord) {
@@ -35,25 +36,25 @@ export const GET = async (
       transactionsCount = db
         .select()
         .from(schema.transactions)
-        .where(eq(schema.transactions.importId, params.id))
+        .where(eq(schema.transactions.importId, id))
         .all().length;
 
       transfersCount = db
         .select()
         .from(schema.transfers)
-        .where(eq(schema.transfers.importId, params.id))
+        .where(eq(schema.transfers.importId, id))
         .all().length;
     } else if (importRecord.type === "balances") {
       balancesCount = db
         .select()
         .from(schema.balanceHistory)
-        .where(eq(schema.balanceHistory.importId, params.id))
+        .where(eq(schema.balanceHistory.importId, id))
         .all().length;
 
       investmentsCount = db
         .select()
         .from(schema.investmentHistory)
-        .where(eq(schema.investmentHistory.importId, params.id))
+        .where(eq(schema.investmentHistory.importId, id))
         .all().length;
     }
 
@@ -73,7 +74,7 @@ export const GET = async (
 // DELETE import and all associated records
 export const DELETE = async (
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
   if (!key) {
@@ -81,13 +82,14 @@ export const DELETE = async (
   }
 
   try {
+    const { id } = await params;
     const db = getDb(key);
     
     // Verify import exists
     const importRecord = db
       .select()
       .from(schema.imports)
-      .where(eq(schema.imports.id, params.id))
+      .where(eq(schema.imports.id, id))
       .get();
 
     if (!importRecord) {
@@ -107,21 +109,21 @@ export const DELETE = async (
       const transactionsToDelete = db
         .select()
         .from(schema.transactions)
-        .where(eq(schema.transactions.importId, params.id))
+        .where(eq(schema.transactions.importId, id))
         .all();
       deleted.transactions = transactionsToDelete.length;
 
       const transfersToDelete = db
         .select()
         .from(schema.transfers)
-        .where(eq(schema.transfers.importId, params.id))
+        .where(eq(schema.transfers.importId, id))
         .all();
       deleted.transfers = transfersToDelete.length;
 
       // Delete transactions
       try {
         db.delete(schema.transactions)
-          .where(eq(schema.transactions.importId, params.id))
+          .where(eq(schema.transactions.importId, id))
           .run();
       } catch (error) {
         console.error("Error deleting transactions:", error);
@@ -131,7 +133,7 @@ export const DELETE = async (
       // Delete transfers
       try {
         db.delete(schema.transfers)
-          .where(eq(schema.transfers.importId, params.id))
+          .where(eq(schema.transfers.importId, id))
           .run();
       } catch (error) {
         console.error("Error deleting transfers:", error);
@@ -142,21 +144,21 @@ export const DELETE = async (
       const balancesToDelete = db
         .select()
         .from(schema.balanceHistory)
-        .where(eq(schema.balanceHistory.importId, params.id))
+        .where(eq(schema.balanceHistory.importId, id))
         .all();
       deleted.balances = balancesToDelete.length;
 
       const investmentsToDelete = db
         .select()
         .from(schema.investmentHistory)
-        .where(eq(schema.investmentHistory.importId, params.id))
+        .where(eq(schema.investmentHistory.importId, id))
         .all();
       deleted.investments = investmentsToDelete.length;
 
       // Delete balance history
       try {
         db.delete(schema.balanceHistory)
-          .where(eq(schema.balanceHistory.importId, params.id))
+          .where(eq(schema.balanceHistory.importId, id))
           .run();
       } catch (error) {
         console.error("Error deleting balance history:", error);
@@ -166,7 +168,7 @@ export const DELETE = async (
       // Delete investment history
       try {
         db.delete(schema.investmentHistory)
-          .where(eq(schema.investmentHistory.importId, params.id))
+          .where(eq(schema.investmentHistory.importId, id))
           .run();
       } catch (error) {
         console.error("Error deleting investment history:", error);
@@ -177,7 +179,7 @@ export const DELETE = async (
     // Delete the import record
     try {
       db.delete(schema.imports)
-        .where(eq(schema.imports.id, params.id))
+        .where(eq(schema.imports.id, id))
         .run();
     } catch (error) {
       console.error("Error deleting import record:", error);

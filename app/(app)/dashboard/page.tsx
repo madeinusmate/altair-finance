@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -300,7 +301,12 @@ const DashboardPage = () => {
                               )}
                             </div>
                             <div>
-                              <p className="text-sm font-medium">{account.name}</p>
+                              <Link
+                                href={`/accounts/${account.id}`}
+                                className="text-sm font-medium hover:underline"
+                              >
+                                {account.name}
+                              </Link>
                               <p className="text-xs text-muted-foreground capitalize">
                                 {account.type} account • {formatCategoryDisplay(account.category)} • {account.nature}
                               </p>
