@@ -56,6 +56,7 @@ import { format } from "date-fns";
 import { formatCategoryDisplay } from "@/lib/account-categories";
 import { calculateTransactionAccountBalance, calculateNetContributions } from "@/lib/accounting";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import { AccountChartsContainer } from "@/components/account-charts/account-charts-container";
 
 type UnifiedItem = 
   | { type: "transaction"; data: Transaction }
@@ -541,6 +542,16 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
           </>
         )}
       </div>
+
+      {/* Charts Section */}
+      <AccountChartsContainer
+        account={account}
+        transactions={transactions}
+        transfers={transfers}
+        balanceHistory={balanceHistory}
+        investmentHistory={investmentHistory}
+        isLoading={isLoading}
+      />
 
       {/* Edit Transaction Dialog */}
       {account.type === "transaction" && editingTransaction && (
