@@ -9,8 +9,17 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const STATEMENTS_FOLDER = path.join(process.cwd(), "statements");
 const OUTPUT_FOLDER = path.join(STATEMENTS_FOLDER, "extracted");
 const CONCURRENCY_LIMIT = 50;
-const MODEL = "gpt-4o";
-const PROMPT = `Read this bank or credit card statements and extract all the transactions into a csv table i can copy paste into a spreadsheet. no mermaid markdown, no markdown tables, no markdown lists, no markdown code blocks, no markdown anything else. just comma separated values. make sure the date field is in the correct format YYYY-MM-DD. make sure the amount number is always positive and doesn't use commas or any other characters. ONLY EXTRACT TRANSACTIONS. IGNORE ANY OTHER INFORMATION ON THE STATEMENT. PAY EXTREME ATTENTION ON HOW THE STATEMENT HANDLES NEGATIVE VALUES. IF IT's a CREDIT CARD STATEMENT, CREDIT transactions are marked negative using brackets. the direction of the transaction is determined by the words 'credit' or 'debit'. make sure you reply only with the table and nothing else. Use this header: date account description amount category type(credit/debit)
+const MODEL = "gpt-5";
+const PROMPT = `Read this bank or credit card statements and extract all the transactions into a csv table i can copy paste into a spreadsheet. 
+no mermaid markdown,no markdown tables, no markdown lists, no markdown code blocks, no markdown anything else. 
+just comma separated values. 
+make sure the date field is in the correct format YYYY-MM-DD. 
+make sure you account for debit and credit transactions. credit transactions are reported in brackets and are negative values. debit transactions are reported as positive values
+ONLY EXTRACT TRANSACTIONS. IGNORE ANY OTHER INFORMATION ON THE STATEMENT. 
+IF IT's a CREDIT CARD STATEMENT, CREDIT transactions are marked negative using brackets. 
+in the output table the direction of the transaction is determined by the words 'credit' or 'debit'. make sure you reply only with the table and nothing else. 
+Use this header for the table: date account description amount category type(credit/debit).
+if you can determine a better description for the transaction, use it.
 for the transaction category you need to classify it based on the available categorties:
 Categories Available: ATM Withdrawal
 Auto & Transport

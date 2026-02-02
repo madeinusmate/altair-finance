@@ -4,7 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 // Configuration
-const DEFAULT_INPUT_DIR = path.join(process.cwd(), "statements", "extracted", "DBS");
+const DEFAULT_INPUT_DIR = path.join(process.cwd(), "statements", "extracted", "CITI");
 const DEFAULT_OUTPUT_FILE = path.join(process.cwd(), "statements", "combined.csv");
 const CSV_HEADER = "date,account,description,amount,category,type";
 
