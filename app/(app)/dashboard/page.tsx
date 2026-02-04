@@ -315,10 +315,16 @@ const DashboardPage = () => {
                           <div className="text-right">
                             <div
                               className={`text-sm font-medium ${
-                                account.nature === "asset" ? "text-green-600" : "text-red-600"
+                                account.nature === "asset" 
+                                  ? "text-green-600" 
+                                  : account.balance < 0 
+                                    ? "text-green-600" 
+                                    : "text-red-600"
                               }`}
                             >
-                              {formatCurrency(account.balance, account.currency, 2)}
+                              {account.nature === "liability" && account.balance < 0 
+                                ? `${formatCurrency(Math.abs(account.balance), account.currency, 2)} credit`
+                                : formatCurrency(account.balance, account.currency, 2)}
                             </div>
                             {account.type === "investment" && account.profitLoss !== undefined && (
                               <div className={`text-xs ${account.profitLoss >= 0 ? "text-green-600" : "text-red-600"}`}>

@@ -3,9 +3,9 @@
  * 
  * This module handles the different accounting rules for assets vs liabilities:
  * - Assets: Credits increase balance, debits decrease balance
- * - Liabilities: Credits decrease debt (reduce balance), debits increase debt (increase balance)
+ * - Liabilities: Debits increase liability (e.g., charge on credit card), credits decrease liability (e.g., payment)
  * 
- * Liabilities are stored as negative values (e.g., -$3,000 debt)
+ * Liabilities are stored as positive values (e.g., $3,000 debt)
  */
 
 /**
@@ -20,15 +20,13 @@
  * @returns The calculated balance
  * 
  * For assets: balance = initialBalance + credits - debits + transferIn - transferOut
- * For liabilities: balance = initialBalance - credits - debits + transferIn - transferOut
+ * For liabilities: balance = initialBalance + debits - credits + transferOut - transferIn
  * 
- * Note: Liabilities are stored as negative values. Credits reduce debt (make less negative),
- * debits increase debt (make more negative). Transfer IN pays down debt (makes less negative),
- * transfer OUT borrows more (makes more negative).
- * 
- * For liabilities:
- * - Transfer IN: money coming in pays down debt → ADD to balance (makes less negative) → +transferIn
- * - Transfer OUT: money going out borrows more → SUBTRACT from balance (makes more negative) → -transferOut
+ * Note: Liabilities are stored as positive values.
+ * - Debits increase liability (charge/purchase) → add debits
+ * - Credits decrease liability (payment) → subtract credits
+ * - Transfer OUT increases liability (borrowing more) → add transferOut
+ * - Transfer IN decreases liability (paying down) → subtract transferIn
  */
 export const calculateTransactionAccountBalance = (
   initialBalance: number,
@@ -42,10 +40,11 @@ export const calculateTransactionAccountBalance = (
     // Assets: credits increase, debits decrease, transfers in increase, transfers out decrease
     return initialBalance + credits - debits + transferIn - transferOut;
   } else {
-    // Liabilities: credits decrease debt (reduce balance/make less negative), debits increase debt (increase balance/make more negative)
-    // Transfer IN decreases debt (paying down - makes less negative) → ADD to balance
-    // Transfer OUT increases debt (borrowing more - makes more negative) → SUBTRACT from balance
-    return initialBalance - credits - debits + transferIn - transferOut;
+    // Liabilities: debits increase liability (charge/purchase) → add debits
+    // Credits decrease liability (payment) → subtract credits
+    // Transfer OUT increases liability (borrowing more) → add transferOut
+    // Transfer IN decreases liability (paying down) → subtract transferIn
+    return initialBalance + debits - credits + transferOut - transferIn;
   }
 };
 
@@ -55,10 +54,10 @@ export const calculateTransactionAccountBalance = (
  * @param transferIn - Sum of all incoming transfers
  * @param transferOut - Sum of all outgoing transfers
  * @param nature - Account nature: "asset" or "liability"
- * @returns Net contributions (positive for assets receiving money, negative for liabilities receiving money)
+ * @returns Net contributions (positive for assets receiving money, positive for liabilities borrowing more)
  * 
  * For assets: netContributions = transferIn - transferOut
- * For liabilities: netContributions = transferOut - transferIn (inverted)
+ * For liabilities: netContributions = transferOut - transferIn (borrowing increases, paying down decreases)
  */
 export const calculateNetContributions = (
   transferIn: number,
@@ -68,8 +67,8 @@ export const calculateNetContributions = (
   if (nature === "asset") {
     return transferIn - transferOut;
   } else {
-    // For liabilities, receiving money (transferIn) reduces debt, so netContributions is negative
-    // Sending money (transferOut) increases debt, so netContributions is positive
+    // For liabilities: transferOut (borrowing) increases liability, transferIn (paying down) decreases liability
+    // Net contributions = transferOut - transferIn
     return transferOut - transferIn;
   }
 };

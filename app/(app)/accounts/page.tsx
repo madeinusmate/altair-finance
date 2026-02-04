@@ -228,9 +228,15 @@ const AccountsPage = () => {
                       <Badge variant="outline">{account.currency}</Badge>
                     </TableCell>
                     <TableCell className={`text-right font-medium ${
-                      account.nature === "asset" ? "text-green-600" : "text-red-600"
+                      account.nature === "asset" 
+                        ? "text-green-600" 
+                        : account.balance < 0 
+                          ? "text-green-600" 
+                          : "text-red-600"
                     }`}>
-                      {formatCurrency(account.balance, account.currency)}
+                      {account.nature === "liability" && account.balance < 0 
+                        ? `${formatCurrency(Math.abs(account.balance), account.currency)} credit`
+                        : formatCurrency(account.balance, account.currency)}
                     </TableCell>
                     <TableCell className="text-right">
                       {account.type === "investment" && account.profitLoss !== undefined ? (

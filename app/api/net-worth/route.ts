@@ -111,7 +111,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
         } else {
           // For transaction accounts: calculate balance based on account nature (asset vs liability)
           // Assets: credits increase, debits decrease, transfers in increase, transfers out decrease
-          // Liabilities: credits decrease debt, debits increase debt, transfers in decrease debt, transfers out increase debt
+          // Liabilities: debits increase liability, credits decrease liability, transfers out increase liability, transfers in decrease liability
           const transactions = db
             .select()
             .from(schema.transactions)
@@ -200,10 +200,16 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
 
           if (account.nature === "asset") {
             totalAssets += convertedBalance;
-          } else if (convertedBalance >= 0) {
-            totalAssets += convertedBalance;
           } else {
-            totalLiabilities += Math.abs(convertedBalance);
+            // Liabilities are stored as positive values
+            // If balance is positive, it's a debt (subtract from net worth)
+            // If balance is negative, it's a credit/overpayment (add to net worth)
+            if (convertedBalance >= 0) {
+              totalLiabilities += convertedBalance;
+            } else {
+              // Negative liability (credit balance) adds to net worth
+              totalAssets += Math.abs(convertedBalance);
+            }
           }
 
           if (account.type === "investment" && account.profitLoss !== undefined) {

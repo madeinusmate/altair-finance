@@ -356,10 +356,16 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
           <CardContent>
             <div
               className={`text-2xl font-bold ${
-                account.nature === "asset" ? "text-green-600" : "text-red-600"
+                account.nature === "asset" 
+                  ? "text-green-600" 
+                  : currentBalance < 0 
+                    ? "text-green-600" 
+                    : "text-red-600"
               }`}
             >
-              {formatCurrency(currentBalance, account.currency)}
+              {account.nature === "liability" && currentBalance < 0 
+                ? `${formatCurrency(Math.abs(currentBalance), account.currency)} credit`
+                : formatCurrency(currentBalance, account.currency)}
             </div>
           </CardContent>
         </Card>
