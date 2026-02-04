@@ -57,6 +57,8 @@ import { formatCategoryDisplay } from "@/lib/account-categories";
 import { calculateTransactionAccountBalance, calculateNetContributions } from "@/lib/accounting";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { AccountChartsContainer } from "@/components/account-charts/account-charts-container";
+import { SyncButton } from "@/components/open-banking/sync-button";
+import { ConnectionIndicator } from "@/components/open-banking/connection-indicator";
 
 type UnifiedItem = 
   | { type: "transaction"; data: Transaction }
@@ -295,6 +297,38 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
               <Badge variant="outline">
                 {formatCategoryDisplay(String(account.category))}
               </Badge>
+              {process.env.NEXT_PUBLIC_OPEN_BANKING_ENABLED === "true" && account.type === "transaction" && account.metadata && (() => {
+                try {
+                  const meta = JSON.parse(account.metadata);
+                  const finverseMeta = meta?.finverse;
+                  if (finverseMeta && finverseMeta.account_id) {
+                    const syncStatus = finverseMeta.sync_status === "completed" ? "connected" as const
+                      : finverseMeta.sync_status === "pending" || finverseMeta.sync_status === "in_progress" ? "syncing" as const
+                      : finverseMeta.sync_status === "error" ? "error" as const
+                      : "disconnected" as const;
+                    
+                    return (
+                      <>
+                        <ConnectionIndicator 
+                          status={syncStatus}
+                          errorMessage={finverseMeta.sync_progress?.error_message}
+                        />
+                        {finverseMeta.login_identity_id && (
+                          <SyncButton
+                            accountId={account.id}
+                            finverseAccountId={finverseMeta.account_id}
+                            loginIdentityId={finverseMeta.login_identity_id}
+                            onSyncComplete={fetchData}
+                          />
+                        )}
+                      </>
+                    );
+                  }
+                } catch {
+                  // Invalid metadata
+                }
+                return null;
+              })()}
             </div>
             <p className="text-muted-foreground capitalize">
               {account.type} account • {account.currency}

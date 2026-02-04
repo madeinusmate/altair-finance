@@ -14,10 +14,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Wallet, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, Wallet, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Link2 } from "lucide-react";
 import { Account } from "@/lib/db/schema";
 import { Badge } from "@/components/ui/badge";
 import { formatCategoryDisplay } from "@/lib/account-categories";
+import { ConnectionIndicator } from "@/components/open-banking/connection-indicator";
 
 interface AccountWithBalance {
   id: string;
@@ -130,6 +131,9 @@ const AccountsPage = () => {
     );
   }
 
+  const isOpenBankingEnabled = process.env.NEXT_PUBLIC_OPEN_BANKING_ENABLED === "true";
+  const hasTransactionAccounts = accounts.some(acc => acc.type === "transaction");
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -137,12 +141,22 @@ const AccountsPage = () => {
           <h1 className="text-3xl font-bold tracking-tight">Accounts</h1>
           <p className="text-muted-foreground">Manage your financial accounts</p>
         </div>
-        <Button asChild>
-          <Link href="/accounts/new">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Account
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          {isOpenBankingEnabled && hasTransactionAccounts && (
+            <Button asChild variant="outline">
+              <Link href="/accounts/connect">
+                <Link2 className="mr-2 h-4 w-4" />
+                Connect Bank
+              </Link>
+            </Button>
+          )}
+          <Button asChild>
+            <Link href="/accounts/new">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Account
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {accounts.length === 0 ? (
@@ -153,12 +167,22 @@ const AccountsPage = () => {
             <p className="text-muted-foreground text-center max-w-sm mb-4">
               Add your first account to start tracking your net worth.
             </p>
-            <Button asChild>
-              <Link href="/accounts/new">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Account
-              </Link>
-            </Button>
+            <div className="flex flex-col gap-2 items-center">
+              <Button asChild>
+                <Link href="/accounts/new">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Account
+                </Link>
+              </Button>
+              {isOpenBankingEnabled && (
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/accounts/connect">
+                    <Link2 className="mr-2 h-4 w-4" />
+                    Connect Bank
+                  </Link>
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       ) : (

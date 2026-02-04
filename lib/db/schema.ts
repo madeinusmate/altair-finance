@@ -27,6 +27,7 @@ export const accounts = sqliteTable("accounts", {
   category: text("category").notNull(),
   currency: text("currency").notNull(),
   initialBalance: real("initial_balance").notNull().default(0),
+  metadata: text("metadata"), // JSON field for Finverse and other metadata
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
@@ -50,6 +51,7 @@ export const transactions = sqliteTable("transactions", {
   amount: real("amount").notNull(),
   description: text("description"),
   date: integer("date", { mode: "timestamp" }).notNull(),
+  metadata: text("metadata"), // JSON field for Finverse transaction metadata
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   importId: text("import_id").references(() => imports.id, { onDelete: "set null" }),
 });
@@ -110,6 +112,21 @@ export const meta = sqliteTable("meta", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+export const openBankingClientTokens = sqliteTable("open_banking_client_tokens", {
+  id: text("id").primaryKey().default("client_credentials"),
+  accessToken: text("access_token").notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const openBankingTokens = sqliteTable("open_banking_tokens", {
+  loginIdentityId: text("login_identity_id").primaryKey(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  connectedAt: integer("connected_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 export type TransactionCategory = typeof transactionCategories.$inferSelect;
 export type NewTransactionCategory = typeof transactionCategories.$inferInsert;
 export type AccountCategory = typeof accountCategories.$inferSelect;
@@ -130,3 +147,7 @@ export type ExchangeRate = typeof exchangeRates.$inferSelect;
 export type NewExchangeRate = typeof exchangeRates.$inferInsert;
 export type Meta = typeof meta.$inferSelect;
 export type NewMeta = typeof meta.$inferInsert;
+export type OpenBankingClientToken = typeof openBankingClientTokens.$inferSelect;
+export type NewOpenBankingClientToken = typeof openBankingClientTokens.$inferInsert;
+export type OpenBankingToken = typeof openBankingTokens.$inferSelect;
+export type NewOpenBankingToken = typeof openBankingTokens.$inferInsert;

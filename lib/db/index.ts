@@ -148,6 +148,77 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
     } catch (error) {
       console.warn("[DB Migration] Could not add import_id columns:", error);
     }
+
+    // Migration: Add metadata columns to accounts and transactions
+    try {
+      const accountsTableCheck = sqlite.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='accounts'
+      `).get();
+      
+      if (accountsTableCheck) {
+        const columns = sqlite.prepare("PRAGMA table_info(accounts)").all() as Array<{ name: string }>;
+        const columnNames = columns.map((col) => col.name);
+        
+        if (!columnNames.includes("metadata")) {
+          sqlite.exec("ALTER TABLE accounts ADD COLUMN metadata TEXT");
+        }
+      }
+
+      const transactionsTableCheck = sqlite.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='transactions'
+      `).get();
+      
+      if (transactionsTableCheck) {
+        const columns = sqlite.prepare("PRAGMA table_info(transactions)").all() as Array<{ name: string }>;
+        const columnNames = columns.map((col) => col.name);
+        
+        if (!columnNames.includes("metadata")) {
+          sqlite.exec("ALTER TABLE transactions ADD COLUMN metadata TEXT");
+        }
+      }
+    } catch (error) {
+      console.warn("[DB Migration] Could not add metadata columns:", error);
+    }
+
+    // Migration: Create open banking tables
+    try {
+      const clientTokensTableCheck = sqlite.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='open_banking_client_tokens'
+      `).get();
+      
+      if (!clientTokensTableCheck) {
+        sqlite.exec(`
+          CREATE TABLE open_banking_client_tokens (
+            id TEXT PRIMARY KEY DEFAULT 'client_credentials',
+            access_token TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            created_at INTEGER NOT NULL
+          );
+        `);
+      }
+
+      const tokensTableCheck = sqlite.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='open_banking_tokens'
+      `).get();
+      
+      if (!tokensTableCheck) {
+        sqlite.exec(`
+          CREATE TABLE open_banking_tokens (
+            login_identity_id TEXT PRIMARY KEY,
+            access_token TEXT NOT NULL,
+            refresh_token TEXT NOT NULL,
+            connected_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          );
+        `);
+      }
+    } catch (error) {
+      console.warn("[DB Migration] Could not create open banking tables:", error);
+    }
   } catch (error) {
     // Ignore migration errors - they might occur if table structure is unexpected
     console.warn("[DB Migration] Could not run migrations:", error);
@@ -205,6 +276,7 @@ export const initializeDb = (encryptionKey: string): void => {
       category TEXT NOT NULL,
       currency TEXT NOT NULL,
       initial_balance REAL NOT NULL DEFAULT 0,
+      metadata TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -217,6 +289,7 @@ export const initializeDb = (encryptionKey: string): void => {
       amount REAL NOT NULL,
       description TEXT,
       date INTEGER NOT NULL,
+      metadata TEXT,
       created_at INTEGER NOT NULL
     );
 
@@ -284,6 +357,21 @@ export const initializeDb = (encryptionKey: string): void => {
     CREATE INDEX IF NOT EXISTS idx_imports_created_at ON imports(created_at);
     CREATE INDEX IF NOT EXISTS idx_imports_file_hash ON imports(file_hash);
 
+    CREATE TABLE IF NOT EXISTS open_banking_client_tokens (
+      id TEXT PRIMARY KEY DEFAULT 'client_credentials',
+      access_token TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS open_banking_tokens (
+      login_identity_id TEXT PRIMARY KEY,
+      access_token TEXT NOT NULL,
+      refresh_token TEXT NOT NULL,
+      connected_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
     INSERT INTO meta (id, schema_version, created_at)
     SELECT '${META_ID}', ${SCHEMA_VERSION}, strftime('%s','now')
     WHERE NOT EXISTS (SELECT 1 FROM meta WHERE id = '${META_ID}');
@@ -342,6 +430,77 @@ export const initializeDb = (encryptionKey: string): void => {
     }
   } catch (error) {
     console.warn("[DB Migration] Could not add import_id columns:", error);
+  }
+
+  // Migration: Add metadata columns to accounts and transactions
+  try {
+    const accountsTableCheck = sqlite.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='accounts'
+    `).get();
+    
+    if (accountsTableCheck) {
+      const columns = sqlite.prepare("PRAGMA table_info(accounts)").all() as Array<{ name: string }>;
+      const columnNames = columns.map((col) => col.name);
+      
+      if (!columnNames.includes("metadata")) {
+        sqlite.exec("ALTER TABLE accounts ADD COLUMN metadata TEXT");
+      }
+    }
+
+    const transactionsTableCheck = sqlite.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='transactions'
+    `).get();
+    
+    if (transactionsTableCheck) {
+      const columns = sqlite.prepare("PRAGMA table_info(transactions)").all() as Array<{ name: string }>;
+      const columnNames = columns.map((col) => col.name);
+      
+      if (!columnNames.includes("metadata")) {
+        sqlite.exec("ALTER TABLE transactions ADD COLUMN metadata TEXT");
+      }
+    }
+  } catch (error) {
+    console.warn("[DB Migration] Could not add metadata columns:", error);
+  }
+
+  // Migration: Create open banking tables
+  try {
+    const clientTokensTableCheck = sqlite.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='open_banking_client_tokens'
+    `).get();
+    
+    if (!clientTokensTableCheck) {
+      sqlite.exec(`
+        CREATE TABLE open_banking_client_tokens (
+          id TEXT PRIMARY KEY DEFAULT 'client_credentials',
+          access_token TEXT NOT NULL,
+          expires_at INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      `);
+    }
+
+    const tokensTableCheck = sqlite.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='open_banking_tokens'
+    `).get();
+    
+    if (!tokensTableCheck) {
+      sqlite.exec(`
+        CREATE TABLE open_banking_tokens (
+          login_identity_id TEXT PRIMARY KEY,
+          access_token TEXT NOT NULL,
+          refresh_token TEXT NOT NULL,
+          connected_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+      `);
+    }
+  } catch (error) {
+    console.warn("[DB Migration] Could not create open banking tables:", error);
   }
 
   // Seed default categories if tables are empty

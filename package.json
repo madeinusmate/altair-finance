@@ -6,9 +6,10 @@
   "author": "@madeinusmate",
   "license": "MIT",
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev --turbopack -p 8528",
+    "dev:https": "next dev --turbopack -p 8528 --experimental-https",
     "build": "next build --webpack",
-    "start": "next start",
+    "start": "next start -p 8528",
     "lint": "eslint",
     "reset-db": "tsx scripts/reset-db.ts",
     "extract-statements": "tsx scripts/extract-statements.ts",

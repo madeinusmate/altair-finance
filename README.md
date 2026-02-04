@@ -5,16 +5,26 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 First, run the development server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:8528](http://localhost:8528) with your browser to see the result.
+
+### Open Banking Setup (Electron)
+
+For OAuth callbacks to work in Electron, you need an HTTPS endpoint. The app automatically uses Cloudflare Tunnel (cloudflared) when available:
+
+1. Install cloudflared:
+   ```bash
+   brew install cloudflared
+   ```
+
+2. Run Electron in development:
+   ```bash
+   pnpm dev:electron
+   ```
+
+The tunnel will automatically start and expose your localhost as an HTTPS URL for OAuth callbacks.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
