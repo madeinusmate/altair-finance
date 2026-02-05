@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { ConnectionProgress } from "@/components/open-banking/connection-progress";
 import { AccountSelectionStep } from "@/components/open-banking/account-selection-step";
@@ -112,6 +114,8 @@ const ConnectPage = () => {
   };
 
   const fetchTransactionPreview = async (selectedAccounts: any[]) => {
+    console.log(`🚀 fetchTransactionPreview called with ${selectedAccounts.length} accounts`);
+    
     const previews = selectedAccounts.map((selection) => ({
       account: selection.account,
       selection: selection,
@@ -121,19 +125,31 @@ const ConnectPage = () => {
       error: undefined as string | undefined,
     }));
 
+    console.log(`📋 Initial previews:`, previews.map(p => ({ name: p.selection.name, isLoading: p.isLoading })));
+    
     setAccountPreviews(previews);
     setSelectedAccountsForPreview(selectedAccounts);
     setCurrentStep("transaction-preview");
 
+    console.log(`⏳ Waiting 2 seconds before fetching...`);
     // Wait a bit for connection to be established
     await new Promise((resolve) => setTimeout(resolve, 2000));
+    console.log(`✅ Wait complete, starting to fetch transactions...`);
 
     // Fetch transactions for each account
     for (let i = 0; i < selectedAccounts.length; i++) {
       const selection = selectedAccounts[i];
       const finverseAccount = selection.account;
 
+      console.log(`🔄 Fetching transactions for account ${i + 1}/${selectedAccounts.length}:`, {
+        accountId: finverseAccount.account_id,
+        loginIdentityId: finverseAccount.login_identity_id,
+        accountName: selection.name,
+      });
+
       try {
+        toast.info(`Fetching transactions for ${selection.name}...`);
+        
         const response = await apiClient.post<{
           transactions: FinverseTransaction[];
           total_transactions: number;
@@ -144,28 +160,46 @@ const ConnectPage = () => {
           offset: 0,
         });
 
-        setAccountPreviews((prev) =>
-          prev.map((preview, index) =>
+        // Extract transactions from response
+        const transactions = Array.isArray(response?.transactions) 
+          ? response.transactions 
+          : [];
+        
+        const totalTransactions = typeof response?.total_transactions === 'number' 
+          ? response.total_transactions 
+          : transactions.length;
+
+        toast.success(`Found ${transactions.length} transactions for ${selection.name}`);
+        
+        console.log(`✅ Extracted data for ${selection.name}:`, {
+          transactionsCount: transactions.length,
+          totalTransactions,
+          accountId: finverseAccount.account_id,
+          firstTransaction: transactions[0] || null,
+        });
+
+        // Update the preview state for this account
+        setAccountPreviews((prev) => 
+          prev.map((preview, index) => 
             index === i
               ? {
                   ...preview,
-                  transactions: response.transactions,
-                  totalTransactions: response.total_transactions,
+                  transactions,
+                  totalTransactions,
                   isLoading: false,
+                  error: undefined,
                 }
               : preview
           )
         );
-      } catch (err) {
-        console.error(`Error fetching preview for ${selection.name}:`, err);
+      } catch (err: any) {
+        const errorMessage = err instanceof Error ? err.message : "Failed to load transactions";
+        toast.error(`Error: ${errorMessage}`);
+        
         setAccountPreviews((prev) =>
           prev.map((preview, index) =>
             index === i
-              ? {
-                  ...preview,
-                  isLoading: false,
-                  error: err instanceof Error ? err.message : "Failed to load transactions",
-                }
+              ? { ...preview, isLoading: false, error: errorMessage }
               : preview
           )
         );
@@ -240,62 +274,64 @@ const ConnectPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="flex flex-col gap-8 p-6 max-w-6xl mx-auto">
-        <div className="text-center pt-8">
-          <h1 className="text-3xl font-bold mb-2">Bank Connection Setup</h1>
-          <p className="text-muted-foreground">
-            Connect your bank accounts securely with Finverse Open Banking
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Bank Connection Setup</h1>
+        <p className="text-muted-foreground">
+          Connect your bank accounts securely with Finverse Open Banking
+        </p>
+      </div>
 
-        <ConnectionProgress currentStep={currentStep} />
+      <ConnectionProgress currentStep={currentStep} />
 
-        {errorMessage && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 max-w-2xl mx-auto">
-            <p className="text-red-800">
-              <strong>Error:</strong> {errorMessage}
-            </p>
-            <Button onClick={handleConnectionRetry} className="mt-3" size="sm">
+      {errorMessage && (
+        <Alert variant="destructive" className="max-w-2xl">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            {errorMessage}
+            <Button onClick={handleConnectionRetry} className="mt-3" size="sm" variant="outline">
               Try Again
             </Button>
-          </div>
-        )}
+          </AlertDescription>
+        </Alert>
+      )}
 
-        {error && errorDescription && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 max-w-2xl mx-auto">
-            <div className="flex items-center gap-2 text-red-600 mb-2">
-              <AlertCircle className="h-5 w-5" />
-              <strong>Connection Failed</strong>
-            </div>
-            <p className="text-red-500">{errorDescription}</p>
-            <Button onClick={handleConnectionRetry} className="mt-3" size="sm">
+      {error && errorDescription && (
+        <Alert variant="destructive" className="max-w-2xl">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Connection Failed</AlertTitle>
+          <AlertDescription>
+            {errorDescription}
+            <Button onClick={handleConnectionRetry} className="mt-3" size="sm" variant="outline">
               Try Again
             </Button>
-          </div>
-        )}
+          </AlertDescription>
+        </Alert>
+      )}
 
-        <div className="bg-white rounded-lg shadow-sm border min-h-[600px]">
+      <Card className="min-h-[600px]">
+        <CardContent className="p-8">
           {currentStep === "connecting" && (
-            <div className="flex flex-col items-center justify-center h-[600px] p-8">
+            <div className="flex flex-col items-center justify-center min-h-[600px]">
               {isConnecting || (!code && !errorMessage) ? (
                 <div className="text-center space-y-4">
-                  <Loader2 className="h-12 w-12 animate-spin mx-auto text-blue-600" />
+                  <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
                   <h2 className="text-2xl font-semibold">Connecting to your bank</h2>
                   <p className="text-muted-foreground max-w-md">
-                    Please wait while we establish a secure connection with your banking institution...
+                    Please wait while we establish a secure connection with your banking institution…
                   </p>
                 </div>
               ) : loadingAccounts ? (
                 <div className="text-center space-y-4">
-                  <Loader2 className="h-12 w-12 animate-spin mx-auto text-blue-600" />
+                  <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
                   <h2 className="text-2xl font-semibold">Loading your accounts</h2>
-                  <p className="text-muted-foreground">Retrieving your account information...</p>
+                  <p className="text-muted-foreground">Retrieving your account information…</p>
                 </div>
               ) : (
                 <div className="text-center space-y-4">
-                  <CheckCircle className="h-12 w-12 mx-auto text-green-600" />
-                  <h2 className="text-2xl font-semibold text-green-600">Connection Successful!</h2>
+                  <CheckCircle className="h-12 w-12 mx-auto text-primary" />
+                  <h2 className="text-2xl font-semibold text-primary">Connection Successful!</h2>
                   <p className="text-muted-foreground">Your bank connection has been established</p>
                 </div>
               )}
@@ -303,53 +339,49 @@ const ConnectPage = () => {
           )}
 
           {currentStep === "account-selection" && accounts?.accounts && (
-            <div className="p-8">
-              <AccountSelectionStep
-                accounts={accounts.accounts}
-                onNext={handleAccountSelection}
-                onBack={handleConnectionRetry}
-                existingFinverseAccountNumbers={existingFinverseAccountNumbers}
-              />
-            </div>
+            <AccountSelectionStep
+              accounts={accounts.accounts}
+              onNext={handleAccountSelection}
+              onBack={handleConnectionRetry}
+              existingFinverseAccountNumbers={existingFinverseAccountNumbers}
+            />
           )}
 
           {currentStep === "transaction-preview" && (
-            <div className="p-8">
-              <TransactionPreviewStep
-                accountPreviews={accountPreviews}
-                onConfirm={handlePreviewConfirm}
-                onBack={handlePreviewBack}
-                isLoading={isCreatingAccounts}
-              />
-            </div>
+            <TransactionPreviewStep
+              accountPreviews={accountPreviews}
+              onConfirm={handlePreviewConfirm}
+              onBack={handlePreviewBack}
+              isLoading={isCreatingAccounts}
+            />
           )}
 
           {currentStep === "creating" && (
-            <div className="flex flex-col items-center justify-center h-[600px] p-8">
+            <div className="flex flex-col items-center justify-center min-h-[600px]">
               <div className="text-center space-y-4">
-                <Loader2 className="h-12 w-12 animate-spin mx-auto text-blue-600" />
+                <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
                 <h2 className="text-2xl font-semibold">Creating your accounts</h2>
                 <p className="text-muted-foreground max-w-md">
-                  Setting up your accounts and importing your transaction history...
+                  Setting up your accounts and importing your transaction history…
                 </p>
               </div>
             </div>
           )}
 
           {currentStep === "completed" && (
-            <div className="flex flex-col items-center justify-center h-[600px] p-8">
+            <div className="flex flex-col items-center justify-center min-h-[600px]">
               <div className="text-center space-y-4">
-                <CheckCircle className="h-12 w-12 mx-auto text-green-600" />
-                <h2 className="text-2xl font-semibold text-green-600">Setup Complete!</h2>
+                <CheckCircle className="h-12 w-12 mx-auto text-primary" />
+                <h2 className="text-2xl font-semibold text-primary">Setup Complete!</h2>
                 <p className="text-muted-foreground max-w-md">
                   Your accounts have been successfully created and transactions imported.
                 </p>
-                <p className="text-sm text-muted-foreground">Redirecting to your accounts...</p>
+                <p className="text-sm text-muted-foreground">Redirecting to your accounts…</p>
               </div>
             </div>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

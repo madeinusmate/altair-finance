@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
@@ -28,7 +27,8 @@ export const TransactionPreviewStep = ({
   onBack,
   isLoading
 }: TransactionPreviewStepProps) => {
-  const [previews, setPreviews] = useState(accountPreviews);
+  // Use prop directly instead of local state - it updates from parent
+  const previews = accountPreviews;
 
   const formatCurrency = (amount: number, currency: string) => {
     return new Intl.NumberFormat("en-US", {
@@ -44,8 +44,8 @@ export const TransactionPreviewStep = ({
 
   return (
     <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-2xl font-semibold mb-2">Transaction Preview</h2>
+      <div>
+        <h2 className="text-2xl font-semibold tracking-tight mb-2">Transaction Preview</h2>
         <p className="text-muted-foreground">
           Review the transactions that will be imported. Duplicates will be automatically filtered.
         </p>
@@ -70,7 +70,18 @@ export const TransactionPreviewStep = ({
               </div>
             ) : preview.transactions.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No transactions to import
+                {preview.totalTransactions > 0 ? (
+                  <div>
+                    <p>No transactions to import</p>
+                    <p className="text-xs mt-2">
+                      {preview.totalTransactions} transaction{preview.totalTransactions !== 1 ? 's' : ''} available, but all are pending.
+                      <br />
+                      Only posted transactions are imported.
+                    </p>
+                  </div>
+                ) : (
+                  <p>No transactions available for this account</p>
+                )}
               </div>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -86,7 +97,7 @@ export const TransactionPreviewStep = ({
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className={`font-medium ${tx.amount.value < 0 ? "text-red-600" : "text-green-600"}`}>
+                      <p className={`font-medium ${tx.amount.value < 0 ? "text-destructive" : "text-primary"}`}>
                         {formatCurrency(tx.amount.value, tx.amount.currency)}
                       </p>
                     </div>

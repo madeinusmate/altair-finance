@@ -86,15 +86,27 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     }
 
     const transactionsData: FinverseTransactionsResponse = await transactionsResponse.json();
+    
+    console.log(`📊 Finverse API Response:`, {
+      total_transactions: transactionsData.total_transactions,
+      transactions_count: transactionsData.transactions?.length || 0,
+      account_id: transactionsData.account_id,
+    });
 
     // Filter out pending transactions
-    const filteredTransactions = transactionsData.transactions?.filter(
+    const allTransactions = transactionsData.transactions || [];
+    const filteredTransactions = allTransactions.filter(
       tx => !tx.is_pending
-    ) || [];
+    );
+    
+    const pendingCount = allTransactions.length - filteredTransactions.length;
+    console.log(`✅ Filtered transactions: ${filteredTransactions.length} posted, ${pendingCount} pending (filtered out)`);
 
     return NextResponse.json({
       ...transactionsData,
-      transactions: filteredTransactions
+      transactions: filteredTransactions,
+      // Keep original total_transactions from Finverse (includes pending)
+      // The filtered transactions array contains only non-pending transactions
     });
 
   } catch (error) {

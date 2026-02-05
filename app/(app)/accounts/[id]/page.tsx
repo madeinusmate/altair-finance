@@ -470,7 +470,38 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
         )}
       </div>
 
-      <div className="flex gap-2">
+      
+
+      {/* Charts Section */}
+      <AccountChartsContainer
+        account={account}
+        transactions={transactions}
+        transfers={transfers}
+        balanceHistory={balanceHistory}
+        investmentHistory={investmentHistory}
+        isLoading={isLoading}
+      />
+
+      {/* Edit Transaction Dialog */}
+      {account.type === "transaction" && editingTransaction && (
+        <Dialog open={isEditTransactionDialogOpen} onOpenChange={setIsEditTransactionDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Transaction</DialogTitle>
+              <DialogDescription>Update transaction details</DialogDescription>
+            </DialogHeader>
+            <TransactionForm
+              accountId={id}
+              currency={account.currency}
+              transaction={editingTransaction}
+              mode="edit"
+              onSuccess={handleTransactionUpdated}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+
+<div className="flex gap-2">
         {account.type === "transaction" && (
           <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
             <DialogTrigger asChild>
@@ -581,36 +612,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
             )}
           </>
         )}
-      </div>
-
-      {/* Charts Section */}
-      <AccountChartsContainer
-        account={account}
-        transactions={transactions}
-        transfers={transfers}
-        balanceHistory={balanceHistory}
-        investmentHistory={investmentHistory}
-        isLoading={isLoading}
-      />
-
-      {/* Edit Transaction Dialog */}
-      {account.type === "transaction" && editingTransaction && (
-        <Dialog open={isEditTransactionDialogOpen} onOpenChange={setIsEditTransactionDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Transaction</DialogTitle>
-              <DialogDescription>Update transaction details</DialogDescription>
-            </DialogHeader>
-            <TransactionForm
-              accountId={id}
-              currency={account.currency}
-              transaction={editingTransaction}
-              mode="edit"
-              onSuccess={handleTransactionUpdated}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
+      </div>ew
 
       {account.type === "transaction" && (
         <Card>

@@ -69,8 +69,8 @@ export const AccountSelectionStep = ({
 
   return (
     <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-2xl font-semibold mb-2">Select Accounts to Connect</h2>
+      <div>
+        <h2 className="text-2xl font-semibold tracking-tight mb-2">Select Accounts to Connect</h2>
         <p className="text-muted-foreground">
           Choose which accounts you&apos;d like to import. Only transaction accounts are supported.
         </p>
@@ -87,7 +87,7 @@ export const AccountSelectionStep = ({
             const selection = selections.find(s => s.account.account_id === account.account_id);
 
             return (
-              <Card key={account.account_id} className={isSelected ? "ring-2 ring-blue-500" : ""}>
+              <Card key={account.account_id} className={isSelected ? "ring-2 ring-ring ring-offset-2" : ""}>
                 <CardHeader className="pb-3">
                   <div className="flex items-center space-x-3">
                     <Checkbox
@@ -97,9 +97,9 @@ export const AccountSelectionStep = ({
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         {account.account_type.sub_type?.toLowerCase().includes("credit") ? (
-                          <CreditCard className="h-5 w-5" />
+                          <CreditCard className="h-5 w-5 text-muted-foreground" />
                         ) : (
-                          <Building2 className="h-5 w-5" />
+                          <Building2 className="h-5 w-5 text-muted-foreground" />
                         )}
                         <CardTitle className="text-lg">
                           {account.account_name || `Account ${account.account_number_masked}`}

@@ -37,22 +37,25 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     // Generate a stable user_id from the encryption key (hash it for privacy)
     const userId = createHash("sha256").update(encryptionKey).digest("hex").substring(0, 32);
 
-    // Determine app URL - prefer tunnel URL for HTTPS OAuth callbacks
-    let appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    // Get relay URL from env (if configured)
+    const relayUrl = process.env.NEXT_PUBLIC_OAUTH_RELAY_URL;
     
-    if (!appUrl) {
-      // Check for tunnel URL (set by Electron or manually)
-      appUrl = process.env.TUNNEL_URL || 
-        (process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL 
-          ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}` 
-          : null);
-    }
-    
-    // Fallback to localhost (will fail for OAuth but useful for testing)
-    if (!appUrl) {
-      appUrl = "http://localhost:8528";
-      console.warn("[Open Banking] No HTTPS URL configured. OAuth callbacks may fail. Set TUNNEL_URL or NEXT_PUBLIC_APP_URL.");
-    }
+    // Determine final redirect target (where user should end up)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 
+      (process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL 
+        ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}` 
+        : "http://localhost:8528");
+
+    // Use relay if configured, otherwise direct (for testing)
+    const redirectUri = relayUrl 
+      ? `${relayUrl}/callback`
+      : `${appUrl}/accounts/connect`;
+
+    // Encode target URL in state if using relay
+    const encodedTarget = relayUrl ? Buffer.from(appUrl).toString("base64") : "";
+    const stateParam = relayUrl 
+      ? `${appId}_state_${encodedTarget}`
+      : `${appId}_stateparameter`;
 
     // Generate link UI URL
     const linkTokenResponse = await fetch("https://api.prod.finverse.net/link/token", {
@@ -63,8 +66,8 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       },
       body: JSON.stringify({
         client_id: clientId,
-        redirect_uri: `${appUrl}/accounts/connect`,
-        state: `${appId}_stateparameter`,
+        redirect_uri: redirectUri,
+        state: stateParam,
         user_id: userId,
         grant_type: "client_credentials",
         response_mode: "form_post",

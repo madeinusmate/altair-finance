@@ -15,7 +15,7 @@ export const ConnectionIndicator = ({ status, errorMessage }: ConnectionIndicato
 
   if (status === "connected") {
     return (
-      <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
+      <Badge variant="default" className="gap-1">
         <CheckCircle2 className="h-3 w-3" />
         Connected
       </Badge>
@@ -24,7 +24,7 @@ export const ConnectionIndicator = ({ status, errorMessage }: ConnectionIndicato
 
   if (status === "syncing") {
     return (
-      <Badge variant="outline" className="gap-1 text-blue-600 border-blue-600">
+      <Badge variant="outline" className="gap-1 text-primary border-primary">
         <Loader2 className="h-3 w-3 animate-spin" />
         Syncing
       </Badge>

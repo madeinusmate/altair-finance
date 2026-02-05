@@ -35,6 +35,21 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       }, { status: 500 });
     }
 
+    // Get relay URL from env (if configured)
+    const relayUrl = process.env.NEXT_PUBLIC_OAUTH_RELAY_URL;
+    
+    // Determine final redirect target (where user should end up)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 
+      (process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL 
+        ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}` 
+        : "http://localhost:8528");
+
+    // Use relay if configured, otherwise direct (for testing)
+    // Must match the redirect_uri used in get-link-ui-url
+    const redirectUri = relayUrl 
+      ? `${relayUrl}/callback`
+      : `${appUrl}/accounts/connect`;
+
     // Get client credentials token
     const clientTokenResult = await getFinverseClientToken(encryptionKey);
     
@@ -51,24 +66,8 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     // Generate a stable user_id from the encryption key (hash it for privacy)
     const userId = createHash("sha256").update(encryptionKey).digest("hex").substring(0, 32);
 
-    // Determine app URL - prefer tunnel URL for HTTPS OAuth callbacks
-    let appUrl = process.env.NEXT_PUBLIC_APP_URL;
-    
-    if (!appUrl) {
-      // Check for tunnel URL (set by Electron or manually)
-      appUrl = process.env.TUNNEL_URL || 
-        (process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL 
-          ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}` 
-          : null);
-    }
-    
-    // Fallback to localhost (will fail for OAuth but useful for testing)
-    if (!appUrl) {
-      appUrl = "http://localhost:8528";
-      console.warn("[Open Banking] No HTTPS URL configured. OAuth callbacks may fail. Set TUNNEL_URL or NEXT_PUBLIC_APP_URL.");
-    }
-
     // Exchange authorization code for user access token
+    // redirect_uri must match the one used in get-link-ui-url
     const userAccessTokenResponse = await fetch("https://api.prod.finverse.net/auth/token", {
       method: "POST",
       headers: {
@@ -77,7 +76,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       },
       body: new URLSearchParams({
         client_id: clientId,
-        redirect_uri: `${appUrl}/accounts/connect`,
+        redirect_uri: redirectUri,
         code: code,
         user_id: userId,
         grant_type: "authorization_code",

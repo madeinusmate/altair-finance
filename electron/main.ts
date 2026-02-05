@@ -5,7 +5,6 @@ import * as fs from "fs";
 import findFreePort from "find-free-port";
 import waitOn from "wait-on";
 import { createMenu } from "./menu";
-import { startTunnel, stopTunnel, getTunnelUrl } from "./tunnel-service";
 
 let mainWindow: BrowserWindow | null = null;
 let nextServer: ChildProcess | null = null;
@@ -219,16 +218,11 @@ const startNextServer = async (port: number): Promise<void> => {
     console.log(`[Electron] Using .next from: ${nextBuildPath}`);
 
     const args = ["start", "-p", port.toString()];
-    
-    // Get tunnel URL if available (set by startTunnel)
-    const tunnelUrl = getTunnelUrl();
-    
     const env = {
       ...process.env,
       PORT: port.toString(),
       NODE_ENV: "production",
       ELECTRON_USER_DATA: app.getPath("userData"),
-      ...(tunnelUrl && { TUNNEL_URL: tunnelUrl }),
     };
 
     // Try bundled Node.js first, then system Node.js, then "node" from PATH
@@ -380,21 +374,6 @@ app.whenReady().then(async () => {
 
     serverPort = await findFreePort(8528);
 
-    // Start tunnel for HTTPS OAuth callbacks (only in development or if needed)
-    // Note: Tunnel must be started BEFORE Next.js server so the URL can be passed to it
-    if (isDev) {
-      try {
-        const tunnelUrl = await startTunnel(serverPort);
-        console.log(`[Electron] Tunnel started: ${tunnelUrl}`);
-        // Store tunnel URL in environment for API routes to use
-        process.env.TUNNEL_URL = tunnelUrl;
-      } catch (tunnelError) {
-        console.warn(`[Electron] Failed to start tunnel (OAuth may not work): ${tunnelError instanceof Error ? tunnelError.message : String(tunnelError)}`);
-        console.warn(`[Electron] To enable OAuth, install cloudflared: brew install cloudflared`);
-        // Continue without tunnel - user can configure manually if needed
-      }
-    }
-
     await startNextServer(serverPort);
 
     splash.close();
@@ -403,7 +382,6 @@ app.whenReady().then(async () => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     showErrorDialog("Failed to start application", errorMessage);
     cleanup();
-    stopTunnel();
     app.quit();
   }
 });
@@ -421,17 +399,6 @@ app.on("activate", () => {
       try {
         if (!nextServer) {
           serverPort = await findFreePort(8528);
-          
-          // Start tunnel if in dev mode
-          if (isDev) {
-            try {
-              const tunnelUrl = await startTunnel(serverPort);
-              process.env.TUNNEL_URL = tunnelUrl;
-            } catch (tunnelError) {
-              console.warn(`[Electron] Failed to start tunnel: ${tunnelError instanceof Error ? tunnelError.message : String(tunnelError)}`);
-            }
-          }
-          
           await startNextServer(serverPort);
         }
         mainWindow = createMainWindow(serverPort);
@@ -439,7 +406,6 @@ app.on("activate", () => {
         const errorMessage = error instanceof Error ? error.message : String(error);
         showErrorDialog("Failed to start application", errorMessage);
         cleanup();
-        stopTunnel();
         app.quit();
       }
     });
@@ -448,7 +414,6 @@ app.on("activate", () => {
 
 app.on("before-quit", () => {
   cleanup();
-  stopTunnel();
 });
 
 process.on("uncaughtException", (error) => {
