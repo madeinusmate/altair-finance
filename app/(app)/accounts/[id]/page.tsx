@@ -42,7 +42,24 @@ import {
   ArrowDownRight,
   ArrowLeftRight,
   Pencil,
+  Search,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Account, Transaction, Transfer, BalanceHistory, InvestmentHistory } from "@/lib/db/schema";
 import { TransactionForm } from "@/components/transaction-form";
 import { TransferForm } from "@/components/transfer-form";
@@ -59,6 +76,9 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { AccountChartsContainer } from "@/components/account-charts/account-charts-container";
 import { SyncButton } from "@/components/open-banking/sync-button";
 import { ConnectionIndicator } from "@/components/open-banking/connection-indicator";
+import { PdfStatementImport } from "@/components/pdf-import/pdf-statement-import";
+import { FileText } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 type UnifiedItem = 
   | { type: "transaction"; data: Transaction }
@@ -93,16 +113,24 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isEditTransferDialogOpen, setIsEditTransferDialogOpen] = useState(false);
   const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
+  const [isPdfImportDialogOpen, setIsPdfImportDialogOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all"); // "all" | "debit" | "credit" | "transfer"
+  const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
 
   const fetchData = async () => {
     try {
-      const [accountData, unifiedData, balanceData, investmentData, allAccounts] =
+      const [accountData, unifiedData, balanceData, investmentData, allAccounts, categoriesData] =
         await Promise.all([
           apiClient.get<Account>(`/api/accounts/${id}`),
           apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>(`/api/transactions-unified?accountId=${id}`),
           apiClient.get<BalanceHistory[]>(`/api/balance-history?accountId=${id}`),
           apiClient.get<InvestmentHistory[]>(`/api/investment-history?accountId=${id}`),
           apiClient.get<Account[]>("/api/accounts"),
+          apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
         ]);
 
       setAccount(accountData);
@@ -111,6 +139,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
       setBalanceHistory(balanceData);
       setInvestmentHistory(investmentData);
       setAccounts(allAccounts);
+      setTransactionCategories(categoriesData.categories.map((c) => c.name));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch account");
     } finally {
@@ -120,6 +149,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
 
   useEffect(() => {
     fetchData();
+    setCurrentPage(1);
   }, [id]);
 
   const handleDeleteAccount = async () => {
@@ -201,6 +231,11 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
     setEditingTransfer(null);
     fetchData();
   };
+
+  // Reset to page 1 when items per page or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [itemsPerPage, searchQuery, categoryFilter, typeFilter]);
 
   if (isLoading) {
     return (
@@ -503,27 +538,56 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
 
 <div className="flex gap-2">
         {account.type === "transaction" && (
-          <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
+          <>
+            <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Transaction
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Transaction</DialogTitle>
+                  <DialogDescription>
+                    Add a new transaction to {account.name}
+                  </DialogDescription>
+                </DialogHeader>
+                <TransactionForm
+                  accountId={id}
+                  currency={account.currency}
+                  onSuccess={handleTransactionCreated}
+                />
+              </DialogContent>
+            </Dialog>
+            <Dialog open={isPdfImportDialogOpen} onOpenChange={setIsPdfImportDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Transaction
+              <Button variant="outline">
+                <FileText className="mr-2 h-4 w-4" />
+                Import PDF Statement
               </Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Transaction</DialogTitle>
-                <DialogDescription>
-                  Add a new transaction to {account.name}
-                </DialogDescription>
-              </DialogHeader>
-              <TransactionForm
-                accountId={id}
-                currency={account.currency}
-                onSuccess={handleTransactionCreated}
-              />
+            <DialogContent className="!max-w-[98vw] !max-h-[98vh] !w-[98vw] !h-[98vh] !translate-x-[-50%] !translate-y-[-50%] !top-[50%] !left-[50%] overflow-hidden flex flex-col p-0 gap-0 [&>button]:z-50">
+              <div className="p-6 border-b shrink-0 bg-background">
+                <DialogHeader>
+                  <DialogTitle>Import PDF Statement</DialogTitle>
+                  <DialogDescription>
+                    Upload a PDF bank or credit card statement to import transactions into {account.name}
+                  </DialogDescription>
+                </DialogHeader>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 min-h-0">
+                <PdfStatementImport
+                  accountId={id}
+                  onSuccess={() => {
+                    setIsPdfImportDialogOpen(false);
+                    fetchData();
+                  }}
+                />
+              </div>
             </DialogContent>
           </Dialog>
+          </>
         )}
 
         {account.type === "balance" && (
@@ -612,45 +676,186 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
             )}
           </>
         )}
-      </div>ew
+      </div>
 
-      {account.type === "transaction" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Transactions & Transfers</CardTitle>
-            <CardDescription>
-              {transactions.length + transfers.length} item{(transactions.length + transfers.length) !== 1 ? "s" : ""}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {transactions.length === 0 && transfers.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No transactions or transfers yet</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TooltipProvider>
-                    {(() => {
-                      // Create unified array and sort by date descending
-                      const unifiedItems: UnifiedItem[] = [
-                        ...transactions.map((t) => ({ type: "transaction" as const, data: t })),
-                        ...transfers.map((t) => ({ type: "transfer" as const, data: t })),
-                      ].sort((a, b) => {
-                        const dateA = new Date(a.data.date).getTime();
-                        const dateB = new Date(b.data.date).getTime();
-                        return dateB - dateA;
-                      });
+      {account.type === "transaction" && (() => {
+        // Create unified array and sort by date descending
+        const unifiedItems: UnifiedItem[] = [
+          ...transactions.map((t) => ({ type: "transaction" as const, data: t })),
+          ...transfers.map((t) => ({ type: "transfer" as const, data: t })),
+        ].sort((a, b) => {
+          const dateA = new Date(a.data.date).getTime();
+          const dateB = new Date(b.data.date).getTime();
+          return dateB - dateA;
+        });
 
-                      return unifiedItems.map((item) => {
+        // Apply filters
+        const filteredItems = unifiedItems.filter((item) => {
+          if (item.type === "transaction") {
+            const t = item.data;
+
+            // Search filter
+            if (searchQuery) {
+              const query = searchQuery.toLowerCase();
+              const matchesDescription = t.description?.toLowerCase().includes(query);
+              const matchesCategory = t.category.toLowerCase().includes(query);
+              if (!matchesDescription && !matchesCategory) {
+                return false;
+              }
+            }
+
+            // Category filter
+            if (categoryFilter !== "all" && t.category !== categoryFilter) {
+              return false;
+            }
+
+            // Type filter
+            if (typeFilter !== "all" && typeFilter !== "transfer" && t.type !== typeFilter) {
+              return false;
+            }
+
+            if (typeFilter === "transfer") {
+              return false; // Hide transactions when filtering for transfers
+            }
+
+            return true;
+          } else {
+            // Transfer filtering
+            const t = item.data;
+
+            // Search filter
+            if (searchQuery) {
+              const query = searchQuery.toLowerCase();
+              const matchesDescription = t.description?.toLowerCase().includes(query);
+              const matchesCategory = t.category?.toLowerCase().includes(query);
+              const otherAccount = accounts.find(
+                (a) => a.id === (t.fromAccountId === id ? t.toAccountId : t.fromAccountId)
+              );
+              const matchesAccount = otherAccount?.name.toLowerCase().includes(query);
+              if (!matchesDescription && !matchesCategory && !matchesAccount) {
+                return false;
+              }
+            }
+
+            // Category filter
+            if (categoryFilter !== "all" && t.category !== categoryFilter) {
+              return false;
+            }
+
+            // Type filter
+            if (typeFilter !== "all" && typeFilter !== "transfer") {
+              return false; // Hide transfers when filtering for debit/credit
+            }
+
+            return true;
+          }
+        });
+
+        const totalItems = filteredItems.length;
+        const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const paginatedItems = filteredItems.slice(startIndex, endIndex);
+
+        return (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Transactions & Transfers</CardTitle>
+                  <CardDescription>
+                    {totalItems === unifiedItems.length 
+                      ? `${totalItems} item${totalItems !== 1 ? "s" : ""}`
+                      : `${totalItems} of ${unifiedItems.length} item${unifiedItems.length !== 1 ? "s" : ""}`
+                    }
+                    {totalPages > 1 && (
+                      <> • Page {currentPage} of {totalPages}</>
+                    )}
+                  </CardDescription>
+                </div>
+                {unifiedItems.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Per page:</span>
+                    <Select
+                      value={itemsPerPage.toString()}
+                      onValueChange={(value) => setItemsPerPage(Number(value))}
+                    >
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                        <SelectItem value="150">150</SelectItem>
+                        <SelectItem value="200">200</SelectItem>
+                        <SelectItem value="250">250</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {unifiedItems.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">No transactions or transfers yet</p>
+              ) : (
+                <>
+                  <div className="mb-4 flex flex-col gap-4 sm:flex-row">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        placeholder="Search transactions..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger className="w-full sm:w-[150px]">
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        {transactionCategories.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={typeFilter} onValueChange={setTypeFilter}>
+                      <SelectTrigger className="w-full sm:w-[130px]">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="debit">Debit</SelectItem>
+                        <SelectItem value="credit">Credit</SelectItem>
+                        <SelectItem value="transfer">Transfer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {totalItems === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">
+                      No transactions match your filters
+                    </p>
+                  ) : (
+                    <>
+                      <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                        <TableHead></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TooltipProvider>
+                        {paginatedItems.map((item) => {
                         if (item.type === "transaction") {
                           const transaction = item.data;
                           return (
@@ -779,15 +984,111 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                             </TableRow>
                           );
                         }
-                      });
-                    })()}
-                  </TooltipProvider>
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                      })}
+                      </TooltipProvider>
+                    </TableBody>
+                  </Table>
+                  </>
+                  )}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4">
+                      <div className="text-sm text-muted-foreground">
+                        Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} items
+                      </div>
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setCurrentPage((prev) => Math.max(1, prev - 1));
+                              }}
+                              className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            />
+                          </PaginationItem>
+                          {(() => {
+                            const pages: (number | "ellipsis")[] = [];
+                            const showEllipsis = totalPages > 7;
+
+                            if (!showEllipsis) {
+                              // Show all pages if 7 or fewer
+                              for (let i = 1; i <= totalPages; i++) {
+                                pages.push(i);
+                              }
+                            } else {
+                              // Always show first page
+                              pages.push(1);
+
+                              if (currentPage <= 4) {
+                                // Near the start: 1 2 3 4 5 ... last
+                                for (let i = 2; i <= 5; i++) {
+                                  pages.push(i);
+                                }
+                                pages.push("ellipsis");
+                                pages.push(totalPages);
+                              } else if (currentPage >= totalPages - 3) {
+                                // Near the end: 1 ... (n-4) (n-3) (n-2) (n-1) n
+                                pages.push("ellipsis");
+                                for (let i = totalPages - 4; i <= totalPages; i++) {
+                                  pages.push(i);
+                                }
+                              } else {
+                                // In the middle: 1 ... (current-1) current (current+1) ... last
+                                pages.push("ellipsis");
+                                pages.push(currentPage - 1);
+                                pages.push(currentPage);
+                                pages.push(currentPage + 1);
+                                pages.push("ellipsis");
+                                pages.push(totalPages);
+                              }
+                            }
+
+                            return pages.map((page, index) => {
+                              if (page === "ellipsis") {
+                                return (
+                                  <PaginationItem key={`ellipsis-${index}`}>
+                                    <PaginationEllipsis />
+                                  </PaginationItem>
+                                );
+                              }
+                              return (
+                                <PaginationItem key={page}>
+                                  <PaginationLink
+                                    href="#"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      setCurrentPage(page);
+                                    }}
+                                    isActive={currentPage === page}
+                                    className="cursor-pointer"
+                                  >
+                                    {page}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              );
+                            });
+                          })()}
+                          <PaginationItem>
+                            <PaginationNext
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setCurrentPage((prev) => Math.min(totalPages, prev + 1));
+                              }}
+                              className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {account.type === "balance" && (
         <Card>

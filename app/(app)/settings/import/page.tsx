@@ -17,6 +17,8 @@ import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import { useImportWizard } from "@/hooks/use-import-wizard";
 import { useAuth } from "@/lib/auth-context";
 import { apiClient } from "@/lib/api-client";
+import { PdfStatementImport } from "@/components/pdf-import/pdf-statement-import";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const steps = [
   { id: 1, label: "Select type" },
@@ -185,9 +187,9 @@ const ImportWizardPage = () => {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">CSV Import Wizard</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Import Data</h1>
           <p className="text-muted-foreground">
-            Import transactions, transfers, balances, and investments in a guided flow.
+            Import transactions, transfers, balances, and investments from CSV files or PDF statements.
           </p>
         </div>
         <Button variant="ghost" asChild onClick={resetImportState}>
@@ -195,7 +197,14 @@ const ImportWizardPage = () => {
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">{stepBadges}</div>
+      <Tabs defaultValue="csv" className="w-full">
+        <TabsList>
+          <TabsTrigger value="csv">CSV Import</TabsTrigger>
+          <TabsTrigger value="pdf">PDF Statement Import</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="csv" className="space-y-6">
+          <div className="flex flex-wrap gap-2">{stepBadges}</div>
 
       {step === 1 && (
         <Card>
@@ -613,6 +622,12 @@ const ImportWizardPage = () => {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        <TabsContent value="pdf" className="space-y-6">
+          <PdfStatementImport />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

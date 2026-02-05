@@ -32,6 +32,7 @@ const ConnectPage = () => {
   const [existingFinverseAccountNumbers, setExistingFinverseAccountNumbers] = useState<string[]>([]);
   const [selectedAccountsForPreview, setSelectedAccountsForPreview] = useState<any[]>([]);
   const [accountPreviews, setAccountPreviews] = useState<any[]>([]);
+  const [isPollingAccounts, setIsPollingAccounts] = useState(false);
 
   // Fetch existing accounts to check for duplicates
   useEffect(() => {
@@ -71,6 +72,7 @@ const ConnectPage = () => {
   // Fetch accounts when code is received
   useEffect(() => {
     if (code && !accounts && !loadingAccounts) {
+      setIsConnecting(false); // Reset connecting state after OAuth redirect
       fetchAccounts();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -78,7 +80,19 @@ const ConnectPage = () => {
 
   // Move to account selection when accounts are loaded
   useEffect(() => {
-    if (accounts?.accounts && accounts.accounts.length > 0 && currentStep === "connecting") {
+    if (accounts !== null && currentStep === "connecting") {
+      // Transition to account-selection when accounts response is received (even if empty)
+      // This allows AccountSelectionStep to show appropriate message for empty/filtered accounts
+      const accountCount = accounts?.accounts?.length || 0;
+      console.log(`Transitioning to account-selection with ${accountCount} accounts`);
+      if (accountCount > 0) {
+        console.log("Account details:", accounts.accounts.map(acc => ({
+          id: acc.account_id,
+          name: acc.account_name,
+          type: acc.account_type,
+          number: acc.account_number_masked
+        })));
+      }
       setCurrentStep("account-selection");
     }
   }, [accounts, currentStep]);
@@ -96,20 +110,103 @@ const ConnectPage = () => {
     }
   };
 
-  const fetchAccounts = async () => {
-    setLoadingAccounts(true);
+  const fetchAccounts = async (isRetry = false) => {
+    if (!isRetry) {
+      setLoadingAccounts(true);
+    }
     setErrorMessage(null);
+    setIsConnecting(false); // Ensure connecting state is reset
     try {
       const accountsData = await apiClient.post<FinverseAccountsResponse>("/api/open-banking/fetch-accounts", {
         code,
       });
+      console.log("Fetched accounts response:", {
+        totalAccounts: accountsData?.accounts?.length || 0,
+        hasAccounts: !!accountsData?.accounts,
+        loginIdentityStatus: accountsData?.login_identity?.status,
+        institution: accountsData?.institution?.institution_name,
+        accounts: accountsData?.accounts?.map(acc => ({
+          id: acc.account_id,
+          name: acc.account_name,
+          type: acc.account_type,
+          number: acc.account_number_masked,
+          currency: acc.account_currency
+        })) || []
+      });
+      
       setAccounts(accountsData);
+      
+      // Check if data retrieval is in progress
+      const status = accountsData?.login_identity?.status;
+      if (status === "DATA_RETRIEVAL_IN_PROGRESS" && (!accountsData.accounts || accountsData.accounts.length === 0)) {
+        // Start polling for accounts
+        console.log("Data retrieval in progress, starting polling...");
+        setIsPollingAccounts(true);
+        // Poll every 3 seconds, max 20 attempts (60 seconds total)
+        let attempts = 0;
+        const maxAttempts = 20;
+        const loginIdentityId = accountsData.login_identity?.login_identity_id;
+        
+        if (!loginIdentityId) {
+          console.error("No login_identity_id found for polling");
+          setIsPollingAccounts(false);
+          setErrorMessage("Unable to poll for accounts: missing login identity ID");
+          return;
+        }
+        
+        const pollInterval = setInterval(async () => {
+          attempts++;
+          console.log(`Polling attempt ${attempts}/${maxAttempts}...`);
+          try {
+            const polledData = await apiClient.post<FinverseAccountsResponse>("/api/open-banking/fetch-accounts", {
+              login_identity_id: loginIdentityId,
+            });
+            
+            const polledStatus = polledData?.login_identity?.status;
+            const hasAccounts = polledData?.accounts && polledData.accounts.length > 0;
+            
+            if (hasAccounts || (polledStatus && polledStatus !== "DATA_RETRIEVAL_IN_PROGRESS")) {
+              // Accounts are available or status changed
+              clearInterval(pollInterval);
+              setIsPollingAccounts(false);
+              setAccounts(polledData);
+              setCurrentStep("account-selection");
+              console.log(`Accounts retrieved after ${attempts} attempts:`, polledData.accounts?.length || 0);
+            } else if (attempts >= maxAttempts) {
+              // Max attempts reached
+              clearInterval(pollInterval);
+              setIsPollingAccounts(false);
+              setErrorMessage("Account data retrieval is taking longer than expected. Please try refreshing the page in a few moments.");
+              setCurrentStep("account-selection");
+            }
+          } catch (err) {
+            console.error("Error polling accounts:", err);
+            if (attempts >= maxAttempts) {
+              clearInterval(pollInterval);
+              setIsPollingAccounts(false);
+            }
+          }
+        }, 3000);
+        
+        // Transition to account-selection to show loading state
+        setCurrentStep("account-selection");
+      } else {
+        // Accounts are available or status is not in progress
+        if (accountsData) {
+          const accountCount = accountsData.accounts?.length || 0;
+          console.log(`Transitioning to account-selection with ${accountCount} accounts`);
+          setCurrentStep("account-selection");
+        }
+      }
     } catch (err) {
       console.error("Error fetching accounts:", err);
       setErrorMessage(err instanceof Error ? err.message : "Failed to fetch accounts");
       setAccounts(null);
+      setIsPollingAccounts(false);
     } finally {
-      setLoadingAccounts(false);
+      if (!isRetry) {
+        setLoadingAccounts(false);
+      }
     }
   };
 
@@ -273,16 +370,18 @@ const ConnectPage = () => {
     getLinkUiUrl();
   };
 
+  console.log(accounts);
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Bank Connection Setup</h1>
         <p className="text-muted-foreground">
-          Connect your bank accounts securely with Finverse Open Banking
+          Connect your bank accounts securely with Open Banking
         </p>
       </div>
 
-      <ConnectionProgress currentStep={currentStep} />
+      
 
       {errorMessage && (
         <Alert variant="destructive" className="max-w-2xl">
@@ -328,23 +427,46 @@ const ConnectPage = () => {
                   <h2 className="text-2xl font-semibold">Loading your accounts</h2>
                   <p className="text-muted-foreground">Retrieving your account information…</p>
                 </div>
+              ) : accounts && accounts.accounts && accounts.accounts.length > 0 ? (
+                // If accounts are loaded but step hasn't updated yet, show loading briefly
+                <div className="text-center space-y-4">
+                  <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
+                  <h2 className="text-2xl font-semibold">Preparing account selection…</h2>
+                  <p className="text-muted-foreground">Loading your accounts…</p>
+                </div>
               ) : (
                 <div className="text-center space-y-4">
                   <CheckCircle className="h-12 w-12 mx-auto text-primary" />
                   <h2 className="text-2xl font-semibold text-primary">Connection Successful!</h2>
                   <p className="text-muted-foreground">Your bank connection has been established</p>
+                  {code && !loadingAccounts && !accounts && (
+                    <p className="text-sm text-muted-foreground mt-2">Waiting for accounts to load…</p>
+                  )}
                 </div>
               )}
             </div>
           )}
 
-          {currentStep === "account-selection" && accounts?.accounts && (
-            <AccountSelectionStep
-              accounts={accounts.accounts}
-              onNext={handleAccountSelection}
-              onBack={handleConnectionRetry}
-              existingFinverseAccountNumbers={existingFinverseAccountNumbers}
-            />
+          {currentStep === "account-selection" && accounts !== null && (
+            <>
+              {isPollingAccounts && (
+                <div className="mb-6">
+                  <Alert>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <AlertTitle>Retrieving Account Data</AlertTitle>
+                    <AlertDescription>
+                      Your bank connection is successful. We&apos;re currently retrieving your account information from {accounts.institution?.institution_name || "your bank"}. This may take a few moments…
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              )}
+              <AccountSelectionStep
+                accounts={accounts.accounts || []}
+                onNext={handleAccountSelection}
+                onBack={handleConnectionRetry}
+                existingFinverseAccountNumbers={existingFinverseAccountNumbers}
+              />
+            </>
           )}
 
           {currentStep === "transaction-preview" && (

@@ -80,6 +80,17 @@ export interface FinverseTransaction {
 // API Response wrappers
 export interface FinverseAccountsResponse {
   accounts: FinverseAccount[];
+  login_identity?: {
+    login_identity_id: string;
+    status?: string; // e.g., "DATA_RETRIEVAL_IN_PROGRESS", "ACTIVE", etc.
+    last_session_id?: string;
+  };
+  institution?: {
+    institution_id: string;
+    institution_name: string;
+    portal_name?: string;
+    countries?: string[];
+  };
   pagination?: {
     page: number;
     page_size: number;

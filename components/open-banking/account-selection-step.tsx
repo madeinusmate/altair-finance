@@ -67,6 +67,8 @@ export const AccountSelectionStep = ({
 
   const canProceed = selections.length > 0 && selections.every(s => s.name && s.category);
 
+  console.log(accounts);
+
   return (
     <div className="space-y-6">
       <div>

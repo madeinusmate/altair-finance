@@ -32,17 +32,11 @@ export const InflowOutflowChart = ({ data, currency }: InflowOutflowChartProps) 
     );
   }
 
-  // Format data for Recharts (outflow as negative for visual effect)
-  const chartData = data.map((item) => ({
-    ...item,
-    outflow: -item.outflow, // Negative for visual representation
-  }));
-
   return (
     <Card>
       <CardContent className="pt-6">
         <ChartContainer config={chartConfig} className="h-[300px] w-full">
-          <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} width={undefined} height={undefined}>
+          <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} width={undefined} height={undefined}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis
               dataKey="monthLabel"
@@ -54,9 +48,7 @@ export const InflowOutflowChart = ({ data, currency }: InflowOutflowChartProps) 
             <YAxis
               tick={{ fill: "hsl(var(--muted-foreground))" }}
               tickFormatter={(value) => {
-                // Format negative values as positive for display
-                const absValue = Math.abs(value);
-                return formatCurrencySmart(absValue, currency);
+                return formatCurrencySmart(value, currency);
               }}
             />
             <ChartTooltip
@@ -67,12 +59,12 @@ export const InflowOutflowChart = ({ data, currency }: InflowOutflowChartProps) 
                   }
                   formatter={(value, name) => {
                     const numericValue = typeof value === "number" ? value : Number(value);
-                    const displayValue = formatCurrencySmart(Math.abs(numericValue), currency);
+                    const displayValue = formatCurrencySmart(numericValue, currency);
                     const label = name === "outflow" ? "Outflow" : "Inflow";
                     return (
                       <div className="flex w-full items-center justify-between gap-4">
                         <span className="text-muted-foreground">{label}</span>
-                        <span className="font-mono text-foreground">{displayValue}</span>
+                        <span className="font-mono text-foreground">{label === "Outflow" ? "-" + displayValue : displayValue}</span>
                       </div>
                     );
                   }}

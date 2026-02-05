@@ -65,6 +65,41 @@ The relay receives OAuth callbacks from Finverse and redirects them to your loca
 
 For more details, see [`oauth-relay/README.md`](oauth-relay/README.md).
 
+## PDF Statement Import
+
+Netly supports importing transactions from PDF bank and credit card statements using AI-powered extraction.
+
+### Setup
+
+1. **Get an OpenAI API Key**:
+   - Sign up at [OpenAI Platform](https://platform.openai.com)
+   - Navigate to [API Keys](https://platform.openai.com/api-keys)
+   - Create a new API key
+
+2. **Configure Environment Variable**:
+   - Add `OPENAI_API_KEY=your_api_key_here` to your `.env` file
+   - See `.env.example` for reference
+
+3. **Usage**:
+   - Navigate to an account detail page and click "Import PDF Statement"
+   - Or go to Settings > Import and select the "PDF Statement Import" tab
+   - Select an account, upload a PDF statement (max 50MB), and review extracted transactions
+   - Edit transactions as needed before importing
+
+### Features
+
+- **AI-Powered Extraction**: Uses OpenAI GPT-5 to automatically extract transactions from PDF statements
+- **Duplicate Detection**: Automatically flags and excludes duplicate transactions
+- **Inline Editing**: Review and edit transactions before importing
+- **Transfer Conversion**: Convert transactions to transfers during review
+- **Import Tracking**: Tracks imported files to prevent duplicate imports
+
+### Supported Formats
+
+- Bank statements (PDF)
+- Credit card statements (PDF)
+- Maximum file size: 50MB
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

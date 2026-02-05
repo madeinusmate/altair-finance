@@ -39,6 +39,15 @@ import { ArrowUpRight, ArrowDownRight, Search, ArrowLeftRight, Pencil, Trash2, P
 import { Transaction, Account, Transfer } from "@/lib/db/schema";
 import { format } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 type UnifiedItem = 
   | { type: "transaction"; data: Transaction }
@@ -72,6 +81,8 @@ const TransactionsPage = () => {
   const [isEditTransferDialogOpen, setIsEditTransferDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -290,6 +301,18 @@ const TransactionsPage = () => {
     });
   }, [unifiedItems, searchQuery, categoryFilter, typeFilter, accountFilter, accountMap]);
 
+  // Pagination logic
+  const totalItems = filteredItems.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedItems = filteredItems.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters or items per page change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, categoryFilter, typeFilter, accountFilter, itemsPerPage]);
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -401,10 +424,40 @@ const TransactionsPage = () => {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>All Transactions</CardTitle>
-            <CardDescription>
-              {filteredItems.length} of {unifiedItems.length} item{unifiedItems.length !== 1 ? "s" : ""}
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>All Transactions</CardTitle>
+                <CardDescription>
+                  {totalItems === unifiedItems.length 
+                    ? `${totalItems} item${totalItems !== 1 ? "s" : ""}`
+                    : `${totalItems} of ${unifiedItems.length} item${unifiedItems.length !== 1 ? "s" : ""}`
+                  }
+                  {totalPages > 1 && (
+                    <> • Page {currentPage} of {totalPages}</>
+                  )}
+                </CardDescription>
+              </div>
+              {unifiedItems.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Per page:</span>
+                  <Select
+                    value={itemsPerPage.toString()}
+                    onValueChange={(value) => setItemsPerPage(Number(value))}
+                  >
+                    <SelectTrigger className="w-[100px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="150">150</SelectItem>
+                      <SelectItem value="200">200</SelectItem>
+                      <SelectItem value="250">250</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <div className="mb-4 flex flex-col gap-4 sm:flex-row">
@@ -458,26 +511,27 @@ const TransactionsPage = () => {
               </Select>
             </div>
 
-            {filteredItems.length === 0 ? (
+            {totalItems === 0 ? (
               <p className="text-muted-foreground text-center py-8">
                 No transactions match your filters
               </p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Account(s)</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TooltipProvider>
-                    {filteredItems.map((item) => {
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Account(s)</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TooltipProvider>
+                      {paginatedItems.map((item) => {
                       if (item.type === "transaction") {
                         const transaction = item.data;
                         const account = accountMap.get(transaction.accountId);
@@ -638,9 +692,103 @@ const TransactionsPage = () => {
                         );
                       }
                     })}
-                  </TooltipProvider>
-                </TableBody>
-              </Table>
+                    </TooltipProvider>
+                  </TableBody>
+                </Table>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-muted-foreground">
+                      Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} items
+                    </div>
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage((prev) => Math.max(1, prev - 1));
+                            }}
+                            className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                          />
+                        </PaginationItem>
+                        {(() => {
+                          const pages: (number | "ellipsis")[] = [];
+                          const showEllipsis = totalPages > 7;
+
+                          if (!showEllipsis) {
+                            // Show all pages if 7 or fewer
+                            for (let i = 1; i <= totalPages; i++) {
+                              pages.push(i);
+                            }
+                          } else {
+                            // Always show first page
+                            pages.push(1);
+
+                            if (currentPage <= 4) {
+                              // Near the start: 1 2 3 4 5 ... last
+                              for (let i = 2; i <= 5; i++) {
+                                pages.push(i);
+                              }
+                              pages.push("ellipsis");
+                              pages.push(totalPages);
+                            } else if (currentPage >= totalPages - 3) {
+                              // Near the end: 1 ... (n-4) (n-3) (n-2) (n-1) n
+                              pages.push("ellipsis");
+                              for (let i = totalPages - 4; i <= totalPages; i++) {
+                                pages.push(i);
+                              }
+                            } else {
+                              // In the middle: 1 ... (current-1) current (current+1) ... last
+                              pages.push("ellipsis");
+                              pages.push(currentPage - 1);
+                              pages.push(currentPage);
+                              pages.push(currentPage + 1);
+                              pages.push("ellipsis");
+                              pages.push(totalPages);
+                            }
+                          }
+
+                          return pages.map((page, index) => {
+                            if (page === "ellipsis") {
+                              return (
+                                <PaginationItem key={`ellipsis-${index}`}>
+                                  <PaginationEllipsis />
+                                </PaginationItem>
+                              );
+                            }
+                            return (
+                              <PaginationItem key={page}>
+                                <PaginationLink
+                                  href="#"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setCurrentPage(page);
+                                  }}
+                                  isActive={currentPage === page}
+                                  className="cursor-pointer"
+                                >
+                                  {page}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          });
+                        })()}
+                        <PaginationItem>
+                          <PaginationNext
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage((prev) => Math.min(totalPages, prev + 1));
+                            }}
+                            className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
