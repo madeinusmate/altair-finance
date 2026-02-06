@@ -1,0 +1,111 @@
+import { NextRequest, NextResponse } from "next/server";
+import { gte, lte, and, eq } from "drizzle-orm";
+import { getDb, schema } from "@/lib/db";
+import { getEncryptionKey } from "@/lib/api-utils";
+import { convertAmount, getFxSnapshot } from "@/lib/fx";
+import { type SupportedCurrency } from "@/lib/currencies";
+
+interface SpendingCategory {
+  category: string;
+  amount: number;
+  percentage: number;
+}
+
+export const GET = async (request: NextRequest): Promise<NextResponse> => {
+  const key = getEncryptionKey(request);
+  if (!key) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const startDateParam = searchParams.get("startDate");
+    const endDateParam = searchParams.get("endDate");
+    const currency = (searchParams.get("currency") || "USD") as SupportedCurrency;
+
+    if (!startDateParam || !endDateParam) {
+      return NextResponse.json({ error: "startDate and endDate are required" }, { status: 400 });
+    }
+
+    const startDate = new Date(startDateParam);
+    const endDate = new Date(endDateParam);
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
+    }
+
+    const db = getDb(key);
+    const fxSnapshot = await getFxSnapshot(db);
+
+    // Get all debit transactions in date range
+    const transactions = db
+      .select()
+      .from(schema.transactions)
+      .where(
+        and(
+          eq(schema.transactions.type, "debit"),
+          gte(schema.transactions.date, startDate),
+          lte(schema.transactions.date, endDate)
+        )
+      )
+      .all();
+
+    // Get account currencies for conversion
+    const accounts = db.select().from(schema.accounts).all();
+    const accountCurrencyMap = new Map(accounts.map((acc) => [acc.id, acc.currency]));
+
+    // Aggregate spending by category
+    const categoryMap = new Map<string, number>();
+
+    transactions.forEach((transaction) => {
+      const accountCurrency = accountCurrencyMap.get(transaction.accountId) || "USD";
+      const convertedAmount = convertAmount(
+        transaction.amount,
+        accountCurrency as SupportedCurrency,
+        currency,
+        fxSnapshot.rates
+      );
+
+      const current = categoryMap.get(transaction.category) || 0;
+      categoryMap.set(transaction.category, current + convertedAmount);
+    });
+
+    // Calculate total for percentage calculation
+    const total = Array.from(categoryMap.values()).reduce((sum, amount) => sum + amount, 0);
+
+    // Convert to array, calculate percentages, and sort by amount descending
+    let categories: SpendingCategory[] = Array.from(categoryMap.entries())
+      .map(([category, amount]) => ({
+        category,
+        amount,
+        percentage: total > 0 ? (amount / total) * 100 : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+
+    // Group small categories into "Other" if more than 5 categories
+    if (categories.length > 5) {
+      const top5 = categories.slice(0, 5);
+      const others = categories.slice(5);
+      const otherTotal = others.reduce((sum, cat) => sum + cat.amount, 0);
+      const otherPercentage = others.reduce((sum, cat) => sum + cat.percentage, 0);
+
+      categories = [
+        ...top5,
+        {
+          category: "Other",
+          amount: otherTotal,
+          percentage: otherPercentage,
+        },
+      ];
+    }
+
+    return NextResponse.json({
+      categories,
+      total,
+      currency,
+    });
+  } catch (error) {
+    console.error("Error calculating spending:", error);
+    return NextResponse.json({ error: "Failed to calculate spending" }, { status: 500 });
+  }
+};
