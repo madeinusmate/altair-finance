@@ -89,26 +89,44 @@ export const SpendingChart = ({
     fill: COLORS[index % COLORS.length],
   }));
 
+  // Calculate dynamic height based on number of categories
+  // Minimum 300px, add ~60px per category (accounting for bar height + spacing)
+  const categoryCount = data.categories.length;
+  const minHeight = 300;
+  const heightPerCategory = 30;
+  const chartHeight = Math.max(minHeight, categoryCount * heightPerCategory + 80);
+
+  // Calculate Y-axis width based on longest category name
+  const maxCategoryLength = Math.max(...data.categories.map((cat) => cat.category.length));
+  const yAxisWidth = Math.max(120, Math.min(200, maxCategoryLength * 8 + 20));
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Net Spending</CardTitle>
+        <CardTitle>Spending Breakdown</CardTitle>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[300px] w-full">
+        <ChartContainer config={chartConfig} className="w-full" style={{ height: `${chartHeight}px` }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            <BarChart 
+              data={chartData} 
+              layout="vertical" 
+              margin={{ top: 20, right: 30, left: 10, bottom: 20 }}
+              barCategoryGap="20%"
+            >
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis
                 type="number"
-                tick={{ fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
                 tickFormatter={(value) => formatCurrency(value, currency)}
+                domain={[0, 'dataMax']}
               />
               <YAxis
                 type="category"
                 dataKey="name"
-                tick={{ fill: "hsl(var(--muted-foreground))" }}
-                width={120}
+                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                width={yAxisWidth}
+                interval={0}
               />
               <ChartTooltip
                 content={
@@ -132,6 +150,7 @@ export const SpendingChart = ({
               <Bar
                 dataKey="spending"
                 radius={[0, 4, 4, 0]}
+                minPointSize={2}
               >
                 {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />

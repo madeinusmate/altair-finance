@@ -182,6 +182,47 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
       console.warn("[DB Migration] Could not add metadata columns:", error);
     }
 
+    // Migration: Create budgets table if it doesn't exist
+    try {
+      const budgetsTableCheck = sqlite.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='budgets'
+      `).get();
+      
+      if (!budgetsTableCheck) {
+        sqlite.exec(`
+          CREATE TABLE budgets (
+            id TEXT PRIMARY KEY,
+            category_name TEXT NOT NULL,
+            amount REAL NOT NULL,
+            currency TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          );
+          
+          CREATE INDEX IF NOT EXISTS idx_budgets_category_name ON budgets(category_name);
+        `);
+        
+        // Create index on transactions table if it exists
+        const transactionsTableCheck = sqlite.prepare(`
+          SELECT name FROM sqlite_master 
+          WHERE type='table' AND name='transactions'
+        `).get();
+        
+        if (transactionsTableCheck) {
+          try {
+            sqlite.exec(`
+              CREATE INDEX IF NOT EXISTS idx_transactions_category_date_type ON transactions(category, date, type);
+            `);
+          } catch (indexError) {
+            console.warn("[DB Migration] Could not create transactions index:", indexError);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("[DB Migration] Could not create budgets table:", error);
+    }
+
     // Migration: Create open banking tables
     try {
       const clientTokensTableCheck = sqlite.prepare(`
@@ -372,6 +413,18 @@ export const initializeDb = (encryptionKey: string): void => {
       updated_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS budgets (
+      id TEXT PRIMARY KEY,
+      category_name TEXT NOT NULL,
+      amount REAL NOT NULL,
+      currency TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_budgets_category_name ON budgets(category_name);
+    CREATE INDEX IF NOT EXISTS idx_transactions_category_date_type ON transactions(category, date, type);
+
     INSERT INTO meta (id, schema_version, created_at)
     SELECT '${META_ID}', ${SCHEMA_VERSION}, strftime('%s','now')
     WHERE NOT EXISTS (SELECT 1 FROM meta WHERE id = '${META_ID}');
@@ -430,6 +483,32 @@ export const initializeDb = (encryptionKey: string): void => {
     }
   } catch (error) {
     console.warn("[DB Migration] Could not add import_id columns:", error);
+  }
+
+  // Migration: Create budgets table if it doesn't exist
+  try {
+    const budgetsTableCheck = sqlite.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='budgets'
+    `).get();
+    
+    if (!budgetsTableCheck) {
+      sqlite.exec(`
+        CREATE TABLE budgets (
+          id TEXT PRIMARY KEY,
+          category_name TEXT NOT NULL,
+          amount REAL NOT NULL,
+          currency TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_budgets_category_name ON budgets(category_name);
+        CREATE INDEX IF NOT EXISTS idx_transactions_category_date_type ON transactions(category, date, type);
+      `);
+    }
+  } catch (error) {
+    console.warn("[DB Migration] Could not create budgets table:", error);
   }
 
   // Migration: Add metadata columns to accounts and transactions

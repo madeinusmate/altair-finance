@@ -4,7 +4,7 @@ import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { type SupportedCurrency } from "@/lib/currencies";
 import { convertAmount, getFxSnapshot } from "@/lib/fx";
-import { format, eachMonthOfInterval } from "date-fns";
+import { format, eachMonthOfInterval, startOfMonth as startOfMonthFns, endOfMonth as endOfMonthFns, addMonths } from "date-fns";
 
 interface MonthlyIncomeExpenses {
   month: string; // "YYYY-MM"
@@ -30,8 +30,13 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "startDate and endDate are required" }, { status: 400 });
     }
 
-    const startDate = new Date(startDateParam);
-    const endDate = new Date(endDateParam);
+    // Parse dates - frontend sends dates as "YYYY-MM-DD" (date part of ISO string)
+    // Parse in local timezone to avoid timezone conversion issues
+    // Format: "YYYY-MM-DD" -> create Date in local timezone
+    const [startYear, startMonth, startDay] = startDateParam.split('-').map(Number);
+    const [endYear, endMonth, endDay] = endDateParam.split('-').map(Number);
+    const startDate = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+    const endDate = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
       return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
@@ -58,7 +63,24 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       .all();
 
     // Generate all months in the date range
-    const months = eachMonthOfInterval({ start: startDate, end: endDate });
+    // Normalize both dates to start of their respective months for consistent comparison
+    const normalizedStart = startOfMonthFns(startDate);
+    const normalizedEnd = startOfMonthFns(endDate);
+    
+    // Calculate months explicitly to ensure we get exactly the right count
+    // Start from normalizedStart and go up to and including normalizedEnd
+    // This ensures "Last 3 months" shows exactly 3 months (e.g., Dec, Jan, Feb)
+    const months: Date[] = [];
+    let currentMonth = new Date(normalizedStart);
+    
+    // Include all months from start to end (inclusive)
+    // Compare by time value to ensure accurate comparison
+    while (currentMonth.getTime() <= normalizedEnd.getTime()) {
+      months.push(new Date(currentMonth));
+      // Move to next month
+      currentMonth = addMonths(currentMonth, 1);
+    }
+    
     const monthlyData = new Map<string, { income: number; expenses: number }>();
 
     // Initialize all months with zero values

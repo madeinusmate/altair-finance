@@ -27,9 +27,22 @@ export const DashboardDateSelector = ({ value, onChange, className }: DashboardD
   const customEnd = format(value.endDate, "yyyy-MM-dd");
 
   const handlePreset = (months: number | null) => {
-    const endDate = endOfDay(new Date());
-    const startDate = months ? startOfMonth(subMonths(endDate, months - 1)) : new Date(2015, 3, 1);
-    onChange({ startDate, endDate });
+    const now = new Date();
+    const endDate = endOfDay(now);
+    // For "Last N months", we want exactly N months including the current month
+    // Example: "Last 3 months" = current month (Feb) + 2 previous months (Jan, Dec)
+    // To get the start: go back (N-1) full months from the start of the current month
+    if (months) {
+      // Get start of current month in local timezone, then subtract (months-1) months
+      // Use startOfMonth which handles timezone correctly
+      const currentMonthStart = startOfMonth(now);
+      const startDate = subMonths(currentMonthStart, months - 1);
+      // Ensure startDate is at the beginning of the day in local timezone
+      const normalizedStartDate = startOfDay(startDate);
+      onChange({ startDate: normalizedStartDate, endDate });
+    } else {
+      onChange({ startDate: new Date(2015, 3, 1), endDate });
+    }
     setIsOpen(false);
   };
 
@@ -53,8 +66,16 @@ export const DashboardDateSelector = ({ value, onChange, className }: DashboardD
   };
 
   const isPresetActive = (months: number | null) => {
-    const endDate = endOfDay(new Date());
-    const startDate = months ? startOfMonth(subMonths(endDate, months - 1)) : new Date(2015, 3, 1);
+    const now = new Date();
+    const endDate = endOfDay(now);
+    // For "Last N months", we want exactly N months including the current month
+    let startDate: Date;
+    if (months) {
+      const currentMonthStart = startOfMonth(now);
+      startDate = startOfDay(subMonths(currentMonthStart, months - 1));
+    } else {
+      startDate = new Date(2015, 3, 1);
+    }
     return (
       format(value.startDate, "yyyy-MM-dd") === format(startDate, "yyyy-MM-dd") &&
       format(value.endDate, "yyyy-MM-dd") === format(endDate, "yyyy-MM-dd")

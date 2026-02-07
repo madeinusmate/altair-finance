@@ -127,6 +127,15 @@ export const openBankingTokens = sqliteTable("open_banking_tokens", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+export const budgets = sqliteTable("budgets", {
+  id: text("id").primaryKey(),
+  categoryName: text("category_name").notNull(),
+  amount: real("amount").notNull(),
+  currency: text("currency").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 export type TransactionCategory = typeof transactionCategories.$inferSelect;
 export type NewTransactionCategory = typeof transactionCategories.$inferInsert;
 export type AccountCategory = typeof accountCategories.$inferSelect;
@@ -151,3 +160,5 @@ export type OpenBankingClientToken = typeof openBankingClientTokens.$inferSelect
 export type NewOpenBankingClientToken = typeof openBankingClientTokens.$inferInsert;
 export type OpenBankingToken = typeof openBankingTokens.$inferSelect;
 export type NewOpenBankingToken = typeof openBankingTokens.$inferInsert;
+export type Budget = typeof budgets.$inferSelect;
+export type NewBudget = typeof budgets.$inferInsert;

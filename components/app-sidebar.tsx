@@ -9,6 +9,7 @@ import {
   Settings,
   LogOut,
   DollarSign,
+  Target,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -41,6 +42,11 @@ const navItems = [
     title: "Transactions",
     url: "/transactions",
     icon: ArrowLeftRight,
+  },
+  {
+    title: "Budget",
+    url: "/budget",
+    icon: Target,
   },
   {
     title: "Settings",

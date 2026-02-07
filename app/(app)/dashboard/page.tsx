@@ -8,7 +8,7 @@ import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight, AlertTr
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TARGET_NET_WORTH_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
-import { startOfMonth, endOfDay, subMonths } from "date-fns";
+import { startOfMonth, endOfDay, subMonths, startOfDay, format } from "date-fns";
 import { DashboardDateSelector, type DashboardDateRange } from "@/components/dashboard/dashboard-date-selector";
 import { MonthlyIncomeExpensesChart } from "@/components/dashboard/monthly-income-expenses-chart";
 import { CashFlowSankeyChart } from "@/components/dashboard/cash-flow-sankey-chart";
@@ -133,8 +133,12 @@ const DashboardPage = () => {
 
   // Date range state - default to last 3 months
   const [dateRange, setDateRange] = useState<DashboardDateRange>(() => {
-    const endDate = endOfDay(new Date());
-    const startDate = startOfMonth(subMonths(endDate, 2));
+    const now = new Date();
+    const endDate = endOfDay(now);
+    // For "Last 3 months": current month + 2 previous months
+    // Get start of current month, then subtract 2 months
+    const currentMonthStart = startOfMonth(now);
+    const startDate = startOfDay(subMonths(currentMonthStart, 2));
     return {
       startDate,
       endDate,
@@ -174,8 +178,10 @@ const DashboardPage = () => {
 
       setIsLoadingDashboard(true);
       try {
-        const startDateStr = dateRange.startDate.toISOString().split("T")[0];
-        const endDateStr = dateRange.endDate.toISOString().split("T")[0];
+        // Use format() instead of toISOString() to preserve local timezone
+        // toISOString() converts to UTC which can shift the date backward
+        const startDateStr = format(dateRange.startDate, "yyyy-MM-dd");
+        const endDateStr = format(dateRange.endDate, "yyyy-MM-dd");
 
         // Fetch all dashboard data in parallel
         const [cashFlowSankeyRes, spendingRes, investmentRes, monthlyIncomeExpensesRes] = await Promise.all([
@@ -407,8 +413,6 @@ const DashboardPage = () => {
                     </div>
                   </CardContent>
                 </Card>
-
-
               </>
             )}
           </div>

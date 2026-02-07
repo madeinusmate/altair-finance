@@ -74,30 +74,13 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     const total = Array.from(categoryMap.values()).reduce((sum, amount) => sum + amount, 0);
 
     // Convert to array, calculate percentages, and sort by amount descending
-    let categories: SpendingCategory[] = Array.from(categoryMap.entries())
+    const categories: SpendingCategory[] = Array.from(categoryMap.entries())
       .map(([category, amount]) => ({
         category,
         amount,
         percentage: total > 0 ? (amount / total) * 100 : 0,
       }))
       .sort((a, b) => b.amount - a.amount);
-
-    // Group small categories into "Other" if more than 5 categories
-    if (categories.length > 5) {
-      const top5 = categories.slice(0, 5);
-      const others = categories.slice(5);
-      const otherTotal = others.reduce((sum, cat) => sum + cat.amount, 0);
-      const otherPercentage = others.reduce((sum, cat) => sum + cat.percentage, 0);
-
-      categories = [
-        ...top5,
-        {
-          category: "Other",
-          amount: otherTotal,
-          percentage: otherPercentage,
-        },
-      ];
-    }
 
     return NextResponse.json({
       categories,
