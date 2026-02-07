@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { subMonths, startOfMonth, endOfMonth, endOfDay, format, startOfDay } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, ChevronDownIcon } from "lucide-react";
 
 export type DashboardDateRange = {
   startDate: Date;
@@ -20,7 +20,7 @@ interface DashboardDateSelectorProps {
 }
 
 export const DashboardDateSelector = ({ value, onChange, className }: DashboardDateSelectorProps) => {
-  const [isCustomOpen, setIsCustomOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   
   // Sync custom inputs when value changes externally
   const customStart = format(value.startDate, "yyyy-MM-dd");
@@ -30,13 +30,14 @@ export const DashboardDateSelector = ({ value, onChange, className }: DashboardD
     const endDate = endOfDay(new Date());
     const startDate = months ? startOfMonth(subMonths(endDate, months - 1)) : new Date(2015, 3, 1);
     onChange({ startDate, endDate });
+    setIsOpen(false);
   };
 
   const handleCustomApply = (start: string, end: string) => {
     const startDate = startOfDay(new Date(start));
     const endDate = endOfDay(new Date(end));
     onChange({ startDate, endDate });
-    setIsCustomOpen(false);
+    setIsOpen(false);
   };
   
   const [localCustomStart, setLocalCustomStart] = useState(customStart);
@@ -44,7 +45,7 @@ export const DashboardDateSelector = ({ value, onChange, className }: DashboardD
   
   // Update local state when popover opens
   const handleOpenChange = (open: boolean) => {
-    setIsCustomOpen(open);
+    setIsOpen(open);
     if (open) {
       setLocalCustomStart(customStart);
       setLocalCustomEnd(customEnd);
@@ -60,72 +61,99 @@ export const DashboardDateSelector = ({ value, onChange, className }: DashboardD
     );
   };
 
+  const getDisplayText = () => {
+    if (isPresetActive(1)) return "Current Month";
+    if (isPresetActive(3)) return "Last 3 months";
+    if (isPresetActive(6)) return "Last 6 months";
+    if (isPresetActive(12)) return "Last 12 months";
+    if (isPresetActive(null)) return "All time";
+    return `${format(value.startDate, "MMM d")} - ${format(value.endDate, "MMM d")}`;
+  };
+
   return (
-    <div className={`flex flex-wrap items-center gap-2 ${className || ""}`}>
-      <Button
-        variant={isPresetActive(1) ? "default" : "outline"}
-        size="sm"
-        onClick={() => handlePreset(1)}
-      >
-        Current Month
-      </Button>
-      <Button
-        variant={isPresetActive(3) ? "default" : "outline"}
-        size="sm"
-        onClick={() => handlePreset(3)}
-      >
-        Last 3 months
-      </Button>
-      <Button
-        variant={isPresetActive(6) ? "default" : "outline"}
-        size="sm"
-        onClick={() => handlePreset(6)}
-      >
-        Last 6 months
-      </Button>
-      <Button
-        variant={isPresetActive(12) ? "default" : "outline"}
-        size="sm"
-        onClick={() => handlePreset(12)}
-      >
-        Last 12 months
-      </Button>
-      <Button
-        variant={isPresetActive(null) ? "default" : "outline"}
-        size="sm"
-        onClick={() => handlePreset(null)}
-      >
-        All time
-      </Button>
-      <Popover open={isCustomOpen} onOpenChange={handleOpenChange}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" size="sm">
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            Custom range
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-4">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="start-date">Start Date</Label>
-              <Input
-                id="start-date"
-                type="date"
-                value={localCustomStart}
-                onChange={(e) => setLocalCustomStart(e.target.value)}
-              />
+    <Popover open={isOpen} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className={className}>
+          <CalendarIcon className="mr-2 h-4 w-4" />
+          {getDisplayText()}
+          <ChevronDownIcon className="ml-2 h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-4" align="end">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground">Quick Selection</Label>
+            <div className="grid grid-cols-1 gap-1">
+              <Button
+                variant={isPresetActive(1) ? "default" : "ghost"}
+                size="sm"
+                className="justify-start"
+                onClick={() => handlePreset(1)}
+              >
+                Current Month
+              </Button>
+              <Button
+                variant={isPresetActive(3) ? "default" : "ghost"}
+                size="sm"
+                className="justify-start"
+                onClick={() => handlePreset(3)}
+              >
+                Last 3 months
+              </Button>
+              <Button
+                variant={isPresetActive(6) ? "default" : "ghost"}
+                size="sm"
+                className="justify-start"
+                onClick={() => handlePreset(6)}
+              >
+                Last 6 months
+              </Button>
+              <Button
+                variant={isPresetActive(12) ? "default" : "ghost"}
+                size="sm"
+                className="justify-start"
+                onClick={() => handlePreset(12)}
+              >
+                Last 12 months
+              </Button>
+              <Button
+                variant={isPresetActive(null) ? "default" : "ghost"}
+                size="sm"
+                className="justify-start"
+                onClick={() => handlePreset(null)}
+              >
+                All time
+              </Button>
             </div>
+          </div>
+          <div className="border-t pt-4 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="end-date">End Date</Label>
-              <Input
-                id="end-date"
-                type="date"
-                value={localCustomEnd}
-                onChange={(e) => setLocalCustomEnd(e.target.value)}
-              />
+              <Label htmlFor="start-date" className="text-xs font-medium text-muted-foreground">Custom Range</Label>
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <Label htmlFor="start-date" className="text-xs">Start Date</Label>
+                  <Input
+                    id="start-date"
+                    type="date"
+                    value={localCustomStart}
+                    onChange={(e) => setLocalCustomStart(e.target.value)}
+                    className="h-8"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="end-date" className="text-xs">End Date</Label>
+                  <Input
+                    id="end-date"
+                    type="date"
+                    value={localCustomEnd}
+                    onChange={(e) => setLocalCustomEnd(e.target.value)}
+                    className="h-8"
+                  />
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setIsCustomOpen(false)}>
+              <Button variant="outline" size="sm" onClick={() => setIsOpen(false)}>
                 Cancel
               </Button>
               <Button size="sm" onClick={() => handleCustomApply(localCustomStart, localCustomEnd)}>
@@ -133,8 +161,8 @@ export const DashboardDateSelector = ({ value, onChange, className }: DashboardD
               </Button>
             </div>
           </div>
-        </PopoverContent>
-      </Popover>
-    </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 };

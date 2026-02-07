@@ -73,7 +73,6 @@ export const SpendingChart = ({
       <Card>
         <CardHeader>
           <CardTitle>Net Spending</CardTitle>
-          <CardDescription>Spending breakdown by category</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex h-[300px] items-center justify-center">
@@ -94,7 +93,6 @@ export const SpendingChart = ({
     <Card>
       <CardHeader>
         <CardTitle>Net Spending</CardTitle>
-        <CardDescription>Spending breakdown by category</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig} className="h-[300px] w-full">

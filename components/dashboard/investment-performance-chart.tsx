@@ -130,29 +130,39 @@ export const InvestmentPerformanceChart = ({
     pnl: point.pnl,
     pnlPercentage: point.pnlPercentage,
   }));
+
+  // Get the last datapoint from the time series
+  const lastDataPoint = chartData[chartData.length - 1];
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="space-y-1">
-          <CardTitle>Investment Performance</CardTitle>
+          <CardTitle>Investments Performance</CardTitle>
           <CardDescription>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-1">
               <span className="text-2xl font-bold">
                 {formatCurrencySmart(data.currentValue, currency)}
               </span>
-              {data.percentageChange !== 0 && (
-                <span
-                  className={`flex items-center gap-1 text-sm ${
-                    data.percentageChange >= 0 ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  <TrendingUp
-                    className={`h-4 w-4 ${data.percentageChange < 0 ? "rotate-180" : ""}`}
-                  />
-                  {data.percentageChange >= 0 ? "+" : ""}
-                  {data.percentageChange.toFixed(1)}% VS Last Week
-                </span>
-              )}
+              {lastDataPoint && (() => {
+                const pnlValue = lastDataPoint.pnl ?? 0;
+                const pnlPercentage = lastDataPoint.pnlPercentage ?? 0;
+                const isPositive = pnlPercentage >= 0;
+                return (
+                  <span
+                    className={`flex items-center gap-1 text-sm ${
+                      isPositive ? "text-green-600" : "text-red-600"
+                    }`}
+                  >
+                    <TrendingUp
+                      className={`h-4 w-4 ${!isPositive ? "rotate-180" : ""}`}
+                    />
+                    {isPositive ? "+" : ""}
+                    {pnlPercentage.toFixed(1)}% ({pnlValue >= 0 ? "+" : ""}
+                    {formatCurrencySmart(pnlValue, currency)})
+                  </span>
+                );
+              })()}
             </div>
           </CardDescription>
         </div>
@@ -281,16 +291,21 @@ export const InvestmentPerformanceChart = ({
                 activeDot={{ r: 4, fill: "#000000" }}
                 connectNulls={true}
               />
-              <Legend
-                formatter={(value) => {
-                  if (value === "value") return "Investment Value";
-                  if (value === "netContributions") return "Net Contributions";
-                  return value;
-                }}
-              />
+             
             </ComposedChart>
           </ResponsiveContainer>
         </ChartContainer>
+        {/* Custom Legend */}
+        <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-1 rounded" style={{ backgroundColor: "hsl(142, 76%, 36%)" }} />
+            <span className="text-sm text-muted-foreground">Investment Value</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-1 rounded" style={{ backgroundColor: "#000000" }} />
+            <span className="text-sm text-muted-foreground">Net Contributions</span>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

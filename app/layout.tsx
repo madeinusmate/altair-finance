@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Netly - Net Worth Tracker",
-  description: "Track your net worth with a local-first, encrypted personal finance app",
+  title: "Netly - Personal Finance Tracker",
+  description: "Local-first, encrypted personal finance app",
 };
 
 const RootLayout = ({

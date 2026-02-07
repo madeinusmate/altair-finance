@@ -697,7 +697,7 @@ const TransactionsPage = () => {
                 </Table>
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between mt-4">
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-sm text-muted-foreground w-full" >
                       Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} items
                     </div>
                     <Pagination>
@@ -786,6 +786,7 @@ const TransactionsPage = () => {
                         </PaginationItem>
                       </PaginationContent>
                     </Pagination>
+                    <div className="w-full"/>
                   </div>
                 )}
               </>

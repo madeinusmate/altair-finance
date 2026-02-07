@@ -992,7 +992,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                   )}
                   {totalPages > 1 && (
                     <div className="flex items-center justify-between mt-4">
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-sm text-muted-foreground line-clamp-1" >
                         Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} items
                       </div>
                       <Pagination>

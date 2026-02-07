@@ -6,14 +6,6 @@ import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Plus, Wallet, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Link2 } from "lucide-react";
 import { Account } from "@/lib/db/schema";
 import { Badge } from "@/components/ui/badge";
@@ -186,34 +178,15 @@ const AccountsPage = () => {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>All Accounts</CardTitle>
-            <CardDescription>
-              {accounts.length} account{accounts.length !== 1 ? "s" : ""} total
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Nature</TableHead>
-                  <TableHead>Currency</TableHead>
-                  <TableHead className="text-right">Balance</TableHead>
-                  <TableHead className="text-right">P/L</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {accounts.map((account) => (
-                  <TableRow key={account.id} className="cursor-pointer hover:bg-muted/50">
-                    <TableCell>
-                      <Link
-                        href={`/accounts/${account.id}`}
-                        className="flex items-center gap-3 font-medium hover:underline"
-                      >
+        <div className="space-y-4">
+         
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {accounts.map((account) => (
+              <Link key={account.id} href={`/accounts/${account.id}`}>
+                <Card className="h-full transition-all hover:shadow-md cursor-pointer">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
                         <div
                           className={`flex h-8 w-8 items-center justify-center rounded-full ${
                             account.nature === "asset"
@@ -227,64 +200,65 @@ const AccountsPage = () => {
                             <ArrowDownRight className="h-4 w-4" />
                           )}
                         </div>
-                        {account.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {account.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {formatCategoryDisplay(account.category)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-base truncate">{account.name}</CardTitle>
+                          <CardDescription className="mt-0.5 text-xs">
+                            {formatCategoryDisplay(account.category)}
+                          </CardDescription>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
                       <Badge
                         variant={account.nature === "asset" ? "default" : "destructive"}
-                        className="capitalize"
+                        className="capitalize text-xs"
                       >
                         {account.nature}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{account.currency}</Badge>
-                    </TableCell>
-                    <TableCell className={`text-right font-medium ${
-                      account.nature === "asset" 
-                        ? "text-green-600" 
-                        : account.balance < 0 
-                          ? "text-green-600" 
-                          : "text-red-600"
-                    }`}>
-                      {account.nature === "liability" && account.balance < 0 
-                        ? `${formatCurrency(Math.abs(account.balance), account.currency)} credit`
-                        : formatCurrency(account.balance, account.currency)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {account.type === "investment" && account.profitLoss !== undefined ? (
-                        <div className={`flex items-center justify-end gap-1 font-medium ${
-                          account.profitLoss >= 0 ? "text-green-600" : "text-red-600"
+                      <Badge variant="outline" className="text-xs">{account.currency}</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Balance</span>
+                        <span className={`text-base font-semibold ${
+                          account.nature === "asset" 
+                            ? "text-green-600" 
+                            : account.balance < 0 
+                              ? "text-green-600" 
+                              : "text-red-600"
                         }`}>
-                          {account.profitLoss >= 0 ? (
-                            <TrendingUp className="h-3 w-3" />
-                          ) : (
-                            <TrendingDown className="h-3 w-3" />
-                          )}
-                          {account.profitLoss >= 0 ? "+" : ""}
-                          {formatCurrency(account.profitLoss, account.currency)}
+                          {account.nature === "liability" && account.balance < 0 
+                            ? `${formatCurrency(Math.abs(account.balance), account.currency)} credit`
+                            : formatCurrency(account.balance, account.currency)}
+                        </span>
+                      </div>
+                      {account.type === "investment" && account.profitLoss !== undefined && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">P/L</span>
+                          <div className={`flex items-center gap-1 font-medium text-sm ${
+                            account.profitLoss >= 0 ? "text-green-600" : "text-red-600"
+                          }`}>
+                            {account.profitLoss >= 0 ? (
+                              <TrendingUp className="h-3 w-3" />
+                            ) : (
+                              <TrendingDown className="h-3 w-3" />
+                            )}
+                            <span>
+                              {account.profitLoss >= 0 ? "+" : ""}
+                              {formatCurrency(account.profitLoss, account.currency)}
+                            </span>
+                          </div>
                         </div>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
                       )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -2,10 +2,8 @@
 
 import { useMemo } from "react";
 import { ResponsiveSankey } from "@nivo/sankey";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { Filter } from "lucide-react";
 import { type DashboardDateRange } from "./dashboard-date-selector";
 
 interface CashFlowSankeyData {
@@ -59,10 +57,10 @@ export const CashFlowSankeyChart = ({
     const savingsFlow = Math.max(0, savings);
 
     const nodes = [
-      { id: "Income" },
-      { id: "Investment" },
-      { id: "Savings" },
-      { id: "Expenses" },
+      { id: "Income", value: income },
+      { id: "Investment", value: investmentFlow },
+      { id: "Savings", value: savingsFlow },
+      { id: "Expenses", value: expensesFlow },
     ];
 
     const links = [];
@@ -115,11 +113,7 @@ export const CashFlowSankeyChart = ({
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <div className="space-y-1">
             <CardTitle>Cash Flow Visualization</CardTitle>
-            <CardDescription>Income sources and expense categories</CardDescription>
           </div>
-          <Button variant="outline" size="sm">
-            <Filter className="h-4 w-4" />
-          </Button>
         </CardHeader>
         <CardContent>
           <div className="flex h-[400px] items-center justify-center">
@@ -130,42 +124,35 @@ export const CashFlowSankeyChart = ({
     );
   }
 
-  // Neutral color scheme
+  // Color scheme: income green, expenses red, saving gold, investment blue
   const getNodeColor = (node: { id: string }) => {
     switch (node.id) {
       case "Income":
-        return "hsl(220, 13%, 18%)"; // dark gray (slate-800)
+        return "#22c55e"; // green
       case "Investment":
-        return "hsl(215, 16%, 47%)"; // medium gray (slate-500)
+        return "#3b82f6"; // blue
       case "Savings":
-        // Neutral gray, slightly darker if negative
-        return data && data.savings < 0 
-          ? "hsl(215, 16%, 35%)" // darker gray if negative
-          : "hsl(215, 16%, 55%)"; // lighter gray if positive
+        return "#eab308"; // gold
       case "Expenses":
-        return "hsl(215, 16%, 40%)"; // medium-dark gray
+        return "#ef4444"; // red
       default:
-        return "hsl(215, 16%, 50%)";
+        return "#6b7280"; // gray fallback
     }
   };
-
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="space-y-1">
           <CardTitle>Cash Flow Visualization</CardTitle>
-          <CardDescription>Income allocation to Investment, Savings, and Expenses</CardDescription>
         </div>
-        <Button variant="outline" size="sm">
-          <Filter className="h-4 w-4" />
-        </Button>
+
       </CardHeader>
       <CardContent>
         <div className="h-[400px] w-full">
           <ResponsiveSankey
             data={sankeyData}
-            margin={{ top: 60, right: 180, bottom: 60, left: 180 }}
+            margin={{ top: 60, right: 180, bottom: 100, left: 180 }}
             align="justify"
             colors={getNodeColor}
             nodeThickness={20}
@@ -177,11 +164,36 @@ export const CashFlowSankeyChart = ({
             linkHoverOpacity={0.85}
             linkHoverOthersOpacity={0.15}
             linkContract={2}
-            enableLinkGradient={false}
+            enableLinkGradient={true}
             labelPosition="outside"
-            labelOrientation="vertical"
+            labelOrientation="horizontal"
             labelPadding={16}
             labelTextColor="hsl(215, 16%, 30%)"
+            label={(node) => {
+              // For horizontal labels, return the text directly and let Nivo handle positioning
+              if (!data) return node.id;
+              let value = node.value !== undefined ? node.value : 0;
+              
+              if (node.id === "Income") {
+                value = data.income;
+              } else if (node.id === "Investment") {
+                value = data.investment;
+              } else if (node.id === "Savings") {
+                value = data.savings;
+              } else if (node.id === "Expenses") {
+                value = data.expenses;
+              }
+              
+              return `${node.id}: ${formatCurrency(value, data.currency)}`;
+            }}
+            theme={{
+              labels: {
+                text: {
+                  fontWeight: 700,
+                  fontSize: 14,
+                },
+              },
+            }}
             nodeTooltip={({ node }) => {
               const value = node.value !== undefined ? node.value : 0;
               return (
@@ -206,57 +218,25 @@ export const CashFlowSankeyChart = ({
                 </div>
               );
             }}
-            legends={[
-              {
-                anchor: "bottom-right",
-                direction: "column",
-                translateX: 100,
-                itemWidth: 80,
-                itemHeight: 14,
-                itemDirection: "right-to-left",
-                itemsSpacing: 2,
-                itemTextColor: "#999",
-                symbolSize: 14,
-                effects: [
-                  {
-                    on: "hover",
-                    style: {
-                      itemTextColor: "#000",
-                    },
-                  },
-                ],
-              },
-            ]}
           />
         </div>
-
-        {/* Summary */}
-        <div className="flex items-center justify-between border-t pt-4 mt-4 text-sm">
-          <div>
-            <span className="text-muted-foreground">Total Income: </span>
-            <span className="font-medium text-foreground">
-              {data ? formatCurrency(data.income, data.currency) : "$0.00"}
-            </span>
+        {/* Custom Legend */}
+        <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: "#22c55e" }} />
+            <span className="text-sm text-muted-foreground">Income</span>
           </div>
-          <div className="flex items-center gap-4">
-            <div>
-              <span className="text-muted-foreground">Investment: </span>
-              <span className="font-medium text-foreground">
-                {data ? formatCurrency(data.investment, data.currency) : "$0.00"}
-              </span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Savings: </span>
-              <span className="font-medium text-foreground">
-                {data ? formatCurrency(data.savings, data.currency) : "$0.00"}
-              </span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Expenses: </span>
-              <span className="font-medium text-foreground">
-                {data ? formatCurrency(data.expenses, data.currency) : "$0.00"}
-              </span>
-            </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: "#3b82f6" }} />
+            <span className="text-sm text-muted-foreground">Investment</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: "#eab308" }} />
+            <span className="text-sm text-muted-foreground">Savings</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: "#ef4444" }} />
+            <span className="text-sm text-muted-foreground">Expenses</span>
           </div>
         </div>
       </CardContent>

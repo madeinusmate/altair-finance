@@ -67,7 +67,7 @@ export const AppSidebar = () => {
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-semibold">Netly</span>
-            <span className="text-xs text-muted-foreground">Net Worth Tracker</span>
+            <span className="text-xs text-muted-foreground">Personal Finance Tracker</span>
           </div>
         </div>
       </SidebarHeader>
