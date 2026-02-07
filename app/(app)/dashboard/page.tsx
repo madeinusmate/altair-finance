@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
-import Link from "next/link";
+import { useState, useEffect } from "react";
 import { apiClient } from "@/lib/api-client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,8 +8,7 @@ import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight, AlertTr
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TARGET_NET_WORTH_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
-import { formatCategoryDisplay } from "@/lib/account-categories";
-import { startOfMonth, endOfDay } from "date-fns";
+import { startOfMonth, endOfDay, subMonths } from "date-fns";
 import { DashboardDateSelector, type DashboardDateRange } from "@/components/dashboard/dashboard-date-selector";
 import { MonthlyIncomeExpensesChart } from "@/components/dashboard/monthly-income-expenses-chart";
 import { CashFlowSankeyChart } from "@/components/dashboard/cash-flow-sankey-chart";
@@ -92,15 +90,6 @@ interface InvestmentPerformanceData {
   currency: string;
 }
 
-interface UpcomingBill {
-  id: string;
-  merchant: string;
-  category: string;
-  amount: number;
-  dueDate: Date;
-  currency: string;
-}
-
 interface MonthlyIncomeExpenses {
   month: string;
   monthLabel: string;
@@ -142,12 +131,13 @@ const DashboardPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedCurrency, setSelectedCurrency] = useState<SupportedCurrency>("USD");
 
-  // Date range state - default to current month
+  // Date range state - default to last 3 months
   const [dateRange, setDateRange] = useState<DashboardDateRange>(() => {
-    const now = new Date();
+    const endDate = endOfDay(new Date());
+    const startDate = startOfMonth(subMonths(endDate, 2));
     return {
-      startDate: startOfMonth(now),
-      endDate: endOfDay(now),
+      startDate,
+      endDate,
     };
   });
 
@@ -157,7 +147,6 @@ const DashboardPage = () => {
   const [spendingData, setSpendingData] = useState<SpendingData | null>(null);
   const [investmentData, setInvestmentData] = useState<InvestmentPerformanceData | null>(null);
   const [monthlyIncomeExpenses, setMonthlyIncomeExpenses] = useState<MonthlyIncomeExpenses[] | null>(null);
-  const [upcomingBills, setUpcomingBills] = useState<UpcomingBill[]>([]);
   const [investmentAccounts, setInvestmentAccounts] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedInvestmentAccount, setSelectedInvestmentAccount] = useState<string | undefined>(undefined);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
@@ -189,7 +178,7 @@ const DashboardPage = () => {
         const endDateStr = dateRange.endDate.toISOString().split("T")[0];
 
         // Fetch all dashboard data in parallel
-        const [cashFlowSankeyRes, spendingRes, investmentRes, monthlyIncomeExpensesRes, transactionsRes] = await Promise.all([
+        const [cashFlowSankeyRes, spendingRes, investmentRes, monthlyIncomeExpensesRes] = await Promise.all([
           apiClient.get<CashFlowSankeyData>(
             `/api/dashboard/cash-flow-sankey?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}`
           ).catch(() => null),
@@ -201,9 +190,6 @@ const DashboardPage = () => {
           ).catch(() => null) as Promise<InvestmentPerformanceData | null>,
           apiClient.get<MonthlyIncomeExpenses[]>(
             `/api/dashboard/monthly-income-expenses?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}`
-          ).catch(() => null),
-          apiClient.get<Array<{ id: string; type: string; category: string; amount: number; description: string | null; date: string; accountId: string }>>(
-            `/api/transactions`
           ).catch(() => null),
         ]);
 
@@ -228,48 +214,6 @@ const DashboardPage = () => {
 
         if (monthlyIncomeExpensesRes) {
           setMonthlyIncomeExpenses(monthlyIncomeExpensesRes);
-        }
-
-        // Calculate upcoming bills from transactions
-        if (transactionsRes) {
-          const subscriptionCategories = ["Subscriptions", "Rent & Utilities"];
-          const subscriptionTransactions = transactionsRes
-            .filter((tx) => tx.type === "debit" && subscriptionCategories.includes(tx.category))
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-          // Group by merchant/description and calculate next due date
-          const billsMap = new Map<string, UpcomingBill>();
-          subscriptionTransactions.forEach((tx) => {
-            const merchant = tx.description || tx.category;
-            const key = `${merchant}-${tx.category}`;
-
-            if (!billsMap.has(key)) {
-              const lastDate = new Date(tx.date);
-              // Assume monthly recurring - calculate next occurrence
-              const nextDate = new Date(lastDate);
-              nextDate.setMonth(nextDate.getMonth() + 1);
-
-              // Get account currency
-              const account = data.accounts.find((acc) => acc.id === tx.accountId);
-              const currency = account?.currency || selectedCurrency;
-
-              billsMap.set(key, {
-                id: tx.id,
-                merchant,
-                category: tx.category,
-                amount: tx.amount,
-                dueDate: nextDate,
-                currency,
-              });
-            }
-          });
-
-          const bills = Array.from(billsMap.values())
-            .filter((bill) => bill.dueDate >= new Date())
-            .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
-            .slice(0, 7);
-
-          setUpcomingBills(bills);
         }
 
         // Get investment accounts

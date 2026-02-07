@@ -83,15 +83,7 @@ export const DashboardDateSelector = ({ value, onChange, className }: DashboardD
         <div className="space-y-4">
           <div className="space-y-2">
             <Label className="text-xs font-medium text-muted-foreground">Quick Selection</Label>
-            <div className="grid grid-cols-1 gap-1">
-              <Button
-                variant={isPresetActive(1) ? "default" : "ghost"}
-                size="sm"
-                className="justify-start"
-                onClick={() => handlePreset(1)}
-              >
-                Current Month
-              </Button>
+            <div className="grid grid-cols-1 gap-1">             
               <Button
                 variant={isPresetActive(3) ? "default" : "ghost"}
                 size="sm"

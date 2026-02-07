@@ -53,8 +53,8 @@ export const CashFlowSankeyChart = ({
     const investmentFlow = Math.max(0, investment);
     const expensesFlow = Math.max(0, expenses);
     // Savings can be negative, but Sankey flows must be positive
-    // If savings is negative, we won't show it as a flow (it means expenses + investment > income)
-    const savingsFlow = Math.max(0, savings);
+    // Use absolute value so negative savings still shows as a flow
+    const savingsFlow = Math.abs(savings);
 
     const nodes = [
       { id: "Income", value: income },
@@ -74,6 +74,8 @@ export const CashFlowSankeyChart = ({
       });
     }
 
+    // Always show savings flow if there's any savings (positive or negative)
+    // The absolute value is used for flow width, color will indicate sign
     if (savingsFlow > 0) {
       links.push({
         source: "Income",
@@ -124,7 +126,7 @@ export const CashFlowSankeyChart = ({
     );
   }
 
-  // Color scheme: income green, expenses red, saving gold, investment blue
+  // Color scheme: income green, expenses red, saving gold (positive) or purple (negative), investment blue
   const getNodeColor = (node: { id: string }) => {
     switch (node.id) {
       case "Income":
@@ -132,7 +134,8 @@ export const CashFlowSankeyChart = ({
       case "Investment":
         return "#3b82f6"; // blue
       case "Savings":
-        return "#eab308"; // gold
+        // Purple for negative savings, gold for positive
+        return data && data.savings < 0 ? "#a855f7" : "#eab308";
       case "Expenses":
         return "#ef4444"; // red
       default:
@@ -195,25 +198,44 @@ export const CashFlowSankeyChart = ({
               },
             }}
             nodeTooltip={({ node }) => {
-              const value = node.value !== undefined ? node.value : 0;
+              if (!data) return null;
+              let value = 0;
+              
+              if (node.id === "Income") {
+                value = data.income;
+              } else if (node.id === "Investment") {
+                value = data.investment;
+              } else if (node.id === "Savings") {
+                value = data.savings; // Show actual value (can be negative)
+              } else if (node.id === "Expenses") {
+                value = data.expenses;
+              }
+              
               return (
                 <div className="rounded-lg border bg-background p-2 shadow-md">
                   <div className="font-semibold">{node.id}</div>
                   <div className="text-sm text-muted-foreground">
-                    {formatCurrency(value, data?.currency || "USD")}
+                    {formatCurrency(value, data.currency)}
                   </div>
                 </div>
               );
             }}
             linkTooltip={({ link }) => {
-              const value = link.value !== undefined ? link.value : 0;
+              if (!data) return null;
+              let value = link.value !== undefined ? link.value : 0;
+              
+              // For savings link, show the actual savings value (can be negative)
+              if (link.target.id === "Savings") {
+                value = data.savings;
+              }
+              
               return (
                 <div className="rounded-lg border bg-background p-2 shadow-md">
                   <div className="font-semibold">
                     {link.source.id} → {link.target.id}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {formatCurrency(value, data?.currency || "USD")}
+                    {formatCurrency(value, data.currency)}
                   </div>
                 </div>
               );
@@ -231,7 +253,10 @@ export const CashFlowSankeyChart = ({
             <span className="text-sm text-muted-foreground">Investment</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: "#eab308" }} />
+            <div 
+              className="w-4 h-4 rounded" 
+              style={{ backgroundColor: data && data.savings < 0 ? "#a855f7" : "#eab308" }} 
+            />
             <span className="text-sm text-muted-foreground">Savings</span>
           </div>
           <div className="flex items-center gap-2">
