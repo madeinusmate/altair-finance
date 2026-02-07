@@ -100,3 +100,24 @@ export const validateIcon = (icon: string | null | undefined): ValidationResult 
 
   return { valid: true };
 };
+
+/**
+ * Validates a transaction type
+ * Rules:
+ * - Must be "debit", "credit", or null (for special categories like Transfer)
+ */
+export const validateTransactionType = (transactionType: string | null | undefined): ValidationResult => {
+  if (transactionType === null || transactionType === undefined) {
+    return { valid: true }; // null is allowed for special categories
+  }
+
+  if (typeof transactionType !== "string") {
+    return { valid: false, error: "Transaction type must be a string" };
+  }
+
+  if (transactionType !== "debit" && transactionType !== "credit") {
+    return { valid: false, error: "Transaction type must be 'debit', 'credit', or null" };
+  }
+
+  return { valid: true };
+};

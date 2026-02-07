@@ -83,6 +83,23 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
       `);
     }
 
+    // Migration: Add transaction_type column to transaction_categories
+    const categoriesTableCheck = sqlite.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='transaction_categories'
+    `).get();
+    
+    if (categoriesTableCheck) {
+      const categoryColumns = sqlite.prepare("PRAGMA table_info(transaction_categories)").all() as Array<{ name: string }>;
+      const categoryColumnNames = categoryColumns.map((col) => col.name);
+      
+      if (!categoryColumnNames.includes("transaction_type")) {
+        console.log("[DB Migration] Adding transaction_type column to transaction_categories");
+        sqlite.exec("ALTER TABLE transaction_categories ADD COLUMN transaction_type TEXT");
+        console.log("[DB Migration] Successfully added transaction_type column");
+      }
+    }
+
     // Migration: Add new columns to transfers table if they don't exist
     // First check if transfers table exists
     const tableCheck = sqlite.prepare(`
@@ -286,13 +303,28 @@ export const getDb = (encryptionKey: string): BetterSQLite3Database<typeof schem
 };
 
 export const initializeDb = (encryptionKey: string): void => {
-  // Run migrations inline for simplicity
   const sqlite = openSqlite(encryptionKey);
   
+  // Check if database is brand new (no tables exist)
+  const tableCount = sqlite.prepare(`
+    SELECT COUNT(*) as count FROM sqlite_master 
+    WHERE type='table' AND name NOT LIKE 'sqlite_%'
+  `).get() as { count: number };
+  
+  const isFreshDatabase = tableCount.count === 0;
+  
+  if (isFreshDatabase) {
+    console.log("[DB Init] Fresh database detected - creating schema with all columns");
+  } else {
+    console.log("[DB Init] Existing database detected - will run migrations if needed");
+  }
+  
+  // Create all tables with current schema (includes all columns)
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS transaction_categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,
+      transaction_type TEXT,
       color TEXT,
       icon TEXT,
       created_at INTEGER NOT NULL,
@@ -430,156 +462,187 @@ export const initializeDb = (encryptionKey: string): void => {
     WHERE NOT EXISTS (SELECT 1 FROM meta WHERE id = '${META_ID}');
   `);
 
-  // Migration: Add new columns to transfers table if they don't exist
-  // Check if columns exist by querying pragma_table_info
-  const columns = sqlite.prepare("PRAGMA table_info(transfers)").all() as Array<{ name: string }>;
-  const columnNames = columns.map((col) => col.name);
+  // Only run migrations if database is NOT fresh (has existing tables)
+  // For fresh databases, tables are created with correct schema above, so migrations are unnecessary
+  if (!isFreshDatabase) {
+    console.log("[DB Init] Running migrations for existing database...");
+    
+    // Migration: Add new columns to transfers table if they don't exist
+    const columns = sqlite.prepare("PRAGMA table_info(transfers)").all() as Array<{ name: string }>;
+    const columnNames = columns.map((col) => col.name);
 
-  if (!columnNames.includes("from_amount")) {
-    sqlite.exec("ALTER TABLE transfers ADD COLUMN from_amount REAL");
-  }
-  if (!columnNames.includes("to_amount")) {
-    sqlite.exec("ALTER TABLE transfers ADD COLUMN to_amount REAL");
-  }
-  if (!columnNames.includes("exchange_rate")) {
-    sqlite.exec("ALTER TABLE transfers ADD COLUMN exchange_rate REAL");
-  }
-  if (!columnNames.includes("category")) {
-    sqlite.exec("ALTER TABLE transfers ADD COLUMN category TEXT NOT NULL DEFAULT 'Transfer'");
-  }
+    if (!columnNames.includes("from_amount")) {
+      sqlite.exec("ALTER TABLE transfers ADD COLUMN from_amount REAL");
+    }
+    if (!columnNames.includes("to_amount")) {
+      sqlite.exec("ALTER TABLE transfers ADD COLUMN to_amount REAL");
+    }
+    if (!columnNames.includes("exchange_rate")) {
+      sqlite.exec("ALTER TABLE transfers ADD COLUMN exchange_rate REAL");
+    }
+    if (!columnNames.includes("category")) {
+      sqlite.exec("ALTER TABLE transfers ADD COLUMN category TEXT NOT NULL DEFAULT 'Transfer'");
+    }
 
-  // Migrate existing data: populate from_amount and to_amount from amount
-  // Only update rows where from_amount is NULL (not yet migrated)
-  sqlite.exec(`
-    UPDATE transfers 
-    SET from_amount = amount, to_amount = amount, exchange_rate = NULL
-    WHERE from_amount IS NULL OR to_amount IS NULL
-  `);
+    // Migrate existing data: populate from_amount and to_amount from amount
+    // Only update rows where from_amount is NULL (not yet migrated)
+    sqlite.exec(`
+      UPDATE transfers 
+      SET from_amount = amount, to_amount = amount, exchange_rate = NULL
+      WHERE from_amount IS NULL OR to_amount IS NULL
+    `);
 
-  // Migrate existing transfers: set category to 'Transfer' if NULL
-  sqlite.exec(`
-    UPDATE transfers 
-    SET category = 'Transfer'
-    WHERE category IS NULL
-  `);
+    // Migrate existing transfers: set category to 'Transfer' if NULL
+    sqlite.exec(`
+      UPDATE transfers 
+      SET category = 'Transfer'
+      WHERE category IS NULL
+    `);
 
-  // Migration: Add import_id columns to existing tables
-  try {
-    const tables = ["transactions", "transfers", "balance_history", "investment_history"];
-    for (const tableName of tables) {
-      const tableCheck = sqlite.prepare(`
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name=?
-      `).get(tableName);
-      
-      if (tableCheck) {
-        const columns = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
-        const columnNames = columns.map((col) => col.name);
+    // Migration: Add import_id columns to existing tables
+    try {
+      const tables = ["transactions", "transfers", "balance_history", "investment_history"];
+      for (const tableName of tables) {
+        const tableCheck = sqlite.prepare(`
+          SELECT name FROM sqlite_master 
+          WHERE type='table' AND name=?
+        `).get(tableName);
         
-        if (!columnNames.includes("import_id")) {
-          sqlite.exec(`ALTER TABLE ${tableName} ADD COLUMN import_id TEXT REFERENCES imports(id) ON DELETE SET NULL`);
+        if (tableCheck) {
+          const columns = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+          const columnNames = columns.map((col) => col.name);
+          
+          if (!columnNames.includes("import_id")) {
+            sqlite.exec(`ALTER TABLE ${tableName} ADD COLUMN import_id TEXT REFERENCES imports(id) ON DELETE SET NULL`);
+          }
         }
       }
+    } catch (error) {
+      console.warn("[DB Migration] Could not add import_id columns:", error);
     }
-  } catch (error) {
-    console.warn("[DB Migration] Could not add import_id columns:", error);
-  }
 
-  // Migration: Create budgets table if it doesn't exist
-  try {
-    const budgetsTableCheck = sqlite.prepare(`
-      SELECT name FROM sqlite_master 
-      WHERE type='table' AND name='budgets'
-    `).get();
-    
-    if (!budgetsTableCheck) {
-      sqlite.exec(`
-        CREATE TABLE budgets (
-          id TEXT PRIMARY KEY,
-          category_name TEXT NOT NULL,
-          amount REAL NOT NULL,
-          currency TEXT NOT NULL,
-          created_at INTEGER NOT NULL,
-          updated_at INTEGER NOT NULL
-        );
+    // Migration: Create budgets table if it doesn't exist
+    try {
+      const budgetsTableCheck = sqlite.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='budgets'
+      `).get();
+      
+      if (!budgetsTableCheck) {
+        sqlite.exec(`
+          CREATE TABLE budgets (
+            id TEXT PRIMARY KEY,
+            category_name TEXT NOT NULL,
+            amount REAL NOT NULL,
+            currency TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          );
+          
+          CREATE INDEX IF NOT EXISTS idx_budgets_category_name ON budgets(category_name);
+          CREATE INDEX IF NOT EXISTS idx_transactions_category_date_type ON transactions(category, date, type);
+        `);
+      }
+    } catch (error) {
+      console.warn("[DB Migration] Could not create budgets table:", error);
+    }
+
+    // Migration: Add transaction_type column to transaction_categories
+    try {
+      const categoriesTableCheck = sqlite.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='transaction_categories'
+      `).get();
+      
+      if (categoriesTableCheck) {
+        const columns = sqlite.prepare("PRAGMA table_info(transaction_categories)").all() as Array<{ name: string }>;
+        const columnNames = columns.map((col) => col.name);
         
-        CREATE INDEX IF NOT EXISTS idx_budgets_category_name ON budgets(category_name);
-        CREATE INDEX IF NOT EXISTS idx_transactions_category_date_type ON transactions(category, date, type);
-      `);
-    }
-  } catch (error) {
-    console.warn("[DB Migration] Could not create budgets table:", error);
-  }
-
-  // Migration: Add metadata columns to accounts and transactions
-  try {
-    const accountsTableCheck = sqlite.prepare(`
-      SELECT name FROM sqlite_master 
-      WHERE type='table' AND name='accounts'
-    `).get();
-    
-    if (accountsTableCheck) {
-      const columns = sqlite.prepare("PRAGMA table_info(accounts)").all() as Array<{ name: string }>;
-      const columnNames = columns.map((col) => col.name);
-      
-      if (!columnNames.includes("metadata")) {
-        sqlite.exec("ALTER TABLE accounts ADD COLUMN metadata TEXT");
+        if (!columnNames.includes("transaction_type")) {
+          console.log("[DB Migration] Adding transaction_type column to transaction_categories");
+          sqlite.exec("ALTER TABLE transaction_categories ADD COLUMN transaction_type TEXT");
+          console.log("[DB Migration] Successfully added transaction_type column");
+        }
       }
+    } catch (error) {
+      console.error("[DB Migration] Error adding transaction_type column:", error);
+      throw error; // Re-throw to prevent seeding with wrong schema
     }
 
-    const transactionsTableCheck = sqlite.prepare(`
-      SELECT name FROM sqlite_master 
-      WHERE type='table' AND name='transactions'
-    `).get();
-    
-    if (transactionsTableCheck) {
-      const columns = sqlite.prepare("PRAGMA table_info(transactions)").all() as Array<{ name: string }>;
-      const columnNames = columns.map((col) => col.name);
+    // Migration: Add metadata columns to accounts and transactions
+    try {
+      const accountsTableCheck = sqlite.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='accounts'
+      `).get();
       
-      if (!columnNames.includes("metadata")) {
-        sqlite.exec("ALTER TABLE transactions ADD COLUMN metadata TEXT");
+      if (accountsTableCheck) {
+        const columns = sqlite.prepare("PRAGMA table_info(accounts)").all() as Array<{ name: string }>;
+        const columnNames = columns.map((col) => col.name);
+        
+        if (!columnNames.includes("metadata")) {
+          sqlite.exec("ALTER TABLE accounts ADD COLUMN metadata TEXT");
+        }
       }
-    }
-  } catch (error) {
-    console.warn("[DB Migration] Could not add metadata columns:", error);
-  }
 
-  // Migration: Create open banking tables
-  try {
-    const clientTokensTableCheck = sqlite.prepare(`
-      SELECT name FROM sqlite_master 
-      WHERE type='table' AND name='open_banking_client_tokens'
-    `).get();
-    
-    if (!clientTokensTableCheck) {
-      sqlite.exec(`
-        CREATE TABLE open_banking_client_tokens (
-          id TEXT PRIMARY KEY DEFAULT 'client_credentials',
-          access_token TEXT NOT NULL,
-          expires_at INTEGER NOT NULL,
-          created_at INTEGER NOT NULL
-        );
-      `);
+      const transactionsTableCheck = sqlite.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='transactions'
+      `).get();
+      
+      if (transactionsTableCheck) {
+        const columns = sqlite.prepare("PRAGMA table_info(transactions)").all() as Array<{ name: string }>;
+        const columnNames = columns.map((col) => col.name);
+        
+        if (!columnNames.includes("metadata")) {
+          sqlite.exec("ALTER TABLE transactions ADD COLUMN metadata TEXT");
+        }
+      }
+    } catch (error) {
+      console.warn("[DB Migration] Could not add metadata columns:", error);
     }
 
-    const tokensTableCheck = sqlite.prepare(`
-      SELECT name FROM sqlite_master 
-      WHERE type='table' AND name='open_banking_tokens'
-    `).get();
-    
-    if (!tokensTableCheck) {
-      sqlite.exec(`
-        CREATE TABLE open_banking_tokens (
-          login_identity_id TEXT PRIMARY KEY,
-          access_token TEXT NOT NULL,
-          refresh_token TEXT NOT NULL,
-          connected_at INTEGER NOT NULL,
-          updated_at INTEGER NOT NULL
-        );
-      `);
+    // Migration: Create open banking tables
+    try {
+      const clientTokensTableCheck = sqlite.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='open_banking_client_tokens'
+      `).get();
+      
+      if (!clientTokensTableCheck) {
+        sqlite.exec(`
+          CREATE TABLE open_banking_client_tokens (
+            id TEXT PRIMARY KEY DEFAULT 'client_credentials',
+            access_token TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            created_at INTEGER NOT NULL
+          );
+        `);
+      }
+
+      const tokensTableCheck = sqlite.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='open_banking_tokens'
+      `).get();
+      
+      if (!tokensTableCheck) {
+        sqlite.exec(`
+          CREATE TABLE open_banking_tokens (
+            login_identity_id TEXT PRIMARY KEY,
+            access_token TEXT NOT NULL,
+            refresh_token TEXT NOT NULL,
+            connected_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          );
+        `);
+      }
+    } catch (error) {
+      console.warn("[DB Migration] Could not create open banking tables:", error);
     }
-  } catch (error) {
-    console.warn("[DB Migration] Could not create open banking tables:", error);
+    
+    console.log("[DB Init] Migrations completed");
+  } else {
+    console.log("[DB Init] Fresh database - skipping migrations (schema already correct)");
   }
 
   // Seed default categories if tables are empty
@@ -594,12 +657,23 @@ const seedDefaultCategories = (sqlite: DatabaseInstance): void => {
   // Seed transaction categories
   const transactionCategoryCount = sqlite.prepare("SELECT COUNT(*) as count FROM transaction_categories").get() as { count: number };
   if (transactionCategoryCount.count === 0) {
-    const defaultTransactionCategories = [
+    // Verify transaction_type column exists before seeding (safety check)
+    // This should always pass because:
+    // - Fresh DB: Column created in CREATE TABLE statement above
+    // - Existing DB: Column added by migration before seedDefaultCategories is called
+    const columns = sqlite.prepare("PRAGMA table_info(transaction_categories)").all() as Array<{ name: string }>;
+    const columnNames = columns.map((col) => col.name);
+    
+    if (!columnNames.includes("transaction_type")) {
+      console.error("[DB Seed] ERROR: transaction_type column does not exist! Cannot seed categories properly.");
+      throw new Error("transaction_type column must exist before seeding categories");
+    }
+
+    // Debit categories (expenses)
+    const defaultDebitCategories = [
       "Shopping",
       "Travel",
       "ATM Withdrawal",
-      "Investment",
-      "Salary",
       "Entertainment",
       "Health & Personal Care",
       "Food & Drink",
@@ -607,22 +681,56 @@ const seedDefaultCategories = (sqlite: DatabaseInstance): void => {
       "Rent & Utilities",
       "Subscriptions",
       "Home Improvement",
-      "Other Income",
       "Auto & Transport",
       "Fees",
       "Other Expenses",
-      "Capital Gain Income",
       "Utilities",
       "Wedding",
     ];
 
+    // Credit categories (income)
+    const defaultCreditCategories = [
+      "Salary",
+      "Investment",
+      "Other Income",
+      "Capital Gain Income",
+    ];
+
+    // Special category for transfers
+    const transferCategory = "Transfer";
+
     const insertTxCategory = sqlite.prepare(`
-      INSERT INTO transaction_categories (name, created_at, updated_at)
-      VALUES (?, ?, ?)
+      INSERT INTO transaction_categories (name, transaction_type, created_at, updated_at)
+      VALUES (?, ?, ?, ?)
     `);
 
-    for (const name of defaultTransactionCategories) {
-      insertTxCategory.run(name, now, now);
+    // Insert debit categories
+    for (const name of defaultDebitCategories) {
+      insertTxCategory.run(name, "debit", now, now);
+    }
+
+    // Insert credit categories
+    for (const name of defaultCreditCategories) {
+      insertTxCategory.run(name, "credit", now, now);
+    }
+
+    // Insert Transfer category (transaction_type = NULL)
+    insertTxCategory.run(transferCategory, null, now, now);
+
+    // Verify the inserted categories have correct transaction_type values
+    const verifyCategories = sqlite.prepare(`
+      SELECT name, transaction_type FROM transaction_categories
+    `).all() as Array<{ name: string; transaction_type: string | null }>;
+    
+    console.log(`[DB Seed] Seeded ${verifyCategories.length} transaction categories`);
+    const debitCount = verifyCategories.filter(c => c.transaction_type === "debit").length;
+    const creditCount = verifyCategories.filter(c => c.transaction_type === "credit").length;
+    const transferCount = verifyCategories.filter(c => c.transaction_type === null).length;
+    console.log(`[DB Seed] Verification: ${debitCount} debit, ${creditCount} credit, ${transferCount} transfer categories`);
+    
+    if (debitCount === 0 && creditCount === 0 && transferCount === verifyCategories.length) {
+      console.error("[DB Seed] ERROR: All categories have NULL transaction_type! This indicates a problem with the INSERT statement.");
+      throw new Error("Failed to seed categories with correct transaction_type values");
     }
   }
 

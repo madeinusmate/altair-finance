@@ -55,12 +55,12 @@ export const BudgetEditDialog = ({
   const [categories, setCategories] = useState<string[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
 
-  // Fetch categories when dialog opens for creating a new budget
+  // Fetch debit categories when dialog opens for creating a new budget (budgets only track expenses)
   useEffect(() => {
     if (open && !budget && !categoryName) {
       setCategoriesLoading(true);
       apiClient
-        .get<{ categories: Array<{ name: string }> }>("/api/transaction-categories")
+        .get<{ categories: Array<{ name: string }> }>("/api/transaction-categories?type=debit")
         .then((data) => {
           const categoryNames = data.categories.map((c) => c.name);
           setCategories(categoryNames);

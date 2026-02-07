@@ -12,6 +12,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
@@ -23,6 +30,7 @@ interface CategoryEditDialogProps {
   category?: {
     id: number;
     name: string;
+    transactionType?: "debit" | "credit" | null;
     color?: string | null;
     icon?: string | null;
     identifier?: string;
@@ -41,6 +49,7 @@ export const CategoryEditDialog = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [transactionType, setTransactionType] = useState<"debit" | "credit" | "transfer" | "">("");
   const [identifier, setIdentifier] = useState("");
   const [color, setColor] = useState("");
   const [icon, setIcon] = useState("");
@@ -51,14 +60,21 @@ export const CategoryEditDialog = ({
       setIdentifier(category.identifier || "");
       setColor(category.color || "");
       setIcon(category.icon || "");
+      if (type === "transaction") {
+        // Map null to "transfer" for display, otherwise use the type
+        setTransactionType(
+          category.transactionType === null ? "transfer" : (category.transactionType || "")
+        );
+      }
     } else {
       setName("");
+      setTransactionType("");
       setIdentifier("");
       setColor("");
       setIcon("");
     }
     setError(null);
-  }, [category, open]);
+  }, [category, open, type]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +93,10 @@ export const CategoryEditDialog = ({
         if (name) body.name = name;
         if (color !== undefined) body.color = color || null;
         if (icon !== undefined) body.icon = icon || null;
+        if (type === "transaction" && transactionType) {
+          // Convert "transfer" back to null for API
+          body.transactionType = transactionType === "transfer" ? null : transactionType;
+        }
         if (type === "account" && identifier) body.identifier = identifier;
 
         await apiClient.put(endpoint, body);
@@ -86,6 +106,13 @@ export const CategoryEditDialog = ({
         const body: any = { name };
         if (color) body.color = color;
         if (icon) body.icon = icon;
+        if (type === "transaction") {
+          if (!transactionType) {
+            throw new Error("Transaction type is required");
+          }
+          // Convert "transfer" back to null for API
+          body.transactionType = transactionType === "transfer" ? null : transactionType;
+        }
         if (type === "account") {
           if (!identifier) {
             throw new Error("Identifier is required for account categories");
@@ -152,6 +179,30 @@ export const CategoryEditDialog = ({
             </div>
           )}
 
+          {type === "transaction" && (
+            <div className="space-y-2">
+              <Label htmlFor="transactionType">Transaction Type</Label>
+              <Select
+                value={transactionType}
+                onValueChange={(value) => setTransactionType(value as "debit" | "credit" | "transfer")}
+                disabled={isLoading}
+                required
+              >
+                <SelectTrigger id="transactionType">
+                  <SelectValue placeholder="Select transaction type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="debit">Debit (Expense)</SelectItem>
+                  <SelectItem value="credit">Credit (Income)</SelectItem>
+                  <SelectItem value="transfer">Transfer (Special)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Debit categories are for expenses, credit categories are for income. Transfer is a special category that bypasses type constraints.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input
@@ -206,7 +257,15 @@ export const CategoryEditDialog = ({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading || !name}>
+            <Button
+              type="submit"
+              disabled={
+                isLoading ||
+                !name ||
+                (type === "transaction" && !transactionType) ||
+                (type === "account" && !category && !identifier)
+              }
+            >
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -67,15 +67,15 @@ export const BudgetSummaryCard = ({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Overall Budget</CardTitle>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Overall Budget</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3">
         <div>
-          <div className={cn("text-3xl font-bold", statusColor)}>
+          <div className={cn("text-2xl font-bold", statusColor)}>
             {formatCurrency(overallBudget, currency)}
           </div>
-          <p className="text-sm text-muted-foreground mt-1">Total monthly budget</p>
+          <p className="text-xs text-muted-foreground mt-1">Total monthly budget</p>
         </div>
 
         <div className="space-y-2">

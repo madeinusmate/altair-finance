@@ -18,6 +18,7 @@ import * as LucideIcons from "lucide-react";
 interface TransactionCategory {
   id: number;
   name: string;
+  transactionType?: "debit" | "credit" | null;
   color?: string | null;
   icon?: string | null;
   createdAt: Date;
@@ -42,12 +43,20 @@ export const TransactionCategoriesTable = ({
     return IconComponent ? <IconComponent className="h-4 w-4" /> : null;
   };
 
+  const getTypeDisplay = (transactionType: "debit" | "credit" | null | undefined): string => {
+    if (transactionType === null || transactionType === undefined) {
+      return "Transfer";
+    }
+    return transactionType === "debit" ? "Debit" : "Credit";
+  };
+
   return (
     <>
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
+            <TableHead>Type</TableHead>
             <TableHead>Color</TableHead>
             <TableHead>Icon</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -56,7 +65,7 @@ export const TransactionCategoriesTable = ({
         <TableBody>
           {categories.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
+              <TableCell colSpan={5} className="text-center text-muted-foreground">
                 No categories found
               </TableCell>
             </TableRow>
@@ -64,6 +73,11 @@ export const TransactionCategoriesTable = ({
             categories.map((category) => (
               <TableRow key={category.id}>
                 <TableCell className="font-medium">{category.name}</TableCell>
+                <TableCell>
+                  <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-muted">
+                    {getTypeDisplay(category.transactionType)}
+                  </span>
+                </TableCell>
                 <TableCell>
                   {category.color ? (
                     <div

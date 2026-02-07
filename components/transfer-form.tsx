@@ -52,7 +52,7 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
     transfer?.category || ""
   );
 
-  // Fetch categories from API
+  // Fetch categories from API - only show Transfer category (transactionType = null)
   useEffect(() => {
     const fetchCategories = async () => {
       const key = getKey();
@@ -62,16 +62,31 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
       }
 
       try {
-        const data = await apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories");
-        const categoryNames = data.categories.map((c) => c.name);
+        const data = await apiClient.get<{ categories: Array<{ name: string; transactionType: "debit" | "credit" | null }> }>("/api/transaction-categories");
+        // Filter to only show Transfer category (transactionType = null)
+        const transferCategories = data.categories.filter((c) => c.transactionType === null);
+        const categoryNames = transferCategories.map((c) => c.name);
+        
+        // If no Transfer category exists, use "Transfer" as default
+        if (categoryNames.length === 0) {
+          categoryNames.push("Transfer");
+        }
+        
         setCategories(categoryNames);
-        // Set default category if not set
+        // Set default category to Transfer if not set
         if (!transfer?.category && categoryNames.length > 0) {
           setCategory(categoryNames[0]);
+        } else if (!transfer?.category) {
+          setCategory("Transfer");
         }
       } catch (error) {
         console.error("Error fetching categories:", error);
         toast.error("Failed to load categories");
+        // Fallback to Transfer category
+        setCategories(["Transfer"]);
+        if (!transfer?.category) {
+          setCategory("Transfer");
+        }
       } finally {
         setCategoriesLoading(false);
       }

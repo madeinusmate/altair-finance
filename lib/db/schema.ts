@@ -3,6 +3,7 @@ import { sqliteTable, text, real, integer } from "drizzle-orm/sqlite-core";
 export const transactionCategories = sqliteTable("transaction_categories", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull().unique(),
+  transactionType: text("transaction_type"), // "debit", "credit", or null (for Transfer)
   color: text("color"),
   icon: text("icon"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),

@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
-import { isValidTransactionCategory } from "@/lib/db/category-helpers";
+import { isValidTransactionCategory, isValidTransactionCategoryForType } from "@/lib/db/category-helpers";
 
 type ImportTransactionRow =
   | {
@@ -164,6 +164,11 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
           const validCategories = db.select().from(schema.transactionCategories).all();
           const categoryNames = validCategories.map((c) => c.name).join(", ");
           throw new Error(`Row ${index + 1}: Invalid category. Valid categories: ${categoryNames}`);
+        }
+        // Validate category matches transaction type (flag for review, don't reject)
+        if (!isValidTransactionCategoryForType(db, row.category, row.type as "debit" | "credit")) {
+          // This is a warning, not an error - we'll still import but flag it
+          console.warn(`Row ${index + 1}: Category "${row.category}" does not match transaction type "${row.type}"`);
         }
 
         db.insert(schema.transactions)

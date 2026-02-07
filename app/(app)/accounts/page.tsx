@@ -11,6 +11,7 @@ import { Account } from "@/lib/db/schema";
 import { Badge } from "@/components/ui/badge";
 import { formatCategoryDisplay } from "@/lib/account-categories";
 import { ConnectionIndicator } from "@/components/open-banking/connection-indicator";
+import { AccountCreateDialog } from "@/components/account-create-dialog";
 
 interface AccountWithBalance {
   id: string;
@@ -42,6 +43,7 @@ const AccountsPage = () => {
   const [accounts, setAccounts] = useState<AccountWithBalance[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   useEffect(() => {
     const fetchAccounts = async () => {
@@ -81,6 +83,37 @@ const AccountsPage = () => {
 
     fetchAccounts();
   }, []);
+
+  const handleAccountCreated = () => {
+    // Refresh accounts list after creation
+    const fetchAccounts = async () => {
+      try {
+        const result = await apiClient.get<NetWorthData>("/api/net-worth");
+        const allAccounts = result.accounts ?? [];
+        
+        if (allAccounts.length === 0 && result.totalAccounts > 0) {
+          console.warn("Net-worth API returned no accounts but totalAccounts > 0, fetching directly from accounts API");
+          const directAccounts = await apiClient.get<Account[]>("/api/accounts");
+          const accountsWithDefaults: AccountWithBalance[] = directAccounts.map((acc) => ({
+            id: acc.id,
+            name: acc.name,
+            type: acc.type as "balance" | "transaction" | "investment",
+            nature: acc.nature as "asset" | "liability",
+            category: acc.category,
+            currency: acc.currency,
+            balance: acc.initialBalance,
+            ...(acc.type === "investment" && { netContributions: 0, profitLoss: 0 }),
+          }));
+          setAccounts(accountsWithDefaults);
+        } else {
+          setAccounts(allAccounts);
+        }
+      } catch (err) {
+        console.error("Error fetching accounts:", err);
+      }
+    };
+    fetchAccounts();
+  };
 
   if (isLoading) {
     return (
@@ -126,6 +159,112 @@ const AccountsPage = () => {
   const isOpenBankingEnabled = process.env.NEXT_PUBLIC_OPEN_BANKING_ENABLED === "true";
   const hasTransactionAccounts = accounts.some(acc => acc.type === "transaction");
 
+  // Group accounts by Asset, Liability, and Investment
+  const groupedAccounts = accounts.reduce((acc, account) => {
+    if (account.type === "investment") {
+      if (!acc.investment) {
+        acc.investment = [];
+      }
+      acc.investment.push(account);
+    } else if (account.nature === "asset") {
+      if (!acc.asset) {
+        acc.asset = [];
+      }
+      acc.asset.push(account);
+    } else if (account.nature === "liability") {
+      if (!acc.liability) {
+        acc.liability = [];
+      }
+      acc.liability.push(account);
+    }
+    return acc;
+  }, {} as Record<"asset" | "liability" | "investment", AccountWithBalance[]>);
+
+  const groupLabels: Record<"asset" | "liability" | "investment", string> = {
+    asset: "Assets",
+    liability: "Liabilities",
+    investment: "Investments",
+  };
+
+  const groupOrder: ("asset" | "liability" | "investment")[] = ["asset", "liability", "investment"];
+
+  const renderAccountCard = (account: AccountWithBalance) => (
+    <Link key={account.id} href={`/accounts/${account.id}`}>
+      <Card className="h-full transition-all hover:shadow-md cursor-pointer">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                  account.nature === "asset"
+                    ? "bg-green-100 text-green-600"
+                    : "bg-red-100 text-red-600"
+                }`}
+              >
+                {account.nature === "asset" ? (
+                  <ArrowUpRight className="h-4 w-4" />
+                ) : (
+                  <ArrowDownRight className="h-4 w-4" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <CardTitle className="text-base truncate">{account.name}</CardTitle>
+                <CardDescription className="mt-0.5 text-xs">
+                  {formatCategoryDisplay(account.category)}
+                </CardDescription>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <Badge
+              variant={account.nature === "asset" ? "default" : "destructive"}
+              className="capitalize text-xs"
+            >
+              {account.nature}
+            </Badge>
+            <Badge variant="outline" className="text-xs">{account.currency}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Balance</span>
+              <span className={`text-base font-semibold ${
+                account.nature === "asset" 
+                  ? "text-green-600" 
+                  : account.balance < 0 
+                    ? "text-green-600" 
+                    : "text-red-600"
+              }`}>
+                {account.nature === "liability" && account.balance < 0 
+                  ? `${formatCurrency(Math.abs(account.balance), account.currency)} credit`
+                  : formatCurrency(account.balance, account.currency)}
+              </span>
+            </div>
+            {account.type === "investment" && account.profitLoss !== undefined && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">P/L</span>
+                <div className={`flex items-center gap-1 font-medium text-sm ${
+                  account.profitLoss >= 0 ? "text-green-600" : "text-red-600"
+                }`}>
+                  {account.profitLoss >= 0 ? (
+                    <TrendingUp className="h-3 w-3" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3" />
+                  )}
+                  <span>
+                    {account.profitLoss >= 0 ? "+" : ""}
+                    {formatCurrency(account.profitLoss, account.currency)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -142,11 +281,9 @@ const AccountsPage = () => {
               </Link>
             </Button>
           )}
-          <Button asChild>
-            <Link href="/accounts/new">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Account
-            </Link>
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Account
           </Button>
         </div>
       </div>
@@ -160,11 +297,9 @@ const AccountsPage = () => {
               Add your first account to start tracking your net worth.
             </p>
             <div className="flex flex-col gap-2 items-center">
-              <Button asChild>
-                <Link href="/accounts/new">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Account
-                </Link>
+              <Button onClick={() => setShowCreateDialog(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Account
               </Button>
               {isOpenBankingEnabled && (
                 <Button asChild variant="outline" size="sm">
@@ -178,88 +313,33 @@ const AccountsPage = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-         
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {accounts.map((account) => (
-              <Link key={account.id} href={`/accounts/${account.id}`}>
-                <Card className="h-full transition-all hover:shadow-md cursor-pointer">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                            account.nature === "asset"
-                              ? "bg-green-100 text-green-600"
-                              : "bg-red-100 text-red-600"
-                          }`}
-                        >
-                          {account.nature === "asset" ? (
-                            <ArrowUpRight className="h-4 w-4" />
-                          ) : (
-                            <ArrowDownRight className="h-4 w-4" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <CardTitle className="text-base truncate">{account.name}</CardTitle>
-                          <CardDescription className="mt-0.5 text-xs">
-                            {formatCategoryDisplay(account.category)}
-                          </CardDescription>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Badge
-                        variant={account.nature === "asset" ? "default" : "destructive"}
-                        className="capitalize text-xs"
-                      >
-                        {account.nature}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">{account.currency}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Balance</span>
-                        <span className={`text-base font-semibold ${
-                          account.nature === "asset" 
-                            ? "text-green-600" 
-                            : account.balance < 0 
-                              ? "text-green-600" 
-                              : "text-red-600"
-                        }`}>
-                          {account.nature === "liability" && account.balance < 0 
-                            ? `${formatCurrency(Math.abs(account.balance), account.currency)} credit`
-                            : formatCurrency(account.balance, account.currency)}
-                        </span>
-                      </div>
-                      {account.type === "investment" && account.profitLoss !== undefined && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">P/L</span>
-                          <div className={`flex items-center gap-1 font-medium text-sm ${
-                            account.profitLoss >= 0 ? "text-green-600" : "text-red-600"
-                          }`}>
-                            {account.profitLoss >= 0 ? (
-                              <TrendingUp className="h-3 w-3" />
-                            ) : (
-                              <TrendingDown className="h-3 w-3" />
-                            )}
-                            <span>
-                              {account.profitLoss >= 0 ? "+" : ""}
-                              {formatCurrency(account.profitLoss, account.currency)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
+        <div className="space-y-8">
+          {groupOrder.map((group) => {
+            const accountsInGroup = groupedAccounts[group] || [];
+            if (accountsInGroup.length === 0) return null;
+
+            return (
+              <div key={group} className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-semibold tracking-tight">{groupLabels[group]}</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {accountsInGroup.length} {accountsInGroup.length === 1 ? "account" : "accounts"}
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  {accountsInGroup.map((account) => renderAccountCard(account))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
+
+      <AccountCreateDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onSuccess={handleAccountCreated}
+      />
     </div>
   );
 };

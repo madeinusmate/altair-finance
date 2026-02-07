@@ -219,7 +219,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     const db = getDb(key);
 
-    // Verify category exists
+    // Verify category exists and is a debit category (budgets only track expenses)
     const category = db
       .select()
       .from(schema.transactionCategories)
@@ -228,6 +228,14 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     if (!category) {
       return NextResponse.json({ error: "Category not found" }, { status: 404 });
+    }
+
+    // Only allow debit categories for budgets
+    if (category.transactionType !== "debit") {
+      return NextResponse.json(
+        { error: "Budgets can only be created for debit (expense) categories" },
+        { status: 400 }
+      );
     }
 
     // Check if budget already exists for this category

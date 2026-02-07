@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { eq, desc } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
-import { isValidTransactionCategory } from "@/lib/db/category-helpers";
+import { isValidTransactionCategory, isValidTransactionCategoryForType } from "@/lib/db/category-helpers";
 
 // GET all transactions or by account
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
@@ -65,11 +65,18 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     const db = getDb(key);
 
-    if (!isValidTransactionCategory(db, category)) {
-      const validCategories = db.select().from(schema.transactionCategories).all();
+    // Validate category exists and matches transaction type
+    if (!isValidTransactionCategoryForType(db, category, type as "debit" | "credit")) {
+      const validCategories = db
+        .select()
+        .from(schema.transactionCategories)
+        .where(
+          eq(schema.transactionCategories.transactionType, type as "debit" | "credit")
+        )
+        .all();
       const categoryNames = validCategories.map((c) => c.name).join(", ");
       return NextResponse.json(
-        { error: `Invalid category. Valid categories: ${categoryNames}` },
+        { error: `Invalid category for ${type} transaction. Valid categories: ${categoryNames || "none"}` },
         { status: 400 }
       );
     }
@@ -137,11 +144,18 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
 
     const db = getDb(key);
 
-    if (!isValidTransactionCategory(db, category)) {
-      const validCategories = db.select().from(schema.transactionCategories).all();
+    // Validate category exists and matches transaction type
+    if (!isValidTransactionCategoryForType(db, category, type as "debit" | "credit")) {
+      const validCategories = db
+        .select()
+        .from(schema.transactionCategories)
+        .where(
+          eq(schema.transactionCategories.transactionType, type as "debit" | "credit")
+        )
+        .all();
       const categoryNames = validCategories.map((c) => c.name).join(", ");
       return NextResponse.json(
-        { error: `Invalid category. Valid categories: ${categoryNames}` },
+        { error: `Invalid category for ${type} transaction. Valid categories: ${categoryNames || "none"}` },
         { status: 400 }
       );
     }

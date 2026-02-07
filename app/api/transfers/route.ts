@@ -4,6 +4,7 @@ import { eq, or, desc } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { isValidTransactionCategory } from "@/lib/db/category-helpers";
+// Note: Transfers use "Transfer" category which has transactionType = null, bypassing type constraints
 
 // GET all transfers or by account
 export const GET = async (request: NextRequest): Promise<NextResponse> => {

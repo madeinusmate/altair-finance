@@ -48,46 +48,7 @@ export const TransactionForm = ({
   const defaultAccountId = transactionAccounts.length > 0 ? transactionAccounts[0].id : "";
   const [selectedAccountId, setSelectedAccountId] = useState<string>(defaultAccountId);
 
-  // Fetch categories from API
-  useEffect(() => {
-    const fetchCategories = async () => {
-      const key = getKey();
-      if (!key) {
-        setCategoriesLoading(false);
-        return;
-      }
-
-      try {
-        const data = await apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories");
-        const categoryNames = data.categories.map((c) => c.name);
-        setCategories(categoryNames);
-        // Set default category if not set
-        if (!transaction?.category && categoryNames.length > 0) {
-          setCategory(categoryNames[0]);
-        }
-      } catch (error) {
-        console.error("Error fetching categories:", error);
-        toast.error("Failed to load categories");
-      } finally {
-        setCategoriesLoading(false);
-      }
-    };
-
-    fetchCategories();
-  }, [getKey, transaction]);
-
-  // Update selected account when accounts change
-  useEffect(() => {
-    if (!providedAccountId && transactionAccounts.length > 0 && !transactionAccounts.find(a => a.id === selectedAccountId)) {
-      setSelectedAccountId(transactionAccounts[0].id);
-    }
-  }, [accounts, providedAccountId, selectedAccountId, transactionAccounts]);
-
-  // Determine current account and currency
-  const currentAccountId = providedAccountId || selectedAccountId;
-  const currentAccount = accounts?.find(a => a.id === currentAccountId);
-  const currency = providedCurrency || currentAccount?.currency || "USD";
-
+  // State declarations - must be before useEffects that use them
   const [type, setType] = useState<"debit" | "credit">(
     transaction?.type || "debit"
   );
@@ -101,6 +62,62 @@ export const TransactionForm = ({
   const [date, setDate] = useState(
     transaction ? new Date(transaction.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
   );
+
+  // Fetch categories from API filtered by transaction type
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const key = getKey();
+      if (!key) {
+        setCategoriesLoading(false);
+        return;
+      }
+
+      try {
+        const data = await apiClient.get<{ categories: Array<{ name: string }> }>(
+          `/api/transaction-categories?type=${type}`
+        );
+        const categoryNames = data.categories.map((c) => c.name);
+        setCategories(categoryNames);
+        
+        // Clear category if current selection is not valid for this type
+        setCategory((currentCategory) => {
+          if (currentCategory && !categoryNames.includes(currentCategory)) {
+            return "";
+          }
+          // Set default category if not set
+          if (!currentCategory && categoryNames.length > 0) {
+            return categoryNames[0];
+          }
+          return currentCategory;
+        });
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+        toast.error("Failed to load categories");
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, [getKey, type, transaction]);
+
+  // Update selected account when accounts change
+  useEffect(() => {
+    if (!providedAccountId && transactionAccounts.length > 0 && !transactionAccounts.find(a => a.id === selectedAccountId)) {
+      setSelectedAccountId(transactionAccounts[0].id);
+    }
+  }, [accounts, providedAccountId, selectedAccountId, transactionAccounts]);
+
+  // Determine current account and currency
+  const currentAccountId = providedAccountId || selectedAccountId;
+  const currentAccount = accounts?.find(a => a.id === currentAccountId);
+  const currency = providedCurrency || currentAccount?.currency || "USD";
+
+  // Handle type change - refetch categories and clear invalid selection
+  const handleTypeChange = (newType: "debit" | "credit") => {
+    setType(newType);
+    // Category will be cleared/updated by the useEffect that watches type
+  };
 
   // Pre-populate form when transaction is provided
   useEffect(() => {
@@ -189,7 +206,7 @@ export const TransactionForm = ({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="type">Type</Label>
-          <Select value={type} onValueChange={(v) => setType(v as "debit" | "credit")}>
+          <Select value={type} onValueChange={(v) => handleTypeChange(v as "debit" | "credit")}>
             <SelectTrigger id="type">
               <SelectValue />
             </SelectTrigger>

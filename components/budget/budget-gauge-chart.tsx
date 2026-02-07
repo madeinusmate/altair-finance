@@ -65,12 +65,12 @@ export const BudgetGaugeChart = ({
   if (isLoading) {
     return (
       <Card className="flex flex-col">
-        <CardHeader className="items-center pb-0">
-          <CardTitle>Budget Utilization</CardTitle>
-          <CardDescription>Overall budget overview</CardDescription>
-        </CardHeader>
+      <CardHeader className="items-center pb-2">
+        <CardTitle className="text-base">Budget Utilization</CardTitle>
+        <CardDescription className="text-xs">Overall budget overview</CardDescription>
+      </CardHeader>
         <CardContent>
-          <Skeleton className="h-[300px] w-full" />
+          <Skeleton className="h-[200px] w-full" />
         </CardContent>
       </Card>
     );
@@ -114,7 +114,7 @@ export const BudgetGaugeChart = ({
       <CardContent className="flex flex-1 items-center pb-0">
         <ChartContainer
           config={chartConfig}
-          className="mx-auto aspect-square w-full max-w-[250px]"
+          className="mx-auto aspect-square w-full max-w-[180px]"
         >
           <RadialBarChart
             data={chartData}

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, or, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import {
   validateCategoryName,
   validateColor,
   validateIcon,
+  validateTransactionType,
 } from "@/lib/validators/category-validators";
 
 // GET all transaction categories
@@ -16,12 +17,33 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
   }
 
   try {
+    const { searchParams } = new URL(request.url);
+    const typeFilter = searchParams.get("type"); // "debit" | "credit" | null
+
     const db = getDb(key);
-    const categories = db
-      .select()
-      .from(schema.transactionCategories)
-      .orderBy(asc(schema.transactionCategories.name))
-      .all();
+    
+    // Filter by type if provided
+    let categories;
+    if (typeFilter === "debit" || typeFilter === "credit") {
+      categories = db
+        .select()
+        .from(schema.transactionCategories)
+        .where(
+          or(
+            eq(schema.transactionCategories.transactionType, typeFilter),
+            isNull(schema.transactionCategories.transactionType) // Include special categories like Transfer
+          )
+        )
+        .orderBy(asc(schema.transactionCategories.name))
+        .all();
+    } else {
+      categories = db
+        .select()
+        .from(schema.transactionCategories)
+        .orderBy(asc(schema.transactionCategories.name))
+        .all();
+    }
+    
     return NextResponse.json({ categories });
   } catch (error) {
     console.error("Error fetching transaction categories:", error);
@@ -41,12 +63,26 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { name, color, icon } = body;
+    const { name, transactionType, color, icon } = body;
 
     // Validate name
     const nameValidation = validateCategoryName(name);
     if (!nameValidation.valid) {
       return NextResponse.json({ error: nameValidation.error }, { status: 400 });
+    }
+
+    // Validate transactionType (required, except for "Transfer" category)
+    const transactionTypeValidation = validateTransactionType(transactionType);
+    if (!transactionTypeValidation.valid) {
+      return NextResponse.json({ error: transactionTypeValidation.error }, { status: 400 });
+    }
+
+    // transactionType is required unless the category name is "Transfer"
+    if (name.trim() !== "Transfer" && (transactionType === null || transactionType === undefined)) {
+      return NextResponse.json(
+        { error: "Transaction type is required (must be 'debit' or 'credit')" },
+        { status: 400 }
+      );
     }
 
     // Validate color
@@ -80,6 +116,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     const now = new Date();
     const newCategory = {
       name: name.trim(),
+      transactionType: name.trim() === "Transfer" ? null : (transactionType as "debit" | "credit" | null),
       color: color?.trim() || null,
       icon: icon?.trim() || null,
       createdAt: now,
@@ -113,7 +150,7 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { id, name, color, icon } = body;
+    const { id, name, transactionType, color, icon } = body;
 
     if (!id || typeof id !== "number") {
       return NextResponse.json({ error: "Category ID is required" }, { status: 400 });
@@ -132,8 +169,25 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Category not found" }, { status: 404 });
     }
 
+    // If trying to change transactionType, check if category is in use
+    if (transactionType !== undefined && transactionType !== existing.transactionType) {
+      const transactionsUsingCategory = db
+        .select()
+        .from(schema.transactions)
+        .where(eq(schema.transactions.category, existing.name))
+        .all();
+
+      if (transactionsUsingCategory.length > 0) {
+        return NextResponse.json(
+          { error: "Cannot change transaction type: category is in use by existing transactions" },
+          { status: 400 }
+        );
+      }
+    }
+
     const updates: Partial<{
       name: string;
+      transactionType: "debit" | "credit" | null;
       color: string | null;
       icon: string | null;
       updatedAt: Date;
@@ -162,6 +216,27 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       }
 
       updates.name = name.trim();
+    }
+
+    if (transactionType !== undefined) {
+      const transactionTypeValidation = validateTransactionType(transactionType);
+      if (!transactionTypeValidation.valid) {
+        return NextResponse.json({ error: transactionTypeValidation.error }, { status: 400 });
+      }
+
+      // If name is "Transfer", force transactionType to null
+      const finalName = name !== undefined ? name.trim() : existing.name;
+      if (finalName === "Transfer") {
+        updates.transactionType = null;
+      } else {
+        if (transactionType === null || transactionType === undefined) {
+          return NextResponse.json(
+            { error: "Transaction type is required (must be 'debit' or 'credit')" },
+            { status: 400 }
+          );
+        }
+        updates.transactionType = transactionType as "debit" | "credit";
+      }
     }
 
     if (color !== undefined) {
