@@ -9,7 +9,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   unlock: (key: string) => Promise<{ success: boolean; error?: string }>;
-  bootstrap: (key: string) => Promise<{ success: boolean; error?: string }>;
+  bootstrap: (key: string, username: string) => Promise<{ success: boolean; error?: string }>;
   importDatabase: (file: File, key: string) => Promise<{ success: boolean; error?: string }>;
   lock: () => void;
   getKey: () => string | null;
@@ -94,12 +94,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const bootstrap = useCallback(async (key: string): Promise<{ success: boolean; error?: string }> => {
+  const bootstrap = useCallback(async (key: string, username: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const response = await fetch("/api/app/bootstrap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key }),
+        body: JSON.stringify({ key, username }),
       });
       const data = await response.json();
 

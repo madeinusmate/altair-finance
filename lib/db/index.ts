@@ -302,7 +302,7 @@ export const getDb = (encryptionKey: string): BetterSQLite3Database<typeof schem
   return db;
 };
 
-export const initializeDb = (encryptionKey: string): void => {
+export const initializeDb = (encryptionKey: string, username: string): void => {
   const sqlite = openSqlite(encryptionKey);
   
   // Check if database is brand new (no tables exist)
@@ -450,6 +450,13 @@ export const initializeDb = (encryptionKey: string): void => {
       category_name TEXT NOT NULL,
       amount REAL NOT NULL,
       currency TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS user_settings (
+      id TEXT PRIMARY KEY DEFAULT 'user',
+      username TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -639,6 +646,27 @@ export const initializeDb = (encryptionKey: string): void => {
     } catch (error) {
       console.warn("[DB Migration] Could not create open banking tables:", error);
     }
+
+    // Migration: Create user_settings table
+    try {
+      const userSettingsTableCheck = sqlite.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='user_settings'
+      `).get();
+      
+      if (!userSettingsTableCheck) {
+        sqlite.exec(`
+          CREATE TABLE user_settings (
+            id TEXT PRIMARY KEY DEFAULT 'user',
+            username TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          );
+        `);
+      }
+    } catch (error) {
+      console.warn("[DB Migration] Could not create user_settings table:", error);
+    }
     
     console.log("[DB Init] Migrations completed");
   } else {
@@ -647,6 +675,26 @@ export const initializeDb = (encryptionKey: string): void => {
 
   // Seed default categories if tables are empty
   seedDefaultCategories(sqlite);
+
+  // Store username in user_settings
+  const now = Math.floor(Date.now() / 1000);
+  try {
+    const existingUser = sqlite.prepare("SELECT id FROM user_settings WHERE id = 'user'").get();
+    if (existingUser) {
+      sqlite.prepare(`
+        UPDATE user_settings 
+        SET username = ?, updated_at = ?
+        WHERE id = 'user'
+      `).run(username, now);
+    } else {
+      sqlite.prepare(`
+        INSERT INTO user_settings (id, username, created_at, updated_at)
+        VALUES ('user', ?, ?, ?)
+      `).run(username, now, now);
+    }
+  } catch (error) {
+    console.warn("[DB Init] Could not store username:", error);
+  }
 
   sqlite.close();
 };

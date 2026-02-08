@@ -32,6 +32,7 @@ const getStrength = (value: string): { label: string; tone: "muted" | "warning" 
 };
 
 export const OnboardingForm = () => {
+  const [username, setUsername] = useState("");
   const [key, setKey] = useState("");
   const [confirmKey, setConfirmKey] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +48,11 @@ export const OnboardingForm = () => {
     e.preventDefault();
     setError(null);
 
+    if (!username || username.trim().length === 0) {
+      setError("Please enter your name.");
+      return;
+    }
+
     if (key.length < 8) {
       setError("Use at least 8 characters for your encryption key.");
       return;
@@ -58,7 +64,7 @@ export const OnboardingForm = () => {
     }
 
     setIsLoading(true);
-    const result = await bootstrap(key);
+    const result = await bootstrap(key, username.trim());
     if (result.success) {
       router.push("/dashboard");
       return;
@@ -86,6 +92,20 @@ export const OnboardingForm = () => {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+          <div className="space-y-2">
+            <Label htmlFor="username">Your Name</Label>
+            <Input
+              id="username"
+              name="username"
+              type="text"
+              autoComplete="name"
+              placeholder="Enter your name…"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              disabled={isLoading}
+              autoFocus
+            />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="encryption-key">Encryption Key</Label>
             <Input

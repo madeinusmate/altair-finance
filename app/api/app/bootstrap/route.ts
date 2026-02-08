@@ -11,11 +11,18 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     console.log("[API /app/bootstrap] ELECTRON_USER_DATA:", process.env.ELECTRON_USER_DATA || "(not set)");
     console.log("[API /app/bootstrap] DB path:", getDbPath());
     
-    const { key } = await request.json();
+    const { key, username } = await request.json();
 
     if (!key || !validateEncryptionKey(key)) {
       return NextResponse.json(
         { success: false, error: "Invalid key format. Key must be at least 8 characters." },
+        { status: 400 }
+      );
+    }
+
+    if (!username || typeof username !== "string" || username.trim().length === 0) {
+      return NextResponse.json(
+        { success: false, error: "Username is required." },
         { status: 400 }
       );
     }
@@ -31,7 +38,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     }
 
     console.log("[API /app/bootstrap] Initializing database...");
-    initializeDb(key);
+    initializeDb(key, username.trim());
     console.log("[API /app/bootstrap] Database initialized successfully");
     
     return NextResponse.json({ success: true });

@@ -48,11 +48,6 @@ const navItems = [
     url: "/budget",
     icon: Target,
   },
-  {
-    title: "Settings",
-    url: "/settings",
-    icon: Settings,
-  },
 ];
 
 export const AppSidebar = () => {
@@ -97,6 +92,12 @@ export const AppSidebar = () => {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        <Button variant="ghost" className="w-full justify-start gap-2" asChild>
+          <Link href="/settings">
+            <Settings className="h-4 w-4" />
+            <span>Settings</span>
+          </Link>
+        </Button>
         <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleLock}>
           <LogOut className="h-4 w-4" />
           <span>Lock</span>

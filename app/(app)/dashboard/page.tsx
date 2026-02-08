@@ -130,6 +130,7 @@ const DashboardPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCurrency, setSelectedCurrency] = useState<SupportedCurrency>("USD");
+  const [username, setUsername] = useState<string | null>(null);
 
   // Date range state - default to last 3 months
   const [dateRange, setDateRange] = useState<DashboardDateRange>(() => {
@@ -154,6 +155,19 @@ const DashboardPage = () => {
   const [investmentAccounts, setInvestmentAccounts] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedInvestmentAccount, setSelectedInvestmentAccount] = useState<string | undefined>(undefined);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
+
+  // Fetch username
+  useEffect(() => {
+    const fetchUsername = async () => {
+      try {
+        const data = await apiClient.get<{ username: string | null }>("/api/user/username");
+        setUsername(data.username);
+      } catch (error) {
+        console.error("Failed to fetch username:", error);
+      }
+    };
+    void fetchUsername();
+  }, []);
 
   // Fetch net worth data
   useEffect(() => {
@@ -272,7 +286,9 @@ const DashboardPage = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {username ? `Hello ${username} 👋` : "Hello 👋"}
+          </h1>
           <p className="text-muted-foreground">Your financial insights at a glance</p>
         </div>
         <Card>
@@ -288,7 +304,9 @@ const DashboardPage = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {username ? `Hello ${username} 👋` : "Hello 👋"}
+          </h1>
           <p className="text-muted-foreground">Your financial insights at a glance</p>
         </div>
         <div className="flex items-center gap-2">
