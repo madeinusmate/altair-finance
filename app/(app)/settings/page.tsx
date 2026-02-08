@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Database, Info, Loader2, Upload } from "lucide-react";
+import { Database, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DatabaseDeleteDialog } from "@/components/database-delete-dialog";
 import { DatabaseImportWizard } from "@/components/database-import-wizard";
@@ -60,33 +60,7 @@ const SettingsPage = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-5 w-5" />
-            About Netly
-          </CardTitle>
-          <CardDescription>Net Worth Tracker</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Version</span>
-              <span>1.0.0</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Storage</span>
-              <span>Local SQLite Database</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Encryption</span>
-              <span>Enabled</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Data import</CardTitle>
+          <CardTitle>Data Import</CardTitle>
           <CardDescription>Import transactions, transfers, balances, and investments.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
