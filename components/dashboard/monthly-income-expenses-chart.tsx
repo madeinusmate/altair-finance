@@ -48,6 +48,9 @@ export const MonthlyIncomeExpensesChart = ({
   isLoading,
   data,
 }: MonthlyIncomeExpensesChartProps) => {
+
+console.log(data);
+
   if (isLoading) {
     return (
       <Card>
@@ -107,7 +110,9 @@ export const MonthlyIncomeExpensesChart = ({
                     formatter={(value, name) => {
                       const numericValue = typeof value === "number" ? value : Number(value);
                       const displayValue = formatCurrency(numericValue, currency);
-                      const label = name === "expenses" ? "Expenses" : "Income";
+                      // Check case-insensitively for expenses (name could be "expenses", "Expenses", or dataKey)
+                      const isExpenses = typeof name === "string" && name.toLowerCase() === "expenses";
+                      const label = isExpenses ? "Expenses" : "Income";
                       return (
                         <div className="flex w-full items-center justify-between gap-4">
                           <span className="text-muted-foreground">{label}</span>

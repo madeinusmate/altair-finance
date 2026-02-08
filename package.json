@@ -6,7 +6,7 @@
   "author": "@madeinusmate",
   "license": "MIT",
   "scripts": {
-    "dev": "next dev --turbopack -p 8528",
+    "dev": "next dev --turbopack -p 8527",
     "build": "next build --webpack",
     "start": "next start -p 8528",
     "lint": "eslint",
