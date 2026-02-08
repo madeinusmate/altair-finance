@@ -127,15 +127,7 @@ export const BudgetCategoryList = ({
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Category Budgets</CardTitle>
-            <Button
-              size="sm"
-              onClick={() => setCreatingCategory("")}
-              disabled={categoriesWithoutBudgets.length === 0 && budgets.length === 0}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Budget
-            </Button>
+            <CardTitle>Category Budgets</CardTitle>    
           </div>
         </CardHeader>
         <CardContent>

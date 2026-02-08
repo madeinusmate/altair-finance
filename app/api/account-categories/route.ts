@@ -8,6 +8,10 @@ import {
   validateColor,
   validateIcon,
 } from "@/lib/validators/category-validators";
+import {
+  generateCategoryIdentifier,
+  generateUniqueCategoryIdentifier,
+} from "@/lib/utils/category-identifier";
 
 // GET all account categories
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
@@ -42,16 +46,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { identifier, name, color, icon } = body;
-
-    // Validate identifier
-    const identifierValidation = validateAccountCategoryIdentifier(identifier);
-    if (!identifierValidation.valid) {
-      return NextResponse.json(
-        { error: identifierValidation.error },
-        { status: 400 }
-      );
-    }
+    const { name, color, icon } = body;
 
     // Validate name
     const nameValidation = validateCategoryName(name);
@@ -73,19 +68,11 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     const db = getDb(key);
 
-    // Check for duplicate identifier
-    const existingByIdentifier = db
-      .select()
-      .from(schema.accountCategories)
-      .where(eq(schema.accountCategories.identifier, identifier.trim()))
-      .get();
-
-    if (existingByIdentifier) {
-      return NextResponse.json(
-        { error: "A category with this identifier already exists" },
-        { status: 409 }
-      );
-    }
+    // Generate identifier automatically from name
+    const baseIdentifier = generateCategoryIdentifier(name.trim());
+    const existingCategories = db.select().from(schema.accountCategories).all();
+    const existingIdentifiers = existingCategories.map((c) => c.identifier);
+    const identifier = generateUniqueCategoryIdentifier(baseIdentifier, existingIdentifiers);
 
     // Check for duplicate name (case-insensitive)
     const existingByName = db
@@ -138,7 +125,7 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { id, identifier, name, color, icon } = body;
+    const { id, name, color, icon } = body;
 
     if (!id || typeof id !== "number") {
       return NextResponse.json({ error: "Category ID is required" }, { status: 400 });
@@ -158,7 +145,6 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
     }
 
     const updates: Partial<{
-      identifier: string;
       name: string;
       color: string | null;
       icon: string | null;
@@ -167,33 +153,8 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       updatedAt: new Date(),
     };
 
-    if (identifier !== undefined) {
-      const identifierValidation = validateAccountCategoryIdentifier(identifier);
-      if (!identifierValidation.valid) {
-        return NextResponse.json(
-          { error: identifierValidation.error },
-          { status: 400 }
-        );
-      }
-
-      // Check for duplicate identifier (excluding current category)
-      const duplicate = db
-        .select()
-        .from(schema.accountCategories)
-        .where(eq(schema.accountCategories.identifier, identifier.trim()))
-        .get();
-
-      if (duplicate && duplicate.id !== id) {
-        return NextResponse.json(
-          { error: "A category with this identifier already exists" },
-          { status: 409 }
-        );
-      }
-
-      updates.identifier = identifier.trim();
-    }
-
-    if (name !== undefined) {
+    // If name is being updated, regenerate identifier to match
+    if (name !== undefined && name.trim() !== existing.name) {
       const nameValidation = validateCategoryName(name);
       if (!nameValidation.valid) {
         return NextResponse.json({ error: nameValidation.error }, { status: 400 });
@@ -214,7 +175,35 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       }
 
       updates.name = name.trim();
+      
+      // Regenerate identifier from new name
+      const baseIdentifier = generateCategoryIdentifier(name.trim());
+      const existingCategories = db.select().from(schema.accountCategories).all();
+      const existingIdentifiers = existingCategories
+        .filter((c) => c.id !== id)
+        .map((c) => c.identifier);
+      const newIdentifier = generateUniqueCategoryIdentifier(baseIdentifier, existingIdentifiers);
+      
+      // Update identifier and all accounts using the old identifier
+      db.update(schema.accountCategories)
+        .set({ identifier: newIdentifier })
+        .where(eq(schema.accountCategories.id, id))
+        .run();
+      
+      // Update all accounts using the old identifier
+      db.update(schema.accounts)
+        .set({ category: newIdentifier })
+        .where(eq(schema.accounts.category, existing.identifier))
+        .run();
+    } else if (name !== undefined) {
+      // Name unchanged, just validate
+      const nameValidation = validateCategoryName(name);
+      if (!nameValidation.valid) {
+        return NextResponse.json({ error: nameValidation.error }, { status: 400 });
+      }
+      updates.name = name.trim();
     }
+
 
     if (color !== undefined) {
       const colorValidation = validateColor(color);
@@ -242,14 +231,6 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       .from(schema.accountCategories)
       .where(eq(schema.accountCategories.id, id))
       .get();
-
-    // If identifier was updated, update all accounts using the old identifier
-    if (identifier !== undefined && identifier.trim() !== existing.identifier) {
-      db.update(schema.accounts)
-        .set({ category: identifier.trim() })
-        .where(eq(schema.accounts.category, existing.identifier))
-        .run();
-    }
 
     return NextResponse.json({ category: updated });
   } catch (error) {

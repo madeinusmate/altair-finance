@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { TransactionForm } from "@/components/transaction-form";
 import { TransferForm } from "@/components/transfer-form";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import { CategoryBadge } from "@/components/category-management/category-badge";
 import { toast } from "sonner";
 import { ArrowUpRight, ArrowDownRight, Search, ArrowLeftRight, Pencil, Trash2, Plus } from "lucide-react";
 import { Transaction, Account, Transfer } from "@/lib/db/schema";
@@ -68,6 +69,7 @@ const TransactionsPage = () => {
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
+  const [categoryMap, setCategoryMap] = useState<Map<string, { color?: string | null; icon?: string | null }>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,12 +98,18 @@ const TransactionsPage = () => {
         const [unifiedData, accountsData, categoriesData] = await Promise.all([
           apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified"),
           apiClient.get<Account[]>("/api/accounts"),
-          apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
+          apiClient.get<{ categories: Array<{ name: string; color?: string | null; icon?: string | null }> }>("/api/transaction-categories"),
         ]);
         setTransactions(unifiedData.transactions);
         setTransfers(unifiedData.transfers);
         setAccounts(accountsData);
         setTransactionCategories(categoriesData.categories.map((c) => c.name));
+        // Create a map of category name to category metadata
+        const catMap = new Map<string, { color?: string | null; icon?: string | null }>();
+        categoriesData.categories.forEach((cat) => {
+          catMap.set(cat.name, { color: cat.color, icon: cat.icon });
+        });
+        setCategoryMap(catMap);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch transactions");
       } finally {
@@ -559,7 +567,11 @@ const TransactionsPage = () => {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline">{transaction.category}</Badge>
+                              <CategoryBadge
+                                name={transaction.category}
+                                color={categoryMap.get(transaction.category)?.color}
+                                icon={categoryMap.get(transaction.category)?.icon}
+                              />
                             </TableCell>
                             <TableCell className="max-w-[200px] truncate">
                               {transaction.description || "-"}
@@ -641,7 +653,11 @@ const TransactionsPage = () => {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline">{transfer.category || "Transfer"}</Badge>
+                              <CategoryBadge
+                                name={transfer.category || "Transfer"}
+                                color={categoryMap.get(transfer.category || "Transfer")?.color}
+                                icon={categoryMap.get(transfer.category || "Transfer")?.icon}
+                              />
                             </TableCell>
                             <TableCell className="max-w-[200px] truncate">
                               <div>

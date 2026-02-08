@@ -19,6 +19,7 @@ import { Transaction, Account } from "@/lib/db/schema";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
+import * as LucideIcons from "lucide-react";
 
 interface TransactionFormProps {
   accountId?: string;
@@ -41,7 +42,22 @@ export const TransactionForm = ({
   const [error, setError] = useState<string | null>(null);
   const { getKey } = useAuth();
   const [categories, setCategories] = useState<string[]>([]);
+  const [categoryMap, setCategoryMap] = useState<Map<string, { color?: string | null; icon?: string | null }>>(new Map());
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+
+  // Helper function to get icon component
+  const getIconComponent = (iconName: string | null | undefined) => {
+    if (!iconName) return null;
+    let IconComponent = (LucideIcons as any)[iconName];
+    if (!IconComponent && iconName.includes("-")) {
+      const pascalCase = iconName
+        .split("-")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join("");
+      IconComponent = (LucideIcons as any)[pascalCase];
+    }
+    return IconComponent ? <IconComponent className="h-4 w-4" /> : null;
+  };
 
   // Account selection state (only used when accountId is not provided)
   const transactionAccounts = accounts?.filter(a => a.type === "transaction") || [];
@@ -73,11 +89,18 @@ export const TransactionForm = ({
       }
 
       try {
-        const data = await apiClient.get<{ categories: Array<{ name: string }> }>(
+        const data = await apiClient.get<{ categories: Array<{ name: string; color?: string | null; icon?: string | null }> }>(
           `/api/transaction-categories?type=${type}`
         );
         const categoryNames = data.categories.map((c) => c.name);
         setCategories(categoryNames);
+        
+        // Create a map of category name to category metadata
+        const catMap = new Map<string, { color?: string | null; icon?: string | null }>();
+        data.categories.forEach((cat) => {
+          catMap.set(cat.name, { color: cat.color, icon: cat.icon });
+        });
+        setCategoryMap(catMap);
         
         // Clear category if current selection is not valid for this type
         setCategory((currentCategory) => {
@@ -224,14 +247,22 @@ export const TransactionForm = ({
           ) : (
             <Select value={category} onValueChange={setCategory} disabled={categoriesLoading || categories.length === 0}>
               <SelectTrigger id="category">
+                {category && getIconComponent(categoryMap.get(category)?.icon) && (
+                  <span className="mr-2">{getIconComponent(categoryMap.get(category)?.icon)}</span>
+                )}
                 <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select category"} />
               </SelectTrigger>
               <SelectContent>
-                {categories.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
+                {categories.map((cat) => {
+                  const catData = categoryMap.get(cat);
+                  const iconComponent = getIconComponent(catData?.icon);
+                  return (
+                    <SelectItem key={cat} value={cat}>
+                      {iconComponent}
+                      <span>{cat}</span>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           )}

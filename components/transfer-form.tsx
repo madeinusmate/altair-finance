@@ -19,6 +19,7 @@ import { Account, Transfer } from "@/lib/db/schema";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
+import * as LucideIcons from "lucide-react";
 
 interface TransferFormProps {
   fromAccountId?: string;
@@ -33,7 +34,22 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
   const [error, setError] = useState<string | null>(null);
   const { getKey } = useAuth();
   const [categories, setCategories] = useState<string[]>([]);
+  const [categoryMap, setCategoryMap] = useState<Map<string, { color?: string | null; icon?: string | null }>>(new Map());
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+
+  // Helper function to get icon component
+  const getIconComponent = (iconName: string | null | undefined) => {
+    if (!iconName) return null;
+    let IconComponent = (LucideIcons as any)[iconName];
+    if (!IconComponent && iconName.includes("-")) {
+      const pascalCase = iconName
+        .split("-")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join("");
+      IconComponent = (LucideIcons as any)[pascalCase];
+    }
+    return IconComponent ? <IconComponent className="h-4 w-4" /> : null;
+  };
 
   const [selectedFromAccountId, setSelectedFromAccountId] = useState<string>(
     transfer?.fromAccountId || ""
@@ -62,7 +78,7 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
       }
 
       try {
-        const data = await apiClient.get<{ categories: Array<{ name: string; transactionType: "debit" | "credit" | null }> }>("/api/transaction-categories");
+        const data = await apiClient.get<{ categories: Array<{ name: string; transactionType: "debit" | "credit" | null; color?: string | null; icon?: string | null }> }>("/api/transaction-categories");
         // Filter to only show Transfer category (transactionType = null)
         const transferCategories = data.categories.filter((c) => c.transactionType === null);
         const categoryNames = transferCategories.map((c) => c.name);
@@ -73,6 +89,18 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
         }
         
         setCategories(categoryNames);
+        
+        // Create a map of category name to category metadata
+        const catMap = new Map<string, { color?: string | null; icon?: string | null }>();
+        transferCategories.forEach((cat) => {
+          catMap.set(cat.name, { color: cat.color, icon: cat.icon });
+        });
+        // Also add "Transfer" if it doesn't exist in the data
+        if (!catMap.has("Transfer")) {
+          catMap.set("Transfer", { color: null, icon: null });
+        }
+        setCategoryMap(catMap);
+        
         // Set default category to Transfer if not set
         if (!transfer?.category && categoryNames.length > 0) {
           setCategory(categoryNames[0]);
@@ -327,14 +355,22 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
         ) : (
           <Select value={category} onValueChange={setCategory} disabled={categoriesLoading || categories.length === 0}>
             <SelectTrigger id="category">
+              {category && getIconComponent(categoryMap.get(category)?.icon) && (
+                <span className="mr-2">{getIconComponent(categoryMap.get(category)?.icon)}</span>
+              )}
               <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select category"} />
             </SelectTrigger>
             <SelectContent>
-              {categories.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat}
-                </SelectItem>
-              ))}
+              {categories.map((cat) => {
+                const catData = categoryMap.get(cat);
+                const iconComponent = getIconComponent(catData?.icon);
+                return (
+                  <SelectItem key={cat} value={cat}>
+                    {iconComponent}
+                    <span>{cat}</span>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         )}

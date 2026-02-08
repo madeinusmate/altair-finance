@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ColorPicker } from "@/components/ui/color-picker";
 import {
   Select,
   SelectContent,
@@ -21,8 +22,191 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
+import * as LucideIcons from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
+
+// Curated list of popular Lucide icons for categories
+const POPULAR_ICONS = [
+  "ShoppingCart",
+  "UtensilsCrossed",
+  "Coffee",
+  "Car",
+  "Home",
+  "Plane",
+  "Train",
+  "Bus",
+  "Bike",
+  "Fuel",
+  "Hotel",
+  "Briefcase",
+  "GraduationCap",
+  "Heart",
+  "Stethoscope",
+  "Dumbbell",
+  "Gamepad2",
+  "Film",
+  "Music",
+  "Book",
+  "Gift",
+  "CreditCard",
+  "Wallet",
+  "PiggyBank",
+  "TrendingUp",
+  "TrendingDown",
+  "DollarSign",
+  "Receipt",
+  "FileText",
+  "Tag",
+  "Tags",
+  "Star",
+  "Bell",
+  "Mail",
+  "Phone",
+  "Smartphone",
+  "Laptop",
+  "Monitor",
+  "Headphones",
+  "Camera",
+  "Tv",
+  "Wifi",
+  "Zap",
+  "Lightbulb",
+  "Droplet",
+  "Sun",
+  "Moon",
+  "Cloud",
+  "Umbrella",
+  "Shirt",
+  "ShoppingBag",
+  "Package",
+  "Box",
+  "Archive",
+  "Folder",
+  "File",
+  "Image",
+  "Video",
+  "Download",
+  "Upload",
+  "Share2",
+  "Link",
+  "Globe",
+  "MapPin",
+  "Navigation",
+  "Compass",
+  "Calendar",
+  "Clock",
+  "Timer",
+  "AlarmClock",
+  "CheckCircle2",
+  "XCircle",
+  "AlertCircle",
+  "Info",
+  "HelpCircle",
+  "Settings",
+  "Wrench",
+  "Hammer",
+  "Scissors",
+  "Paintbrush",
+  "Palette",
+  "Pencil",
+  "Calculator",
+  "BarChart3",
+  "LineChart",
+  "PieChart",
+  "Activity",
+  "Target",
+  "Flag",
+  "Award",
+  "Trophy",
+  "Medal",
+  "Crown",
+  "Gem",
+  "Sparkles",
+  "Rocket",
+  "Ship",
+  "Anchor",
+  "TreePine",
+  "Flower2",
+  "Leaf",
+  "Cat",
+  "Dog",
+  "Bird",
+  "PawPrint",
+  "Users",
+  "User",
+  "Handshake",
+  "ThumbsUp",
+  "ThumbsDown",
+  "Smile",
+  "PartyPopper",
+  "Cake",
+  "Cookie",
+  "IceCream",
+  "Apple",
+  "Banana",
+  "Cherry",
+  "Pizza",
+  "Burger",
+  "Sandwich",
+  "Soup",
+  "Salad",
+  "Chicken",
+  "Egg",
+  "Milk",
+  "Beer",
+  "Wine",
+  "Cocktail",
+  "Tea",
+  "Juice",
+  "Water",
+  "Battery",
+  "BatteryCharging",
+  "Power",
+  "Plug",
+  "HardDrive",
+  "Database",
+  "Server",
+  "CloudUpload",
+  "CloudDownload",
+  "Building",
+  "Building2",
+  "Factory",
+  "Store",
+  "Shop",
+  "Bank",
+  "Hospital",
+  "School",
+  "University",
+  "Library",
+  "Museum",
+  "Theater",
+  "Gym",
+  "Pool",
+  "Tent",
+  "Truck",
+  "Delivery",
+].sort();
+
+// Helper function to get icon component
+// Handles both PascalCase (ShoppingCart) and kebab-case (shopping-cart) formats
+const getIconComponent = (iconName: string | null | undefined) => {
+  if (!iconName) return null;
+  
+  // Try PascalCase first (direct match)
+  let IconComponent = (LucideIcons as any)[iconName];
+  
+  // If not found, try converting kebab-case to PascalCase
+  if (!IconComponent && iconName.includes("-")) {
+    const pascalCase = iconName
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join("");
+    IconComponent = (LucideIcons as any)[pascalCase];
+  }
+  
+  return IconComponent ? <IconComponent className="h-4 w-4" /> : null;
+};
 
 interface CategoryEditDialogProps {
   open: boolean;
@@ -50,14 +234,12 @@ export const CategoryEditDialog = ({
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [transactionType, setTransactionType] = useState<"debit" | "credit" | "transfer" | "">("");
-  const [identifier, setIdentifier] = useState("");
   const [color, setColor] = useState("");
   const [icon, setIcon] = useState("");
 
   useEffect(() => {
     if (category) {
       setName(category.name || "");
-      setIdentifier(category.identifier || "");
       setColor(category.color || "");
       setIcon(category.icon || "");
       if (type === "transaction") {
@@ -69,7 +251,6 @@ export const CategoryEditDialog = ({
     } else {
       setName("");
       setTransactionType("");
-      setIdentifier("");
       setColor("");
       setIcon("");
     }
@@ -97,7 +278,7 @@ export const CategoryEditDialog = ({
           // Convert "transfer" back to null for API
           body.transactionType = transactionType === "transfer" ? null : transactionType;
         }
-        if (type === "account" && identifier) body.identifier = identifier;
+        // Identifier is auto-generated for account categories, no need to set it
 
         await apiClient.put(endpoint, body);
         toast.success("Category updated successfully");
@@ -113,12 +294,7 @@ export const CategoryEditDialog = ({
           // Convert "transfer" back to null for API
           body.transactionType = transactionType === "transfer" ? null : transactionType;
         }
-        if (type === "account") {
-          if (!identifier) {
-            throw new Error("Identifier is required for account categories");
-          }
-          body.identifier = identifier;
-        }
+        // Identifier is auto-generated for account categories from the name
 
         await apiClient.post(endpoint, body);
         toast.success("Category created successfully");
@@ -162,22 +338,6 @@ export const CategoryEditDialog = ({
             </Alert>
           )}
 
-          {type === "account" && (
-            <div className="space-y-2">
-              <Label htmlFor="identifier">Identifier (snake_case)</Label>
-              <Input
-                id="identifier"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="e.g., credit_card"
-                disabled={isLoading || !!category}
-                required={!category}
-              />
-              <p className="text-xs text-muted-foreground">
-                Lowercase letters, numbers, and underscores only. Cannot be changed after creation.
-              </p>
-            </div>
-          )}
 
           {type === "transaction" && (
             <div className="space-y-2">
@@ -216,35 +376,59 @@ export const CategoryEditDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="color">Color (hex)</Label>
-            <Input
+            <Label htmlFor="color">Color</Label>
+            <ColorPicker
               id="color"
-              type="text"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              placeholder="#FF5733"
-              disabled={isLoading}
-            />
-            {color && (
-              <div
-                className="h-8 w-16 rounded border"
-                style={{ backgroundColor: color }}
-              />
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="icon">Icon (lucide-react name)</Label>
-            <Input
-              id="icon"
-              type="text"
-              value={icon}
-              onChange={(e) => setIcon(e.target.value)}
-              placeholder="e.g., shopping-cart"
+              value={color || ""}
+              onChange={(value) => setColor(value || "")}
               disabled={isLoading}
             />
             <p className="text-xs text-muted-foreground">
-              Icon name from lucide-react library (optional)
+              Choose a color for this category (optional). Leave empty to remove color.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="icon">Icon</Label>
+            <Select
+              value={icon || "__none__"}
+              onValueChange={(value) => setIcon(value === "__none__" ? "" : value)}
+              disabled={isLoading}
+            >
+              <SelectTrigger id="icon" className="w-full">
+                {icon && getIconComponent(icon) ? (
+                  <div className="flex items-center gap-2">
+                    {getIconComponent(icon)}
+                    <SelectValue>
+                      {POPULAR_ICONS.find((name) => name === icon)
+                        ?.replace(/([A-Z])/g, " $1")
+                        .trim() || icon}
+                    </SelectValue>
+                  </div>
+                ) : (
+                  <SelectValue placeholder="Select an icon (optional)" />
+                )}
+              </SelectTrigger>
+              <SelectContent className="max-h-[300px]">
+                <SelectItem value="__none__">
+                  <span className="text-muted-foreground">None</span>
+                </SelectItem>
+                {POPULAR_ICONS.map((iconName) => {
+                  const IconComponent = getIconComponent(iconName);
+                  const displayName = iconName.replace(/([A-Z])/g, " $1").trim();
+                  return (
+                    <SelectItem key={iconName} value={iconName}>
+                      <div className="flex items-center gap-2">
+                        {IconComponent}
+                        <span>{displayName}</span>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Choose an icon from the dropdown (optional)
             </p>
           </div>
 
@@ -262,8 +446,7 @@ export const CategoryEditDialog = ({
               disabled={
                 isLoading ||
                 !name ||
-                (type === "transaction" && !transactionType) ||
-                (type === "account" && !category && !identifier)
+                (type === "transaction" && !transactionType)
               }
             >
               {isLoading ? (

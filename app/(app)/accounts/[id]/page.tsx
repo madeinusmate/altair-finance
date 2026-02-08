@@ -79,6 +79,7 @@ import { ConnectionIndicator } from "@/components/open-banking/connection-indica
 import { PdfStatementImport } from "@/components/pdf-import/pdf-statement-import";
 import { FileText } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { CategoryBadge } from "@/components/category-management/category-badge";
 
 type UnifiedItem = 
   | { type: "transaction"; data: Transaction }
@@ -120,6 +121,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all"); // "all" | "debit" | "credit" | "transfer"
   const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
+  const [categoryMap, setCategoryMap] = useState<Map<string, { color?: string | null; icon?: string | null }>>(new Map());
 
   const fetchData = async () => {
     try {
@@ -130,7 +132,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
           apiClient.get<BalanceHistory[]>(`/api/balance-history?accountId=${id}`),
           apiClient.get<InvestmentHistory[]>(`/api/investment-history?accountId=${id}`),
           apiClient.get<Account[]>("/api/accounts"),
-          apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
+          apiClient.get<{ categories: Array<{ name: string; color?: string | null; icon?: string | null }> }>("/api/transaction-categories"),
         ]);
 
       setAccount(accountData);
@@ -140,6 +142,12 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
       setInvestmentHistory(investmentData);
       setAccounts(allAccounts);
       setTransactionCategories(categoriesData.categories.map((c) => c.name));
+      // Create a map of category name to category metadata
+      const catMap = new Map<string, { color?: string | null; icon?: string | null }>();
+      categoriesData.categories.forEach((cat) => {
+        catMap.set(cat.name, { color: cat.color, icon: cat.icon });
+      });
+      setCategoryMap(catMap);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch account");
     } finally {
@@ -872,7 +880,11 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <Badge variant="outline">{transaction.category}</Badge>
+                                <CategoryBadge
+                                  name={transaction.category}
+                                  color={categoryMap.get(transaction.category)?.color}
+                                  icon={categoryMap.get(transaction.category)?.icon}
+                                />
                               </TableCell>
                               <TableCell>{transaction.description || "-"}</TableCell>
                               <TableCell
@@ -941,7 +953,11 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <Badge variant="outline">{transfer.category || "Transfer"}</Badge>
+                                <CategoryBadge
+                                  name={transfer.category || "Transfer"}
+                                  color={categoryMap.get(transfer.category || "Transfer")?.color}
+                                  icon={categoryMap.get(transfer.category || "Transfer")?.icon}
+                                />
                               </TableCell>
                               <TableCell>
                                 <div>
@@ -1223,7 +1239,11 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <Badge variant="outline">{transfer.category || "Transfer"}</Badge>
+                                <CategoryBadge
+                                  name={transfer.category || "Transfer"}
+                                  color={categoryMap.get(transfer.category || "Transfer")?.color}
+                                  icon={categoryMap.get(transfer.category || "Transfer")?.icon}
+                                />
                               </TableCell>
                               <TableCell>
                                 <div>
