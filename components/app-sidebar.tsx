@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -8,7 +9,6 @@ import {
   ArrowLeftRight,
   Settings,
   LogOut,
-  DollarSign,
   Target,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
@@ -63,8 +63,14 @@ export const AppSidebar = () => {
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <DollarSign className="h-5 w-5 text-primary-foreground" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden">
+            <Image
+              src="/app-icon.png"
+              alt="Netly"
+              width={32}
+              height={32}
+              className="h-full w-full object-contain"
+            />
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-semibold">Netly</span>

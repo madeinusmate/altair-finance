@@ -5,6 +5,7 @@ import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { makeAuthenticatedFinverseRequest } from "@/lib/finverse-token-refresh";
 import { getFinverseClientToken } from "@/lib/finverse-client";
+import type { FinverseAccount } from "@/lib/finverse-types";
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
   const encryptionKey = getEncryptionKey(request);
@@ -195,7 +196,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     // Enhance account data with login_identity_id for client-side account creation
     const enhancedAccountsData = {
       ...accountsData,
-      accounts: accountsData.accounts?.map((account: any) => ({
+      accounts: accountsData.accounts?.map((account: FinverseAccount) => ({
         ...account,
         login_identity_id: loginIdentityId,
         connection_metadata: {

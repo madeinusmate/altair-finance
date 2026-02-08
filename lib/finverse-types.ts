@@ -59,18 +59,30 @@ export interface FinverseAccount {
   };
 }
 
+// Transaction category type
+export interface FinverseTransactionCategory {
+  primary?: string;
+  detailed?: string;
+  [key: string]: unknown;
+}
+
+// Transaction details type
+export interface FinverseTransactionDetails {
+  [key: string]: unknown;
+}
+
 // Base Transaction from Finverse API  
 export interface FinverseTransaction {
   account_id: string; 
   amount: FinverseAmount;
-  categories?: any;
-  category_predictions?: any[];
+  categories?: FinverseTransactionCategory;
+  category_predictions?: Array<Record<string, unknown>>;
   created_at: string;
   description: string;
   is_pending?: boolean;
   posted_date: string;
   transaction_date?: string;
-  transaction_details?: any;  
+  transaction_details?: FinverseTransactionDetails;  
   transaction_id: string;  
   transaction_reference?: string;
   transaction_type: string;
@@ -115,7 +127,7 @@ export interface FinverseTransactionsResponse {
 export interface FinverseErrorResponse {
   error: string;
   code: string;
-  details?: any;
+  details?: Record<string, unknown>;
   message?: string;
 }
 

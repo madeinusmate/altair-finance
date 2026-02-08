@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Badge } from "@/components/ui/badge";
 import * as LucideIcons from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,7 +19,7 @@ const getIconComponent = (iconName: string | null | undefined) => {
   if (!iconName) return null;
   
   // Try PascalCase first (direct match)
-  let IconComponent = (LucideIcons as any)[iconName];
+  let IconComponent = (LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[iconName];
   
   // If not found, try converting kebab-case to PascalCase
   if (!IconComponent && iconName.includes("-")) {
@@ -26,7 +27,7 @@ const getIconComponent = (iconName: string | null | undefined) => {
       .split("-")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join("");
-    IconComponent = (LucideIcons as any)[pascalCase];
+    IconComponent = (LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[pascalCase];
   }
   
   return IconComponent ? <IconComponent className="h-3 w-3" /> : null;

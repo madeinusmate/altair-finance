@@ -39,7 +39,7 @@ export const TransactionCategoriesTable = ({
 
   const getIconComponent = (iconName: string | null | undefined) => {
     if (!iconName) return null;
-    const IconComponent = (LucideIcons as any)[iconName];
+    const IconComponent = (LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[iconName];
     return IconComponent ? <IconComponent className="h-4 w-4" /> : null;
   };
 

@@ -46,12 +46,31 @@ const createMainWindow = (port: number): BrowserWindow => {
   const electronDir = getElectronDir();
   const preloadPath = path.join(electronDir, "dist", "preload.js");
 
+  // Get icon path - use .icns for macOS, .png for others
+  let iconPath: string | undefined;
+  if (process.platform === "darwin") {
+    // For macOS, use .icns if available, otherwise .png
+    const icnsPath = app.isPackaged
+      ? path.join(process.resourcesPath, "build", "icon.icns")
+      : path.join(__dirname, "..", "..", "build", "icon.icns");
+    const pngPath = app.isPackaged
+      ? path.join(process.resourcesPath, "build", "icon.png")
+      : path.join(__dirname, "..", "..", "build", "icon.png");
+    iconPath = fs.existsSync(icnsPath) ? icnsPath : pngPath;
+  } else {
+    // For other platforms, use .png
+    iconPath = app.isPackaged
+      ? path.join(process.resourcesPath, "build", "icon.png")
+      : path.join(__dirname, "..", "..", "build", "icon.png");
+  }
+
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 800,
     minHeight: 600,
     show: false,
+    icon: iconPath,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -82,7 +101,9 @@ const getBundledNodePath = (): string | null => {
     return null;
   }
   
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const os = require("os");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { execSync } = require("child_process");
   
   // Detect current architecture
@@ -265,7 +286,7 @@ const startNextServer = async (port: number): Promise<void> => {
     
     nextServer = spawn(nodeExecutable, [serverPath, ...args], {
       cwd: appRoot,
-      env: env as any,
+      env: env as NodeJS.ProcessEnv,
       stdio: "pipe",
     });
 
@@ -345,11 +366,11 @@ const startNextServer = async (port: number): Promise<void> => {
           console.log(`[Electron] Server is ready at ${serverUrl}`);
           resolve();
         })
-        .catch((error: any) => {
+        .catch((error: unknown) => {
           const errorMsg = `Timeout waiting for Next.js server at ${serverUrl}. ` +
             `Stdout: ${stdoutBuffer.substring(0, 1000)}. ` +
             `Stderr: ${stderrBuffer.substring(0, 1000)}. ` +
-            `Error: ${error.message}`;
+            `Error: ${error instanceof Error ? error.message : String(error)}`;
           reject(new Error(errorMsg));
         });
     }, 1000);

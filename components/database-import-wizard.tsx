@@ -381,7 +381,7 @@ export const DatabaseImportWizard = ({ open, onOpenChange }: DatabaseImportWizar
                   autoFocus
                 />
                 <p className="text-xs text-muted-foreground">
-                  Minimum 8 characters. This is the key used to encrypt the database you're importing.
+                  Minimum 8 characters. This is the key used to encrypt the database you&apos;re importing.
                 </p>
               </div>
 
@@ -430,7 +430,7 @@ export const DatabaseImportWizard = ({ open, onOpenChange }: DatabaseImportWizar
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Database Information</CardTitle>
-                    <CardDescription>Preview of the database you're importing</CardDescription>
+                    <CardDescription>Preview of the database you&apos;re importing</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="grid grid-cols-2 gap-4 text-sm">

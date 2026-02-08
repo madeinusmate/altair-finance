@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,13 +48,13 @@ export const TransactionForm = ({
   // Helper function to get icon component
   const getIconComponent = (iconName: string | null | undefined) => {
     if (!iconName) return null;
-    let IconComponent = (LucideIcons as any)[iconName];
+    let IconComponent = (LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[iconName];
     if (!IconComponent && iconName.includes("-")) {
       const pascalCase = iconName
         .split("-")
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
         .join("");
-      IconComponent = (LucideIcons as any)[pascalCase];
+      IconComponent = (LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[pascalCase];
     }
     return IconComponent ? <IconComponent className="h-4 w-4" /> : null;
   };

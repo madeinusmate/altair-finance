@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -194,7 +194,7 @@ const getIconComponent = (iconName: string | null | undefined) => {
   if (!iconName) return null;
   
   // Try PascalCase first (direct match)
-  let IconComponent = (LucideIcons as any)[iconName];
+  let IconComponent = (LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[iconName];
   
   // If not found, try converting kebab-case to PascalCase
   if (!IconComponent && iconName.includes("-")) {
@@ -202,7 +202,7 @@ const getIconComponent = (iconName: string | null | undefined) => {
       .split("-")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join("");
-    IconComponent = (LucideIcons as any)[pascalCase];
+    IconComponent = (LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[pascalCase];
   }
   
   return IconComponent ? <IconComponent className="h-4 w-4" /> : null;
@@ -270,7 +270,7 @@ export const CategoryEditDialog = ({
 
       if (category) {
         // Update
-        const body: any = { id: category.id };
+        const body: Record<string, unknown> = { id: category.id };
         if (name) body.name = name;
         if (color !== undefined) body.color = color || null;
         if (icon !== undefined) body.icon = icon || null;
@@ -284,7 +284,7 @@ export const CategoryEditDialog = ({
         toast.success("Category updated successfully");
       } else {
         // Create
-        const body: any = { name };
+        const body: Record<string, unknown> = { name };
         if (color) body.color = color;
         if (icon) body.icon = icon;
         if (type === "transaction") {

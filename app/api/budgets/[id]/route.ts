@@ -6,7 +6,7 @@ import { getEncryptionKey } from "@/lib/api-utils";
 // DELETE budget by ID
 export const DELETE = async (
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
   if (!key) {
@@ -14,7 +14,7 @@ export const DELETE = async (
   }
 
   try {
-    const { id } = params;
+    const { id } = await params;
 
     if (!id) {
       return NextResponse.json({ error: "Budget ID is required" }, { status: 400 });

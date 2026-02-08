@@ -17,8 +17,10 @@ export const GET = async (): Promise<NextResponse> => {
 
   // Try to load the native module
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Database = require("better-sqlite3-multiple-ciphers");
     debug.sqliteModule = "loaded successfully";
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     debug.sqliteModulePath = require.resolve("better-sqlite3-multiple-ciphers");
   } catch (error) {
     debug.sqliteModule = "failed to load";
@@ -28,7 +30,9 @@ export const GET = async (): Promise<NextResponse> => {
 
   // Try to check fs access
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require("fs");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require("path");
     const electronUserData = process.env.ELECTRON_USER_DATA;
     

@@ -94,8 +94,9 @@ export const BudgetCategoryList = ({
       toast.success("Budget deleted successfully");
       onRefresh();
       setDeletingBudget(null);
-    } catch (error: any) {
-      toast.error(error?.response?.data?.error || "Failed to delete budget");
+    } catch (error: unknown) {
+      const errorMessage = error && typeof error === "object" && "response" in error && error.response && typeof error.response === "object" && "data" in error.response && error.response.data && typeof error.response.data === "object" && "error" in error.response.data && typeof error.response.data.error === "string" ? error.response.data.error : "Failed to delete budget";
+      toast.error(errorMessage);
     }
   };
 

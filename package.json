@@ -15,9 +15,10 @@
     "combine-csvs": "tsx scripts/combine-csvs.ts",
     "compress-pdf": "tsx scripts/compress-pdf.ts",
     "dev:electron": "tsx scripts/dev-electron.ts",
-    "build:electron": "pnpm build && pnpm build:electron-files && node scripts/prepare-electron-build.js && node scripts/download-node.js && pnpm exec electron-builder install-app-deps && pnpm exec electron-builder",
+    "build:electron": "pnpm build && pnpm build:electron-files && node scripts/prepare-electron-build.js && node scripts/download-node.js && pnpm exec electron-builder install-app-deps && pnpm exec electron-builder && pnpm postbuild:electron",
     "build:electron-files": "tsc -p electron/tsconfig.json",
-    "package:mac": "pnpm build && pnpm build:electron-files && node scripts/prepare-electron-build.js && node scripts/download-node.js && pnpm exec electron-builder install-app-deps && pnpm exec electron-builder --mac",
+    "package:mac": "pnpm build && pnpm build:electron-files && node scripts/prepare-electron-build.js && node scripts/download-node.js && pnpm exec electron-builder install-app-deps && pnpm exec electron-builder --mac && pnpm postbuild:electron",
+    "postbuild:electron": "bash scripts/fix-app-signature.sh",
     "postinstall": "tsx scripts/rebuild-electron.ts"
   },
   "dependencies": {
@@ -107,6 +108,7 @@
   "build": {
     "appId": "com.netly.app",
     "productName": "Netly",
+    "icon": "build/icon.png",
     "directories": {
       "output": "dist"
     },
@@ -114,6 +116,7 @@
       "electron/dist/**/*",
       "electron/splash.html",
       ".next/**/*",
+      "public/**/*",
       "package.json"
     ],
     "asar": true,
@@ -121,7 +124,8 @@
     "nodeGypRebuild": false,
     "asarUnpack": [
       "**/node_modules/**/*",
-      "**/.next/**/*"
+      "**/.next/**/*",
+      "**/public/**/*"
     ],
     "extraMetadata": {
       "main": "electron/dist/main.js"
@@ -138,7 +142,13 @@
     "publish": null,
     "mac": {
       "category": "public.app-category.finance",
+      "icon": "build/icon.icns",
       "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "entitlements": null,
+      "entitlementsInherit": null,
+      "type": "distribution",
       "target": [
         {
           "target": "dmg",

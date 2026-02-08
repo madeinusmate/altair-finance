@@ -123,8 +123,8 @@ export const BudgetEditDialog = ({
       toast.success(budget ? "Budget updated successfully" : "Budget created successfully");
       onSuccess();
       onOpenChange(false);
-    } catch (err: any) {
-      const errorMessage = err?.response?.data?.error || "Failed to save budget";
+    } catch (err: unknown) {
+      const errorMessage = err && typeof err === "object" && "response" in err && err.response && typeof err.response === "object" && "data" in err.response && err.response.data && typeof err.response.data === "object" && "error" in err.response.data && typeof err.response.data.error === "string" ? err.response.data.error : "Failed to save budget";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {

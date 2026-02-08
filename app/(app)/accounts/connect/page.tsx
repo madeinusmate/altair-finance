@@ -11,10 +11,28 @@ import { AccountSelectionStep } from "@/components/open-banking/account-selectio
 import { TransactionPreviewStep } from "@/components/open-banking/transaction-preview-step";
 import { apiClient } from "@/lib/api-client";
 import { createAccountFromFinverseData } from "@/lib/finverse-mapping";
-import type { FinverseAccountsResponse, FinverseTransaction } from "@/lib/finverse-types";
+import type { FinverseAccountsResponse, FinverseTransaction, FinverseAccount } from "@/lib/finverse-types";
 import { toast } from "sonner";
+import type { Account } from "@/lib/db/schema";
 
 type Step = "connecting" | "account-selection" | "transaction-preview" | "creating" | "completed";
+
+interface AccountSelection {
+  account: FinverseAccount;
+  name: string;
+  type: "balance" | "transaction" | "investment";
+  nature: "asset" | "liability";
+  category: string;
+}
+
+interface AccountPreview {
+  account: FinverseAccount;
+  selection: AccountSelection;
+  transactions: FinverseTransaction[];
+  totalTransactions: number;
+  isLoading: boolean;
+  error?: string;
+}
 
 const ConnectPage = () => {
   const router = useRouter();
@@ -30,29 +48,30 @@ const ConnectPage = () => {
   const [currentStep, setCurrentStep] = useState<Step>("connecting");
   const [isCreatingAccounts, setIsCreatingAccounts] = useState(false);
   const [existingFinverseAccountNumbers, setExistingFinverseAccountNumbers] = useState<string[]>([]);
-  const [selectedAccountsForPreview, setSelectedAccountsForPreview] = useState<any[]>([]);
-  const [accountPreviews, setAccountPreviews] = useState<any[]>([]);
+  const [selectedAccountsForPreview, setSelectedAccountsForPreview] = useState<AccountSelection[]>([]);
+  const [accountPreviews, setAccountPreviews] = useState<AccountPreview[]>([]);
   const [isPollingAccounts, setIsPollingAccounts] = useState(false);
 
   // Fetch existing accounts to check for duplicates
   useEffect(() => {
     const fetchExistingAccounts = async () => {
       try {
-        const allAccounts = await apiClient.get<any[]>("/api/accounts");
+        const allAccounts = await apiClient.get<Account[]>("/api/accounts");
         const finverseNumbers = allAccounts
-          .filter((account: any) => {
+          .filter((account) => {
             if (!account.metadata) return false;
             try {
               const meta = JSON.parse(account.metadata);
-              return meta?.finverse?.account_number_masked;
+              return meta && typeof meta === "object" && "finverse" in meta && meta.finverse && typeof meta.finverse === "object" && "account_number_masked" in meta.finverse;
             } catch {
               return false;
             }
           })
-          .map((account: any) => {
-            const meta = JSON.parse(account.metadata);
-            return meta.finverse.account_number_masked;
-          });
+          .map((account) => {
+            const meta = JSON.parse(account.metadata || "{}");
+            return (meta as { finverse?: { account_number_masked?: string } })?.finverse?.account_number_masked || "";
+          })
+          .filter((num): num is string => Boolean(num));
         setExistingFinverseAccountNumbers(finverseNumbers);
       } catch (err) {
         console.warn("Failed to fetch existing accounts:", err);
@@ -210,16 +229,16 @@ const ConnectPage = () => {
     }
   };
 
-  const fetchTransactionPreview = async (selectedAccounts: any[]) => {
+  const fetchTransactionPreview = async (selectedAccounts: AccountSelection[]) => {
     console.log(`🚀 fetchTransactionPreview called with ${selectedAccounts.length} accounts`);
     
-    const previews = selectedAccounts.map((selection) => ({
+    const previews: AccountPreview[] = selectedAccounts.map((selection) => ({
       account: selection.account,
       selection: selection,
       transactions: [] as FinverseTransaction[],
       totalTransactions: 0,
       isLoading: true,
-      error: undefined as string | undefined,
+      error: undefined,
     }));
 
     console.log(`📋 Initial previews:`, previews.map(p => ({ name: p.selection.name, isLoading: p.isLoading })));
@@ -289,7 +308,7 @@ const ConnectPage = () => {
               : preview
           )
         );
-      } catch (err: any) {
+      } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : "Failed to load transactions";
         toast.error(`Error: ${errorMessage}`);
         
@@ -304,7 +323,7 @@ const ConnectPage = () => {
     }
   };
 
-  const handleAccountSelection = async (selectedAccounts: any[]) => {
+  const handleAccountSelection = async (selectedAccounts: AccountSelection[]) => {
     await fetchTransactionPreview(selectedAccounts);
   };
 

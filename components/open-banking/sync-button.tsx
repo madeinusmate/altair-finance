@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, RefreshCw } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
+import type { FinverseTransaction } from "@/lib/finverse-types";
 
 interface SyncButtonProps {
   accountId: string;
@@ -32,7 +33,7 @@ export const SyncButton = ({
 
       // Fetch transactions with date filter
       const transactionsResponse = await apiClient.post<{
-        transactions: any[];
+        transactions: FinverseTransaction[];
         total_transactions: number;
       }>("/api/open-banking/fetch-transactions", {
         accountId: finverseAccountId,

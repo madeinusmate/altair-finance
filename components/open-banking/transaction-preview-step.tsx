@@ -3,11 +3,19 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
-import type { FinverseTransaction } from "@/lib/finverse-types";
+import type { FinverseTransaction, FinverseAccount } from "@/lib/finverse-types";
+
+interface AccountSelection {
+  account: FinverseAccount;
+  name: string;
+  type: "balance" | "transaction" | "investment";
+  nature: "asset" | "liability";
+  category: string;
+}
 
 interface TransactionPreview {
-  account: any;
-  selection: any;
+  account: FinverseAccount;
+  selection: AccountSelection;
   transactions: FinverseTransaction[];
   totalTransactions: number;
   isLoading: boolean;

@@ -71,8 +71,17 @@ export const UnlockForm = () => {
                   pastedText = e.clipboardData.getData("text");
                 } catch (err) {
                   // Fallback to Electron clipboard API if available
-                  if (typeof window !== "undefined" && (window as any).electron?.clipboard) {
-                    pastedText = (window as any).electron.clipboard.readText();
+                  if (typeof window !== "undefined") {
+                    const electronWindow = window as typeof window & {
+                      electron?: {
+                        clipboard?: {
+                          readText: () => string;
+                        };
+                      };
+                    };
+                    if (electronWindow.electron?.clipboard) {
+                      pastedText = electronWindow.electron.clipboard.readText();
+                    }
                   }
                 }
                 

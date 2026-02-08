@@ -88,7 +88,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       setState("locked");
       return { success: false, error: data.error || "Invalid encryption key" };
-    } catch (error) {
+    } catch {
       setState("locked");
       return { success: false, error: "Failed to verify key" };
     }
@@ -111,7 +111,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       setState("new");
       return { success: false, error: data.error || "Failed to initialize database" };
-    } catch (error) {
+    } catch {
       setState("new");
       return { success: false, error: "Failed to initialize database" };
     }
@@ -140,7 +140,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           success: false,
           error: data.error || "Failed to import database",
         };
-      } catch (error) {
+      } catch {
         return {
           success: false,
           error: "Failed to import database",

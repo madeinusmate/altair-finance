@@ -59,9 +59,10 @@ const BudgetPage = () => {
 
       setBudgetsData(budgetsRes);
       setCategories(categoriesRes.categories.map((c) => c.name));
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching budgets:", err);
-      setError(err?.response?.data?.error || "Failed to load budgets");
+      const errorMessage = err && typeof err === "object" && "response" in err && err.response && typeof err.response === "object" && "data" in err.response && err.response.data && typeof err.response.data === "object" && "error" in err.response.data && typeof err.response.data.error === "string" ? err.response.data.error : "Failed to load budgets";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

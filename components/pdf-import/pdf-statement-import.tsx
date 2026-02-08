@@ -257,7 +257,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
         throw new Error("Account not found");
       }
 
-      const rawRows = data.transactions.map((tx, index) => ({
+      const rawRows = data.transactions.map((tx: ParsedTransaction) => ({
         date: tx.date,
         account: account.name,
         description: tx.description,

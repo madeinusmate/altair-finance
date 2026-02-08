@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and, gte, lte, ne } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
+import { type Budget } from "@/lib/db/schema";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { convertAmount, getFxSnapshot } from "@/lib/fx";
 import { type SupportedCurrency, isSupportedCurrency } from "@/lib/currencies";
@@ -117,22 +118,18 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     }
 
     // Get all budgets (migration should have created the table by now)
-    let budgets;
+    let budgets: Budget[];
     try {
       budgets = db.select().from(schema.budgets).all();
-    } catch (error: any) {
+    } catch (error: unknown) {
       // If table doesn't exist yet, return empty budgets (migration should create it on next request)
-      if (error?.code === "SQLITE_ERROR" && error?.message?.includes("no such table")) {
+      if (error && typeof error === "object" && "code" in error && "message" in error && error.code === "SQLITE_ERROR" && typeof error.message === "string" && error.message.includes("no such table")) {
         console.warn("[Budgets API] Budgets table not found, returning empty list");
         budgets = [];
       } else {
         throw error;
       }
     }
-
-    // Get all transaction categories
-    const categories = db.select().from(schema.transactionCategories).all();
-    const categoryNames = categories.map((cat) => cat.name);
 
     // Calculate spending for each budget category
     const budgetsWithSpending: BudgetWithSpending[] = await Promise.all(

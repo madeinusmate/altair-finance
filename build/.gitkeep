@@ -1,0 +1,4 @@
+# This directory contains Electron app icons
+# Add your icon files here:
+# - icon.icns (for macOS - recommended)
+# - icon.png (fallback, will be converted by electron-builder)
