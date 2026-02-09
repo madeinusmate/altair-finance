@@ -152,6 +152,31 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   } | null>(null);
   const [isLoadingInvestmentPerformance, setIsLoadingInvestmentPerformance] = useState(false);
 
+  // Calculate the oldest date from transactions, transfers, balance history, and investment history
+  const calculateOldestDate = (): Date | null => {
+    const dates: Date[] = [];
+    
+    // Add transaction dates
+    transactions.forEach((t) => dates.push(new Date(t.date)));
+    
+    // Add transfer dates
+    transfers.forEach((t) => dates.push(new Date(t.date)));
+    
+    // Add balance history dates
+    balanceHistory.forEach((b) => dates.push(new Date(b.date)));
+    
+    // Add investment history dates
+    investmentHistory.forEach((i) => dates.push(new Date(i.date)));
+    
+    if (dates.length === 0) {
+      return null;
+    }
+    
+    return new Date(Math.min(...dates.map((d) => d.getTime())));
+  };
+
+  const oldestDate = calculateOldestDate();
+
   const fetchData = async () => {
     try {
       const [accountData, unifiedData, balanceData, investmentData, allAccounts, categoriesData] =
@@ -570,7 +595,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
       {account.type === "investment" ? (
         <div className="space-y-4">
           <div className="flex items-center justify-end">
-            <DashboardDateSelector value={dateRange} onChange={setDateRange} />
+            <DashboardDateSelector value={dateRange} onChange={setDateRange} oldestDate={oldestDate} />
           </div>
           <InvestmentPerformanceChart
             dateRange={dateRange}

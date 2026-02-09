@@ -17,9 +17,10 @@ interface DashboardDateSelectorProps {
   value: DashboardDateRange;
   onChange: (range: DashboardDateRange) => void;
   className?: string;
+  oldestDate?: Date | null;
 }
 
-export const DashboardDateSelector = ({ value, onChange, className }: DashboardDateSelectorProps) => {
+export const DashboardDateSelector = ({ value, onChange, className, oldestDate }: DashboardDateSelectorProps) => {
   const [isOpen, setIsOpen] = useState(false);
   
   // Sync custom inputs when value changes externally
@@ -41,7 +42,9 @@ export const DashboardDateSelector = ({ value, onChange, className }: DashboardD
       const normalizedStartDate = startOfDay(startDate);
       onChange({ startDate: normalizedStartDate, endDate });
     } else {
-      onChange({ startDate: new Date(2015, 3, 1), endDate });
+      // Use oldestDate if provided, otherwise fall back to 2015
+      const allTimeStartDate = oldestDate ? startOfDay(oldestDate) : new Date(2015, 3, 1);
+      onChange({ startDate: allTimeStartDate, endDate });
     }
     setIsOpen(false);
   };
@@ -74,7 +77,8 @@ export const DashboardDateSelector = ({ value, onChange, className }: DashboardD
       const currentMonthStart = startOfMonth(now);
       startDate = startOfDay(subMonths(currentMonthStart, months - 1));
     } else {
-      startDate = new Date(2015, 3, 1);
+      // Use oldestDate if provided, otherwise fall back to 2015
+      startDate = oldestDate ? startOfDay(oldestDate) : new Date(2015, 3, 1);
     }
     return (
       format(value.startDate, "yyyy-MM-dd") === format(startDate, "yyyy-MM-dd") &&
