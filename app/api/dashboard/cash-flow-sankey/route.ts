@@ -114,11 +114,15 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       )
       .all();
 
-    let totalInvestment = 0;
+    let totalInvestmentIn = 0;
+    let totalInvestmentOut = 0;
+
     transfers.forEach((transfer) => {
+      const fromAccountType = accountTypeMap.get(transfer.fromAccountId);
       const toAccountType = accountTypeMap.get(transfer.toAccountId);
-      // Only count transfers to investment accounts
-      if (toAccountType === "investment") {
+
+      if (toAccountType === "investment" && fromAccountType === "transaction") {
+        // Money flowing INTO investment from a transaction account
         const toAccountCurrency = accountCurrencyMap.get(transfer.toAccountId);
         const convertedAmount = convertAmount(
           transfer.toAmount ?? transfer.amount,
@@ -126,9 +130,22 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
           currency,
           fxSnapshot.rates
         );
-        totalInvestment += convertedAmount;
+        totalInvestmentIn += convertedAmount;
+      } else if (fromAccountType === "investment" && toAccountType === "transaction") {
+        // Money flowing OUT of investment back to a transaction account (withdrawal)
+        const fromAccountCurrency = accountCurrencyMap.get(transfer.fromAccountId);
+        const convertedAmount = convertAmount(
+          transfer.fromAmount ?? transfer.amount,
+          fromAccountCurrency as SupportedCurrency,
+          currency,
+          fxSnapshot.rates
+        );
+        totalInvestmentOut += convertedAmount;
       }
+      // Transfers between two investment accounts are ignored (rebalancing, not new investment)
     });
+
+    const totalInvestment = Math.max(0, totalInvestmentIn - totalInvestmentOut);
 
     // Calculate Savings: Income - Investment - Expenses (can be negative)
     const totalSavings = totalIncome - totalInvestment - totalExpenses;

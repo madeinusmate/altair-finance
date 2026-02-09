@@ -126,6 +126,64 @@ export const CashFlowSankeyChart = ({
     );
   }
 
+  // Helper to get the real value for a node
+  const getNodeValue = (nodeId: string): number => {
+    if (!data) return 0;
+    switch (nodeId) {
+      case "Income":
+        return data.income;
+      case "Investment":
+        return data.investment;
+      case "Savings":
+        return data.savings;
+      case "Expenses":
+        return data.expenses;
+      default:
+        return 0;
+    }
+  };
+
+  // Custom labels layer that renders two-line labels (name + value)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const CustomLabelsLayer = ({ nodes }: { nodes: readonly any[] }) => {
+    return (
+      <>
+        {nodes.map((node) => {
+          const value = getNodeValue(node.id);
+          const formatted = data ? formatCurrency(value, data.currency) : "";
+
+          // Determine x position: left-side nodes get label to the left, right-side nodes to the right
+          const isLeftSide = node.x < 100;
+          const labelX = isLeftSide ? node.x - 16 : node.x + node.width + 16;
+          const textAnchor = isLeftSide ? "end" : "start";
+          const labelY = node.y + node.height / 2;
+
+          return (
+            <text
+              key={node.id}
+              x={labelX}
+              y={labelY}
+              textAnchor={textAnchor}
+              dominantBaseline="central"
+              style={{
+                fontWeight: 700,
+                fontSize: 14,
+                fill: "hsl(215, 16%, 30%)",
+              }}
+            >
+              <tspan x={labelX} dy="-0.5em">
+                {node.id}
+              </tspan>
+              <tspan x={labelX} dy="1.2em" style={{ fontSize: 12, fontWeight: 500 }}>
+                {formatted}
+              </tspan>
+            </text>
+          );
+        })}
+      </>
+    );
+  };
+
   // Color scheme: income green, expenses red, saving gold (positive) or purple (negative), investment blue
   const getNodeColor = (node: { id: string }) => {
     switch (node.id) {
@@ -168,49 +226,11 @@ export const CashFlowSankeyChart = ({
             linkHoverOthersOpacity={0.15}
             linkContract={2}
             enableLinkGradient={true}
-            labelPosition="outside"
-            labelOrientation="horizontal"
-            labelPadding={16}
-            labelTextColor="hsl(215, 16%, 30%)"
-            label={(node) => {
-              // For horizontal labels, return the text directly and let Nivo handle positioning
-              if (!data) return node.id;
-              let value = node.value !== undefined ? node.value : 0;
-              
-              if (node.id === "Income") {
-                value = data.income;
-              } else if (node.id === "Investment") {
-                value = data.investment;
-              } else if (node.id === "Savings") {
-                value = data.savings;
-              } else if (node.id === "Expenses") {
-                value = data.expenses;
-              }
-              
-              return `${node.id}: ${formatCurrency(value, data.currency)}`;
-            }}
-            theme={{
-              labels: {
-                text: {
-                  fontWeight: 700,
-                  fontSize: 14,
-                },
-              },
-            }}
+            enableLabels={false}
+            layers={["links", "nodes", CustomLabelsLayer, "legends"]}
             nodeTooltip={({ node }) => {
               if (!data) return null;
-              let value = 0;
-              
-              if (node.id === "Income") {
-                value = data.income;
-              } else if (node.id === "Investment") {
-                value = data.investment;
-              } else if (node.id === "Savings") {
-                value = data.savings; // Show actual value (can be negative)
-              } else if (node.id === "Expenses") {
-                value = data.expenses;
-              }
-              
+              const value = getNodeValue(node.id);
               return (
                 <div className="rounded-lg border bg-background p-2 shadow-md">
                   <div className="font-semibold">{node.id}</div>
