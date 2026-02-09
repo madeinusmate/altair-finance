@@ -69,11 +69,13 @@ import { AccountEditForm } from "@/components/account-edit-form";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfDay, subMonths, startOfDay } from "date-fns";
 import { formatCategoryDisplay } from "@/lib/account-categories";
 import { calculateTransactionAccountBalance, calculateNetContributions } from "@/lib/accounting";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { AccountChartsContainer } from "@/components/account-charts/account-charts-container";
+import { InvestmentPerformanceChart } from "@/components/dashboard/investment-performance-chart";
+import { DashboardDateSelector, type DashboardDateRange } from "@/components/dashboard/dashboard-date-selector";
 import { SyncButton } from "@/components/open-banking/sync-button";
 import { ConnectionIndicator } from "@/components/open-banking/connection-indicator";
 import { PdfStatementImport } from "@/components/pdf-import/pdf-statement-import";
@@ -122,6 +124,33 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   const [typeFilter, setTypeFilter] = useState<string>("all"); // "all" | "debit" | "credit" | "transfer"
   const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
   const [categoryMap, setCategoryMap] = useState<Map<string, { color?: string | null; icon?: string | null }>>(new Map());
+  
+  // Investment performance chart state
+  const [dateRange, setDateRange] = useState<DashboardDateRange>(() => {
+    const now = new Date();
+    const endDate = endOfDay(now);
+    const currentMonthStart = startOfMonth(now);
+    const startDate = startOfDay(subMonths(currentMonthStart, 2));
+    return {
+      startDate,
+      endDate,
+    };
+  });
+  const [investmentPerformanceData, setInvestmentPerformanceData] = useState<{
+    data: Array<{
+      date: string;
+      dateLabel: string;
+      value: number;
+      netContributions: number;
+      pnl: number;
+      pnlPercentage: number;
+    }>;
+    currentValue: number;
+    previousValue: number;
+    percentageChange: number;
+    currency: string;
+  } | null>(null);
+  const [isLoadingInvestmentPerformance, setIsLoadingInvestmentPerformance] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -159,6 +188,46 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
     fetchData();
     setCurrentPage(1);
   }, [id]);
+
+  // Fetch investment performance data for investment accounts
+  useEffect(() => {
+    const fetchInvestmentPerformance = async () => {
+      if (!account || account.type !== "investment") {
+        setInvestmentPerformanceData(null);
+        return;
+      }
+
+      setIsLoadingInvestmentPerformance(true);
+      try {
+        const startDateStr = format(dateRange.startDate, "yyyy-MM-dd");
+        const endDateStr = format(dateRange.endDate, "yyyy-MM-dd");
+        const data = await apiClient.get<{
+          data: Array<{
+            date: string;
+            dateLabel: string;
+            value: number;
+            netContributions: number;
+            pnl: number;
+            pnlPercentage: number;
+          }>;
+          currentValue: number;
+          previousValue: number;
+          percentageChange: number;
+          currency: string;
+        }>(
+          `/api/dashboard/investment-performance?startDate=${startDateStr}&endDate=${endDateStr}&currency=${account.currency}&accountId=${account.id}`
+        );
+        setInvestmentPerformanceData(data);
+      } catch (err) {
+        console.error("Error fetching investment performance:", err);
+        setInvestmentPerformanceData(null);
+      } finally {
+        setIsLoadingInvestmentPerformance(false);
+      }
+    };
+
+    void fetchInvestmentPerformance();
+  }, [account, dateRange]);
 
   const handleDeleteAccount = async () => {
     try {
@@ -334,12 +403,21 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-bold tracking-tight">{account.name}</h1>
-              <Badge variant={account.nature === "asset" ? "default" : "destructive"}>
-                {account.nature}
-              </Badge>
-              <Badge variant="outline">
-                {formatCategoryDisplay(String(account.category))}
-              </Badge>
+              {account.type === "transaction" && (
+                <span
+                  className={`text-3xl font-bold ${
+                    account.nature === "asset" 
+                      ? "text-green-600" 
+                      : currentBalance < 0 
+                        ? "text-green-600" 
+                        : "text-red-600"
+                  }`}
+                >
+                  {account.nature === "liability" && currentBalance < 0 
+                    ? ` • ${formatCurrency(Math.abs(currentBalance), account.currency)} credit`
+                    : ` • ${formatCurrency(currentBalance, account.currency)}`}
+                </span>
+              )}
               {process.env.NEXT_PUBLIC_OPEN_BANKING_ENABLED === "true" && account.type === "transaction" && account.metadata && (() => {
                 try {
                   const meta = JSON.parse(account.metadata);
@@ -373,9 +451,20 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                 return null;
               })()}
             </div>
-            <p className="text-muted-foreground capitalize">
-              {account.type} account • {account.currency}
-            </p>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <Badge className="capitalize" variant={account.nature === "asset" ? "default" : "destructive"}>
+                {account.nature}
+              </Badge>              
+              <Badge variant="outline" className="capitalize">
+                {account.type}
+              </Badge>
+              <Badge variant="outline">
+                {formatCategoryDisplay(String(account.category))}
+              </Badge>
+              <Badge variant="outline">
+                {account.currency}
+              </Badge>
+            </div>
           </div>
         </div>
         <div className="flex gap-2">
@@ -423,107 +512,83 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
         </div>
       </div>
 
-      <div className={`grid gap-4 ${account.type === "investment" ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>
-              {account.type === "investment" ? "Current Value" : "Current Balance"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div
-              className={`text-2xl font-bold ${
-                account.nature === "asset" 
-                  ? "text-green-600" 
-                  : currentBalance < 0 
+      {account.type === "investment" && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Current Value</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div
+                className={`text-2xl font-bold ${
+                  account.nature === "asset" 
                     ? "text-green-600" 
-                    : "text-red-600"
-              }`}
-            >
-              {account.nature === "liability" && currentBalance < 0 
-                ? `${formatCurrency(Math.abs(currentBalance), account.currency)} credit`
-                : formatCurrency(currentBalance, account.currency)}
-            </div>
-          </CardContent>
-        </Card>
-
-        {account.type === "investment" ? (
-          <>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Net Contributions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(netContributions ?? 0, account.currency)}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Profit / Loss</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className={`flex items-center gap-2 text-2xl font-bold ${
-                  (profitLoss ?? 0) >= 0 ? "text-green-600" : "text-red-600"
-                }`}>
-                  {(profitLoss ?? 0) >= 0 ? (
-                    <TrendingUp className="h-5 w-5" />
-                  ) : (
-                    <TrendingDown className="h-5 w-5" />
-                  )}
-                  {formatCurrency(Math.abs(profitLoss ?? 0), account.currency)}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Value Updates</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{investmentHistory.length}</div>
-              </CardContent>
-            </Card>
-          </>
-        ) : (
-          <>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Initial Balance</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(account.initialBalance, account.currency)}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>
-                  {account.type === "transaction" ? "Transactions" : "Balance Updates"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {account.type === "transaction" ? transactions.length : balanceHistory.length}
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
-      </div>
+                    : currentBalance < 0 
+                      ? "text-green-600" 
+                      : "text-red-600"
+                }`}
+              >
+                {account.nature === "liability" && currentBalance < 0 
+                  ? `${formatCurrency(Math.abs(currentBalance), account.currency)} credit`
+                  : formatCurrency(currentBalance, account.currency)}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Net Contributions</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {formatCurrency(netContributions ?? 0, account.currency)}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Profit / Loss</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className={`flex items-center gap-2 text-2xl font-bold ${
+                (profitLoss ?? 0) >= 0 ? "text-green-600" : "text-red-600"
+              }`}>
+                {(profitLoss ?? 0) >= 0 ? (
+                  <TrendingUp className="h-5 w-5" />
+                ) : (
+                  <TrendingDown className="h-5 w-5" />
+                )}
+                {formatCurrency(Math.abs(profitLoss ?? 0), account.currency)}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       
 
       {/* Charts Section */}
-      <AccountChartsContainer
-        account={account}
-        transactions={transactions}
-        transfers={transfers}
-        balanceHistory={balanceHistory}
-        investmentHistory={investmentHistory}
-        isLoading={isLoading}
-      />
+      {account.type === "investment" ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-end">
+            <DashboardDateSelector value={dateRange} onChange={setDateRange} />
+          </div>
+          <InvestmentPerformanceChart
+            dateRange={dateRange}
+            currency={account.currency}
+            isLoading={isLoadingInvestmentPerformance}
+            data={investmentPerformanceData || undefined}
+          />
+        </div>
+      ) : (
+        <AccountChartsContainer
+          account={account}
+          transactions={transactions}
+          transfers={transfers}
+          balanceHistory={balanceHistory}
+          investmentHistory={investmentHistory}
+          isLoading={isLoading}
+        />
+      )}
 
       {/* Edit Transaction Dialog */}
       {account.type === "transaction" && editingTransaction && (

@@ -103,9 +103,7 @@ export const InvestmentPerformanceChart = ({
                 </SelectContent>
               </Select>
             )}
-            <Button variant="outline" size="sm">
-              <Filter className="h-4 w-4" />
-            </Button>
+            
           </div>
         </CardHeader>
         <CardContent>
@@ -182,9 +180,7 @@ export const InvestmentPerformanceChart = ({
               </SelectContent>
             </Select>
           )}
-          <Button variant="outline" size="sm">
-            <Filter className="h-4 w-4" />
-          </Button>
+          
         </div>
       </CardHeader>
       <CardContent>
