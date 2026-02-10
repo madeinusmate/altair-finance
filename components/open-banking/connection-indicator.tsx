@@ -5,19 +5,32 @@ import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
 interface ConnectionIndicatorProps {
   status?: "connected" | "syncing" | "error" | "disconnected";
+  provider?: "finverse" | "plaid";
   errorMessage?: string;
 }
 
-export const ConnectionIndicator = ({ status, errorMessage }: ConnectionIndicatorProps) => {
+const providerLabel = (provider?: "finverse" | "plaid") => {
+  if (provider === "plaid") return "Plaid";
+  if (provider === "finverse") return "Finverse";
+  return "";
+};
+
+export const ConnectionIndicator = ({
+  status,
+  provider,
+  errorMessage,
+}: ConnectionIndicatorProps) => {
   if (!status || status === "disconnected") {
     return null;
   }
+
+  const label = providerLabel(provider);
 
   if (status === "connected") {
     return (
       <Badge variant="default" className="gap-1">
         <CheckCircle2 className="h-3 w-3" />
-        Connected
+        {label ? `${label} Connected` : "Connected"}
       </Badge>
     );
   }
@@ -26,7 +39,7 @@ export const ConnectionIndicator = ({ status, errorMessage }: ConnectionIndicato
     return (
       <Badge variant="outline" className="gap-1 text-primary border-primary">
         <Loader2 className="h-3 w-3 animate-spin" />
-        Syncing
+        {label ? `${label} Syncing` : "Syncing"}
       </Badge>
     );
   }
@@ -35,7 +48,7 @@ export const ConnectionIndicator = ({ status, errorMessage }: ConnectionIndicato
     return (
       <Badge variant="destructive" className="gap-1" title={errorMessage}>
         <AlertCircle className="h-3 w-3" />
-        Error
+        {label ? `${label} Error` : "Error"}
       </Badge>
     );
   }

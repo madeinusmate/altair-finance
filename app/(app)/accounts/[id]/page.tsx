@@ -447,7 +447,37 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                 try {
                   const meta = JSON.parse(account.metadata);
                   const finverseMeta = meta?.finverse;
+                  const plaidMeta = meta?.plaid;
+
+                  if (plaidMeta && plaidMeta.account_id) {
+                    // Plaid-connected account
+                    const syncStatus = plaidMeta.sync_status === "completed" ? "connected" as const
+                      : plaidMeta.sync_status === "pending" || plaidMeta.sync_status === "in_progress" ? "syncing" as const
+                      : plaidMeta.sync_status === "error" ? "error" as const
+                      : "disconnected" as const;
+
+                    return (
+                      <>
+                        <ConnectionIndicator
+                          status={syncStatus}
+                          provider="plaid"
+                          errorMessage={plaidMeta.sync_progress?.error_message}
+                        />
+                        {plaidMeta.item_id && (
+                          <SyncButton
+                            accountId={account.id}
+                            provider="plaid"
+                            providerAccountId={plaidMeta.account_id}
+                            providerIdentityId={plaidMeta.item_id}
+                            onSyncComplete={fetchData}
+                          />
+                        )}
+                      </>
+                    );
+                  }
+
                   if (finverseMeta && finverseMeta.account_id) {
+                    // Finverse-connected account
                     const syncStatus = finverseMeta.sync_status === "completed" ? "connected" as const
                       : finverseMeta.sync_status === "pending" || finverseMeta.sync_status === "in_progress" ? "syncing" as const
                       : finverseMeta.sync_status === "error" ? "error" as const
@@ -457,13 +487,15 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                       <>
                         <ConnectionIndicator 
                           status={syncStatus}
+                          provider="finverse"
                           errorMessage={finverseMeta.sync_progress?.error_message}
                         />
                         {finverseMeta.login_identity_id && (
                           <SyncButton
                             accountId={account.id}
-                            finverseAccountId={finverseMeta.account_id}
-                            loginIdentityId={finverseMeta.login_identity_id}
+                            provider="finverse"
+                            providerAccountId={finverseMeta.account_id}
+                            providerIdentityId={finverseMeta.login_identity_id}
                             onSyncComplete={fetchData}
                           />
                         )}

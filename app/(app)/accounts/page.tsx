@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatCategoryDisplay } from "@/lib/account-categories";
 import { ConnectionIndicator } from "@/components/open-banking/connection-indicator";
 import { AccountCreateDialog } from "@/components/account-create-dialog";
+import { ProviderSelectionDialog } from "@/components/open-banking/provider-selection-dialog";
 
 interface AccountWithBalance {
   id: string;
@@ -44,6 +45,7 @@ const AccountsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showProviderDialog, setShowProviderDialog] = useState(false);
 
   useEffect(() => {
     const fetchAccounts = async () => {
@@ -274,11 +276,9 @@ const AccountsPage = () => {
         </div>
         <div className="flex gap-2">
           {isOpenBankingEnabled && hasTransactionAccounts && (
-            <Button asChild variant="outline">
-              <Link href="/accounts/connect">
-                <Link2 className="mr-2 h-4 w-4" />
-                Connect Bank
-              </Link>
+            <Button variant="outline" onClick={() => setShowProviderDialog(true)}>
+              <Link2 className="mr-2 h-4 w-4" />
+              Connect Bank
             </Button>
           )}
           <Button onClick={() => setShowCreateDialog(true)}>
@@ -302,11 +302,9 @@ const AccountsPage = () => {
                 Add Account
               </Button>
               {isOpenBankingEnabled && (
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/accounts/connect">
-                    <Link2 className="mr-2 h-4 w-4" />
-                    Connect Bank
-                  </Link>
+                <Button variant="outline" size="sm" onClick={() => setShowProviderDialog(true)}>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  Connect Bank
                 </Button>
               )}
             </div>
@@ -340,6 +338,13 @@ const AccountsPage = () => {
         onOpenChange={setShowCreateDialog}
         onSuccess={handleAccountCreated}
       />
+
+      {isOpenBankingEnabled && (
+        <ProviderSelectionDialog
+          open={showProviderDialog}
+          onOpenChange={setShowProviderDialog}
+        />
+      )}
     </div>
   );
 };
