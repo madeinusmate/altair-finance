@@ -7,19 +7,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
+import type { InvestmentHistory } from "@/lib/db/schema";
 
 interface InvestmentBalanceFormProps {
   accountId: string;
   currency: string;
   onSuccess: () => void;
+  entry?: InvestmentHistory;
 }
 
-export const InvestmentBalanceForm = ({ accountId, currency, onSuccess }: InvestmentBalanceFormProps) => {
+export const InvestmentBalanceForm = ({ accountId, currency, onSuccess, entry }: InvestmentBalanceFormProps) => {
+  const isEditMode = !!entry;
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [balance, setBalance] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [balance, setBalance] = useState(
+    entry ? String(entry.balance) : ""
+  );
+  const [date, setDate] = useState(
+    entry
+      ? new Date(entry.date).toISOString().split("T")[0]
+      : new Date().toISOString().split("T")[0]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,15 +36,23 @@ export const InvestmentBalanceForm = ({ accountId, currency, onSuccess }: Invest
     setIsLoading(true);
 
     try {
-      await apiClient.post("/api/investment-history", {
-        accountId,
-        balance: parseFloat(balance),
-        date,
-      });
+      if (isEditMode) {
+        await apiClient.put("/api/investment-history", {
+          id: entry.id,
+          balance: parseFloat(balance),
+          date,
+        });
+      } else {
+        await apiClient.post("/api/investment-history", {
+          accountId,
+          balance: parseFloat(balance),
+          date,
+        });
+      }
 
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update balance");
+      setError(err instanceof Error ? err.message : "Failed to update value");
       setIsLoading(false);
     }
   };
@@ -50,7 +67,7 @@ export const InvestmentBalanceForm = ({ accountId, currency, onSuccess }: Invest
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="balance">Current Market Value ({currency})</Label>
+        <Label htmlFor="balance">{isEditMode ? "Market Value" : "Current Market Value"} ({currency})</Label>
         <Input
           id="balance"
           type="number"
@@ -82,10 +99,10 @@ export const InvestmentBalanceForm = ({ accountId, currency, onSuccess }: Invest
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Updating...
+            {isEditMode ? "Saving..." : "Updating..."}
           </>
         ) : (
-          "Update Value"
+          isEditMode ? "Save Changes" : "Update Value"
         )}
       </Button>
     </form>

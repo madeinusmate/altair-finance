@@ -87,6 +87,57 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
   }
 };
 
+// PUT update investment history entry
+export const PUT = async (request: NextRequest): Promise<NextResponse> => {
+  const key = getEncryptionKey(request);
+  if (!key) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const { id, balance, date } = body;
+
+    if (!id || balance === undefined || !date) {
+      return NextResponse.json(
+        { error: "Missing required fields: id, balance, date" },
+        { status: 400 }
+      );
+    }
+
+    const db = getDb(key);
+
+    const existing = db
+      .select()
+      .from(schema.investmentHistory)
+      .where(eq(schema.investmentHistory.id, id))
+      .get();
+
+    if (!existing) {
+      return NextResponse.json({ error: "Investment entry not found" }, { status: 404 });
+    }
+
+    db.update(schema.investmentHistory)
+      .set({
+        balance: Number(balance),
+        date: new Date(date),
+      })
+      .where(eq(schema.investmentHistory.id, id))
+      .run();
+
+    const updated = db
+      .select()
+      .from(schema.investmentHistory)
+      .where(eq(schema.investmentHistory.id, id))
+      .get();
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error("Error updating investment entry:", error);
+    return NextResponse.json({ error: "Failed to update investment entry" }, { status: 500 });
+  }
+};
+
 // DELETE investment history entry
 export const DELETE = async (request: NextRequest): Promise<NextResponse> => {
   const key = getEncryptionKey(request);

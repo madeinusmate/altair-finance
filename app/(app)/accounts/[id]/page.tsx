@@ -117,6 +117,10 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   const [isEditTransferDialogOpen, setIsEditTransferDialogOpen] = useState(false);
   const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
   const [isPdfImportDialogOpen, setIsPdfImportDialogOpen] = useState(false);
+  const [isEditBalanceEntryDialogOpen, setIsEditBalanceEntryDialogOpen] = useState(false);
+  const [editingBalanceEntry, setEditingBalanceEntry] = useState<BalanceHistory | null>(null);
+  const [isEditInvestmentEntryDialogOpen, setIsEditInvestmentEntryDialogOpen] = useState(false);
+  const [editingInvestmentEntry, setEditingInvestmentEntry] = useState<InvestmentHistory | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const [searchQuery, setSearchQuery] = useState("");
@@ -332,6 +336,50 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
     setIsEditTransferDialogOpen(false);
     setEditingTransfer(null);
     fetchData();
+  };
+
+  const handleEditBalanceEntry = (entry: BalanceHistory) => {
+    setEditingBalanceEntry(entry);
+    setIsEditBalanceEntryDialogOpen(true);
+  };
+
+  const handleDeleteBalanceEntry = async (entryId: string) => {
+    try {
+      await apiClient.delete(`/api/balance-history?id=${entryId}`);
+      fetchData();
+      toast.success("Balance entry deleted");
+    } catch {
+      toast.error("Failed to delete balance entry");
+    }
+  };
+
+  const handleBalanceEntryUpdated = () => {
+    setIsEditBalanceEntryDialogOpen(false);
+    setEditingBalanceEntry(null);
+    fetchData();
+    toast.success("Balance entry updated");
+  };
+
+  const handleEditInvestmentEntry = (entry: InvestmentHistory) => {
+    setEditingInvestmentEntry(entry);
+    setIsEditInvestmentEntryDialogOpen(true);
+  };
+
+  const handleDeleteInvestmentEntry = async (entryId: string) => {
+    try {
+      await apiClient.delete(`/api/investment-history?id=${entryId}`);
+      fetchData();
+      toast.success("Investment entry deleted");
+    } catch {
+      toast.error("Failed to delete investment entry");
+    }
+  };
+
+  const handleInvestmentEntryUpdated = () => {
+    setIsEditInvestmentEntryDialogOpen(false);
+    setEditingInvestmentEntry(null);
+    fetchData();
+    toast.success("Investment entry updated");
   };
 
   // Reset to page 1 when items per page or filters change
@@ -1245,6 +1293,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead className="text-right">Balance</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1254,6 +1303,26 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                       <TableCell className="text-right font-medium">
                         {formatCurrency(entry.balance, account.currency)}
                       </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditBalanceEntry(entry)}
+                            aria-label="Edit balance entry"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteBalanceEntry(entry.id)}
+                            aria-label="Delete balance entry"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1262,6 +1331,26 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={isEditBalanceEntryDialogOpen} onOpenChange={(open) => {
+        setIsEditBalanceEntryDialogOpen(open);
+        if (!open) setEditingBalanceEntry(null);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Balance Entry</DialogTitle>
+            <DialogDescription>Update the balance and date for this entry.</DialogDescription>
+          </DialogHeader>
+          {editingBalanceEntry && account && (
+            <BalanceUpdateForm
+              accountId={id}
+              currency={account.currency}
+              onSuccess={handleBalanceEntryUpdated}
+              entry={editingBalanceEntry}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {account.type === "investment" && (
         <>
@@ -1281,6 +1370,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                     <TableRow>
                       <TableHead>Date</TableHead>
                       <TableHead className="text-right">Market Value</TableHead>
+                      <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1290,6 +1380,26 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                         <TableCell className="text-right font-medium">
                           {formatCurrency(entry.balance, account.currency)}
                         </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEditInvestmentEntry(entry)}
+                              aria-label="Edit investment entry"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteInvestmentEntry(entry.id)}
+                              aria-label="Delete investment entry"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1297,6 +1407,26 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
               )}
             </CardContent>
           </Card>
+
+          <Dialog open={isEditInvestmentEntryDialogOpen} onOpenChange={(open) => {
+            setIsEditInvestmentEntryDialogOpen(open);
+            if (!open) setEditingInvestmentEntry(null);
+          }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Edit Value Entry</DialogTitle>
+                <DialogDescription>Update the market value and date for this entry.</DialogDescription>
+              </DialogHeader>
+              {editingInvestmentEntry && account && (
+                <InvestmentBalanceForm
+                  accountId={id}
+                  currency={account.currency}
+                  onSuccess={handleInvestmentEntryUpdated}
+                  entry={editingInvestmentEntry}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
 
           {transfers.length > 0 && (
             <Card>

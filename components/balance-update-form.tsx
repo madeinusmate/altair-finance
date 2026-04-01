@@ -7,19 +7,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
+import type { BalanceHistory } from "@/lib/db/schema";
 
 interface BalanceUpdateFormProps {
   accountId: string;
   currency: string;
   onSuccess: () => void;
+  entry?: BalanceHistory;
 }
 
-export const BalanceUpdateForm = ({ accountId, currency, onSuccess }: BalanceUpdateFormProps) => {
+export const BalanceUpdateForm = ({ accountId, currency, onSuccess, entry }: BalanceUpdateFormProps) => {
+  const isEditMode = !!entry;
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [balance, setBalance] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [balance, setBalance] = useState(
+    entry ? String(entry.balance) : ""
+  );
+  const [date, setDate] = useState(
+    entry
+      ? new Date(entry.date).toISOString().split("T")[0]
+      : new Date().toISOString().split("T")[0]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,11 +36,19 @@ export const BalanceUpdateForm = ({ accountId, currency, onSuccess }: BalanceUpd
     setIsLoading(true);
 
     try {
-      await apiClient.post("/api/balance-history", {
-        accountId,
-        balance: parseFloat(balance),
-        date,
-      });
+      if (isEditMode) {
+        await apiClient.put("/api/balance-history", {
+          id: entry.id,
+          balance: parseFloat(balance),
+          date,
+        });
+      } else {
+        await apiClient.post("/api/balance-history", {
+          accountId,
+          balance: parseFloat(balance),
+          date,
+        });
+      }
 
       onSuccess();
     } catch (err) {
@@ -50,7 +67,7 @@ export const BalanceUpdateForm = ({ accountId, currency, onSuccess }: BalanceUpd
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="balance">New Balance ({currency})</Label>
+        <Label htmlFor="balance">{isEditMode ? "Balance" : "New Balance"} ({currency})</Label>
         <Input
           id="balance"
           type="number"
@@ -82,10 +99,10 @@ export const BalanceUpdateForm = ({ accountId, currency, onSuccess }: BalanceUpd
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Updating...
+            {isEditMode ? "Saving..." : "Updating..."}
           </>
         ) : (
-          "Update Balance"
+          isEditMode ? "Save Changes" : "Update Balance"
         )}
       </Button>
     </form>
