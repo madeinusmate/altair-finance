@@ -8,7 +8,7 @@ CSV import, PDF statement import, and database backup import are unchanged.
 
 ## Restore later
 
-The last commit that still contains the integration is `5ba28fb` (`Prepare the desktop app for a public repository`). That tree has:
+Revert `eb73630` (`Remove Finverse and Plaid open banking`) to restore it. The last commit that still contains the integration is `5ba28fb` (`Prepare the desktop app for a public repository`). That tree has:
 
 - `app/api/open-banking/**`
 - `app/(app)/accounts/connect/page.tsx`
@@ -19,4 +19,4 @@ The last commit that still contains the integration is `5ba28fb` (`Prepare the d
 - the Electron bank window in `electron/main.ts` and `electron/preload.ts`
 - the `react-plaid-link` dependency
 
-To bring it back, revert the commit that removed open banking, or check those paths out of `5ba28fb` and reinstall `react-plaid-link`. You would also need to host `oauth-relay` again and put provider credentials in `.env.local`.
+To bring it back, `git revert eb73630`, or check those paths out of `5ba28fb` and reinstall `react-plaid-link`. You would also need to host `oauth-relay` again and put provider credentials in `.env.local`.
