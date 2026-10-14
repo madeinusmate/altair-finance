@@ -8,12 +8,10 @@ import waitOn from "wait-on";
 import { createMenu } from "./menu";
 
 const LOCAL_HOST = "127.0.0.1";
-const APP_PORT_MIN = 8528;
-const APP_PORT_MAX = 8535;
 const apiToken = randomBytes(32).toString("hex");
 
-// Keep the window origin on localhost (the OAuth callback target) while the
-// socket itself is the IPv4 loopback address Next binds to.
+// The window origin stays on localhost while the socket is the IPv4 loopback
+// address Next binds to.
 app.commandLine.appendSwitch("host-resolver-rules", "MAP localhost 127.0.0.1");
 
 ipcMain.on("netly-get-api-token", (event) => {
@@ -45,27 +43,15 @@ const installApiTokenHeader = (port: number): void => {
 };
 
 let mainWindow: BrowserWindow | null = null;
-let bankWindow: BrowserWindow | null = null;
 let nextServer: ChildProcess | null = null;
 let serverPort: number = 8528;
 
-type BankAuthResult = {
-  code?: string;
-  error?: string;
-  errorDescription?: string;
-  state?: string;
-  publicToken?: string;
-  exited?: boolean;
-  plaidError?: string;
-  plaidErrorMessage?: string;
-};
-
-const reserveAppPort = async (): Promise<number> => {
-  const raw = await findFreePort(APP_PORT_MIN, APP_PORT_MAX, LOCAL_HOST);
+const reserveLoopbackPort = async (): Promise<number> => {
+  const raw = await findFreePort(8528);
   const candidate = Array.isArray(raw) ? raw[0] : raw;
   const port = Number(candidate);
-  if (!Number.isInteger(port) || port < APP_PORT_MIN || port > APP_PORT_MAX) {
-    throw new Error(`No free loopback port between ${APP_PORT_MIN} and ${APP_PORT_MAX}`);
+  if (!Number.isInteger(port)) {
+    throw new Error("No free loopback port");
   }
   return port;
 };
@@ -78,122 +64,6 @@ const isAppNavigation = (value: string): boolean => {
     return false;
   }
 };
-
-const isBankCallback = (value: string): boolean => {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "http:") return false;
-    if (url.hostname !== "127.0.0.1" && url.hostname !== "localhost") return false;
-    if (url.port !== String(serverPort)) return false;
-    return url.pathname === "/accounts/connect";
-  } catch {
-    return false;
-  }
-};
-
-const isAllowedBankUrl = (value: string): boolean => {
-  try {
-    const url = new URL(value);
-    if (url.protocol === "https:") return true;
-    if (url.protocol !== "http:") return false;
-    if (url.hostname !== "127.0.0.1" && url.hostname !== "localhost") return false;
-    if (url.port !== String(serverPort)) return false;
-    return url.pathname === "/plaid-link.html";
-  } catch {
-    return false;
-  }
-};
-
-const deliverBankResult = (rawUrl: string): void => {
-  const url = new URL(rawUrl);
-  const payload: BankAuthResult = {
-    code: url.searchParams.get("code") || undefined,
-    error: url.searchParams.get("error") || undefined,
-    errorDescription: url.searchParams.get("error_description") || undefined,
-    state: url.searchParams.get("state") || undefined,
-    publicToken: url.searchParams.get("plaid_public_token") || undefined,
-    exited: url.searchParams.get("plaid_exit") === "1",
-    plaidError: url.searchParams.get("plaid_error") || undefined,
-    plaidErrorMessage: url.searchParams.get("plaid_error_message") || undefined,
-  };
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("netly-bank-auth-result", payload);
-  }
-  if (bankWindow && !bankWindow.isDestroyed()) {
-    bankWindow.close();
-  }
-};
-
-const bankWindowOptions = {
-  parent: undefined as BrowserWindow | undefined,
-  webPreferences: {
-    sandbox: true,
-    contextIsolation: true,
-    nodeIntegration: false,
-    nodeIntegrationInSubFrames: false,
-    partition: "netly-bank",
-  },
-};
-
-const attachBankGuards = (contents: Electron.WebContents): void => {
-  const handle = (event: Electron.Event, url: string): void => {
-    if (isBankCallback(url)) {
-      event.preventDefault();
-      deliverBankResult(url);
-      return;
-    }
-    if (!url.startsWith("https:") && !isAllowedBankUrl(url)) {
-      event.preventDefault();
-    }
-  };
-  contents.on("will-navigate", handle);
-  contents.on("will-redirect", handle);
-  contents.setWindowOpenHandler(({ url }) => {
-    if (!url.startsWith("https:") && !isBankCallback(url)) {
-      return { action: "deny" };
-    }
-    return {
-      action: "allow",
-      overrideBrowserWindowOptions: {
-        ...bankWindowOptions,
-        parent: mainWindow ?? undefined,
-      },
-    };
-  });
-  contents.on("did-create-window", (child) => {
-    attachBankGuards(child.webContents);
-  });
-};
-
-const openBankWindow = (url: string): void => {
-  if (!isAllowedBankUrl(url)) return;
-
-  if (!bankWindow || bankWindow.isDestroyed()) {
-    bankWindow = new BrowserWindow({
-      width: 480,
-      height: 720,
-      parent: mainWindow ?? undefined,
-      webPreferences: bankWindowOptions.webPreferences,
-    });
-    attachBankGuards(bankWindow.webContents);
-    bankWindow.on("closed", () => {
-      bankWindow = null;
-    });
-  }
-
-  void bankWindow.loadURL(url);
-  bankWindow.show();
-};
-
-ipcMain.handle("netly-open-bank-connect", (event, url: unknown) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents) {
-    throw new Error("Unauthorized");
-  }
-  if (typeof url !== "string" || !isAllowedBankUrl(url)) {
-    throw new Error("Refusing to open this address");
-  }
-  openBankWindow(url);
-});
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 
@@ -268,11 +138,9 @@ const createMainWindow = (port: number): BrowserWindow => {
   win.webContents.on("will-navigate", (event, url) => {
     if (isAppNavigation(url)) return;
     event.preventDefault();
-    if (isAllowedBankUrl(url)) openBankWindow(url);
   });
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (isAllowedBankUrl(url)) openBankWindow(url);
+  win.webContents.setWindowOpenHandler(() => {
     return { action: "deny" };
   });
 
@@ -442,7 +310,6 @@ const startNextServer = async (port: number): Promise<void> => {
       NODE_ENV: "production",
       ELECTRON_USER_DATA: app.getPath("userData"),
       NETLY_API_TOKEN: apiToken,
-      NETLY_APP_URL: `http://127.0.0.1:${port}`,
     };
 
     // Try bundled Node.js first, then system Node.js, then "node" from PATH
@@ -592,7 +459,7 @@ app.whenReady().then(async () => {
     createMenu();
     const splash = createSplashWindow();
 
-    serverPort = await reserveAppPort();
+    serverPort = await reserveLoopbackPort();
 
     await startNextServer(serverPort);
     installApiTokenHeader(serverPort);
@@ -619,7 +486,7 @@ app.on("activate", () => {
     app.whenReady().then(async () => {
       try {
         if (!nextServer) {
-          serverPort = await reserveAppPort();
+          serverPort = await reserveLoopbackPort();
           await startNextServer(serverPort);
         }
         installApiTokenHeader(serverPort);

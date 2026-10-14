@@ -242,6 +242,8 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
       console.warn("[DB Migration] Could not create budgets table:", error);
     }
 
+    // Open banking tables stay in place. Account rows they once fed remain
+    // ordinary records. The app does not read these tables.
     // Migration: Create open banking tables
     try {
       const clientTokensTableCheck = sqlite.prepare(`
@@ -612,6 +614,8 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       console.warn("[DB Migration] Could not add metadata columns:", error);
     }
 
+    // Open banking tables stay in place. Account rows they once fed remain
+    // ordinary records. The app does not read these tables.
     // Migration: Create open banking tables
     try {
       const clientTokensTableCheck = sqlite.prepare(`

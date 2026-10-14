@@ -13,18 +13,15 @@ Email the maintainers, or use GitHub private vulnerability reporting on this rep
 - Passphrase brute force that bypasses the shared rate limit
 - Distinguishing a wrong passphrase from an unreadable database through the API
 - Path traversal or unsafe writes in import and export
-- Open redirects in the OAuth relay, including redirects off loopback or onto an unexpected port
-- Bank windows receiving the API token, the preload bridge, or the clipboard helper
 - Secrets written to logs, crash dialogs, or files in the user-data directory
-- Sending the passphrase, or a hash of it, to Finverse, Plaid, or any other provider
 
 ## What is out of scope
 
 - A person with access to an unlocked session on the same OS user account
 - Physical access to an unlocked computer
-- Attacks that require a leaked `.env.local` or provider secret
+- Attacks that require a leaked `.env.local`
 - Social engineering of the account holder
 
 ## Supported setup
 
-The supported way to run Netly is the Electron app, with the server bound to `127.0.0.1` and the OAuth relay allowlist unchanged. Hosting the Next.js app as a public website is not a supported configuration.
+The supported way to run Netly is the Electron app, with the server bound to `127.0.0.1`. Hosting the Next.js app as a public website is not a supported configuration.

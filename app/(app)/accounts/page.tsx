@@ -6,13 +6,11 @@ import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Wallet, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Link2 } from "lucide-react";
+import { Plus, Wallet, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown } from "lucide-react";
 import { Account } from "@/lib/db/schema";
 import { Badge } from "@/components/ui/badge";
 import { formatCategoryDisplay } from "@/lib/account-categories";
-import { ConnectionIndicator } from "@/components/open-banking/connection-indicator";
 import { AccountCreateDialog } from "@/components/account-create-dialog";
-import { ProviderSelectionDialog } from "@/components/open-banking/provider-selection-dialog";
 
 interface AccountWithBalance {
   id: string;
@@ -45,7 +43,6 @@ const AccountsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showProviderDialog, setShowProviderDialog] = useState(false);
 
   useEffect(() => {
     const fetchAccounts = async () => {
@@ -157,9 +154,6 @@ const AccountsPage = () => {
       </div>
     );
   }
-
-  const isOpenBankingEnabled = process.env.NEXT_PUBLIC_OPEN_BANKING_ENABLED === "true";
-  const hasTransactionAccounts = accounts.some(acc => acc.type === "transaction");
 
   // Group accounts by Asset, Liability, and Investment
   const groupedAccounts = accounts.reduce((acc, account) => {
@@ -275,12 +269,6 @@ const AccountsPage = () => {
           <p className="text-muted-foreground">Manage your financial accounts</p>
         </div>
         <div className="flex gap-2">
-          {isOpenBankingEnabled && hasTransactionAccounts && (
-            <Button variant="outline" onClick={() => setShowProviderDialog(true)}>
-              <Link2 className="mr-2 h-4 w-4" />
-              Connect Bank
-            </Button>
-          )}
           <Button onClick={() => setShowCreateDialog(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Account
@@ -301,12 +289,6 @@ const AccountsPage = () => {
                 <Plus className="mr-2 h-4 w-4" />
                 Add Account
               </Button>
-              {isOpenBankingEnabled && (
-                <Button variant="outline" size="sm" onClick={() => setShowProviderDialog(true)}>
-                  <Link2 className="mr-2 h-4 w-4" />
-                  Connect Bank
-                </Button>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -338,13 +320,6 @@ const AccountsPage = () => {
         onOpenChange={setShowCreateDialog}
         onSuccess={handleAccountCreated}
       />
-
-      {isOpenBankingEnabled && (
-        <ProviderSelectionDialog
-          open={showProviderDialog}
-          onOpenChange={setShowProviderDialog}
-        />
-      )}
     </div>
   );
 };

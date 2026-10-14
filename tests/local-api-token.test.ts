@@ -54,6 +54,6 @@ describe("renderer token attachment", () => {
     assert.equal(shouldAttachApiToken("/accounts", origin), false);
     assert.equal(shouldAttachApiToken("https://evil.example/api/auth/verify", origin), false);
     assert.equal(shouldAttachApiToken("//evil.example/api/auth/verify", origin), false);
-    assert.equal(shouldAttachApiToken("https://api.prod.finverse.net/auth/token", origin), false);
+    assert.equal(shouldAttachApiToken("https://example.com/api/auth/verify", origin), false);
   });
 });

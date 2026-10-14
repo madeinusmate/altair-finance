@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, AlertCircle, Loader2, Link2 } from "lucide-react";
+import { ArrowLeft, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { DEFAULT_ACCOUNT_CURRENCY, SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
 import { useAuth } from "@/lib/auth-context";
@@ -170,16 +170,6 @@ const NewAccountPage = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                {type === "transaction" && process.env.NEXT_PUBLIC_OPEN_BANKING_ENABLED === "true" && (
-                  <div className="mt-2">
-                    <Button type="button" variant="outline" size="sm" asChild className="w-full">
-                      <Link href="/accounts/connect">
-                        <Link2 className="mr-2 h-4 w-4" />
-                        Connect via Open Banking
-                      </Link>
-                    </Button>
-                  </div>
-                )}
               </div>
 
               <div className="space-y-2">

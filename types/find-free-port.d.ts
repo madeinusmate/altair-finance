@@ -1,8 +1,4 @@
 declare module "find-free-port" {
-  const findFreePort: (
-    from?: number,
-    to?: number,
-    host?: string
-  ) => Promise<number | number[]>;
+  const findFreePort: (from?: number, to?: number) => Promise<number | number[]>;
   export default findFreePort;
 }
