@@ -10,6 +10,7 @@ import { Filter, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
 import { type DashboardDateRange } from "./dashboard-date-selector";
 import { formatCurrencySmart } from "@/lib/chart-data-aggregation";
+import { axisTick, chartCobalt, chartCobaltSoft, chartGrid, chartInk } from "@/components/charts/palette";
 
 interface InvestmentDataPoint {
   date: string;
@@ -46,11 +47,11 @@ interface InvestmentPerformanceChartProps {
 const chartConfig = {
   value: {
     label: "Investment Value",
-    color: "hsl(142, 76%, 36%)", // green-600
+    color: chartCobalt,
   },
   netContributions: {
     label: "Net Contributions",
-    color: "#000000", // black
+    color: chartInk,
   },
 } satisfies ChartConfig;
 
@@ -139,7 +140,7 @@ export const InvestmentPerformanceChart = ({
           <CardTitle>Investments Performance</CardTitle>
           <CardDescription>
             <div className="flex flex-col gap-1">
-              <span className="text-2xl font-bold">
+              <span className="text-2xl font-semibold tracking-[-0.02em] tabular-nums">
                 {formatCurrencySmart(data.currentValue, currency)}
               </span>
               {lastDataPoint && (() => {
@@ -147,11 +148,7 @@ export const InvestmentPerformanceChart = ({
                 const pnlPercentage = lastDataPoint.pnlPercentage ?? 0;
                 const isPositive = pnlPercentage >= 0;
                 return (
-                  <span
-                    className={`flex items-center gap-1 text-sm ${
-                      isPositive ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
+                  <span className="flex items-center gap-1 text-sm text-[#717173]">
                     <TrendingUp
                       className={`h-4 w-4 ${!isPositive ? "rotate-180" : ""}`}
                     />
@@ -184,7 +181,7 @@ export const InvestmentPerformanceChart = ({
         </div>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[300px] w-full">
+        <ChartContainer config={chartConfig} className="h-[280px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={chartData}
@@ -192,25 +189,26 @@ export const InvestmentPerformanceChart = ({
             >
               <defs>
                 <linearGradient id="gradientValue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0.4} />
-                  <stop offset="95%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0} />
+                  <stop offset="0%" stopColor={chartCobalt} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={chartCobaltSoft} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
+              <CartesianGrid vertical={false} stroke={chartGrid} />
               <XAxis
                 dataKey="date"
                 type="category"
                 tickFormatter={(value) => format(new Date(value), "MMM d")}
-                tick={{ fill: "hsl(var(--muted-foreground))" }}
+                tick={axisTick}
                 tickLine={false}
                 axisLine={false}
                 allowDuplicatedCategory={false}
               />
               <YAxis
-                tick={{ fill: "hsl(var(--muted-foreground))" }}
+                tick={axisTick}
                 tickFormatter={(value) => formatCurrencySmart(value, currency)}
                 tickLine={false}
                 axisLine={false}
+                width={72}
               />
               <Tooltip
                 content={({ active, payload, label }) => {
@@ -231,7 +229,7 @@ export const InvestmentPerformanceChart = ({
                   }
 
                   return (
-                    <div className="border-border/50 bg-background grid min-w-32 items-start gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl">
+                    <div className="grid min-w-32 items-start gap-1.5 rounded-2xl border border-[#e4e4e7] bg-white px-3 py-2 text-xs shadow-none">
                               <div className="font-medium">
                                 {typeof label === "string" ? format(new Date(label), "MMM d, yyyy") : label}
                               </div>
@@ -244,14 +242,14 @@ export const InvestmentPerformanceChart = ({
                         </div>
                         <div className="flex w-full items-center justify-between gap-4">
                           <span className="text-muted-foreground">PnL (Absolute)</span>
-                          <span className={`font-mono ${(dataPayload.pnl || 0) >= 0 ? "text-green-600" : "text-red-600"}`}>
+                          <span className="font-mono text-[#1f1f1f]">
                             {(dataPayload.pnl || 0) >= 0 ? "+" : ""}
                             {formatCurrencySmart(dataPayload.pnl || 0, currency)}
                           </span>
                         </div>
                         <div className="flex w-full items-center justify-between gap-4">
                           <span className="text-muted-foreground">PnL (Percentage)</span>
-                          <span className={`font-mono ${(dataPayload.pnlPercentage || 0) >= 0 ? "text-green-600" : "text-red-600"}`}>
+                          <span className="font-mono text-[#1f1f1f]">
                             {(dataPayload.pnlPercentage || 0) >= 0 ? "+" : ""}
                             {(dataPayload.pnlPercentage || 0).toFixed(2)}%
                           </span>
@@ -272,7 +270,7 @@ export const InvestmentPerformanceChart = ({
                 dataKey="value"
                 fill="url(#gradientValue)"
                 fillOpacity={1}
-                stroke="hsl(142, 76%, 36%)"
+                stroke={chartCobalt}
                 strokeWidth={2}
                 dot={false}
                 activeDot={false}
@@ -281,10 +279,10 @@ export const InvestmentPerformanceChart = ({
               <Line
                 type="monotone"
                 dataKey="netContributions"
-                stroke="#000000"
-                strokeWidth={1}
+                stroke={chartInk}
+                strokeWidth={1.5}
                 dot={false}
-                activeDot={{ r: 4, fill: "#000000" }}
+                activeDot={{ r: 4, fill: chartInk }}
                 connectNulls={true}
               />
              
@@ -294,11 +292,11 @@ export const InvestmentPerformanceChart = ({
         {/* Custom Legend */}
         <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-1 rounded" style={{ backgroundColor: "hsl(142, 76%, 36%)" }} />
+            <div className="h-2 w-2 rounded-full" style={{ backgroundColor: chartCobalt }} />
             <span className="text-sm text-muted-foreground">Investment Value</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-1 rounded" style={{ backgroundColor: "#000000" }} />
+            <div className="h-2 w-2 rounded-full" style={{ backgroundColor: chartInk }} />
             <span className="text-sm text-muted-foreground">Net Contributions</span>
           </div>
         </div>

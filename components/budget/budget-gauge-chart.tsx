@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { chartCobalt } from "@/components/charts/palette";
 
 interface BudgetGaugeChartProps {
   overallPercentageUsed: number;
@@ -35,19 +36,12 @@ const formatCurrency = (amount: number, currency: string): string => {
   }).format(amount);
 };
 
-const getSpentColor = (percentage: number): string => {
-  if (percentage > 100) {
-    return "hsl(0, 84%, 60%)"; // red-500
-  } else if (percentage >= 75) {
-    return "hsl(38, 92%, 50%)"; // amber-500
-  }
-  return "hsl(142, 76%, 36%)"; // green-600
-};
+const getSpentColor = (): string => chartCobalt;
 
 const chartConfig = {
   spent: {
     label: "Spent",
-    color: "hsl(142, 76%, 36%)",
+    color: chartCobalt,
   },
   remaining: {
     label: "Remaining",
@@ -79,7 +73,7 @@ export const BudgetGaugeChart = ({
   // Calculate values for the radial chart
   const displayPercentage = Math.min(overallPercentageUsed, 100);
   const remainingPercentage = Math.max(0, 100 - displayPercentage);
-  const spentColor = getSpentColor(overallPercentageUsed);
+  const spentColor = getSpentColor();
 
   const chartData = [
     {
@@ -97,14 +91,7 @@ export const BudgetGaugeChart = ({
     return "Within budget";
   };
 
-  const getStatusColor = () => {
-    if (overallPercentageUsed > 100) {
-      return "text-red-600";
-    } else if (overallPercentageUsed >= 75) {
-      return "text-amber-600";
-    }
-    return "text-green-600";
-  };
+  const getStatusColor = () => "fill-[#1f1f1f]";
 
   return (
     <Card className="flex flex-col">
@@ -137,7 +124,7 @@ export const BudgetGaugeChart = ({
                           x={viewBox.cx}
                           y={(viewBox.cy || 0) - 16}
                           className={cn(
-                            "fill-foreground text-2xl font-bold",
+                            "text-2xl font-medium",
                             getStatusColor()
                           )}
                         >

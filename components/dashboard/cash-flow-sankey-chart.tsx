@@ -5,6 +5,7 @@ import { ResponsiveSankey } from "@nivo/sankey";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type DashboardDateRange } from "./dashboard-date-selector";
+import { chartCobalt, chartCobaltSoft, chartInk, chartSlate } from "@/components/charts/palette";
 
 interface CashFlowSankeyData {
   income: number;
@@ -166,9 +167,9 @@ export const CashFlowSankeyChart = ({
               textAnchor={textAnchor}
               dominantBaseline="central"
               style={{
-                fontWeight: 700,
+                fontWeight: 500,
                 fontSize: 14,
-                fill: "hsl(215, 16%, 30%)",
+                fill: chartInk,
               }}
             >
               <tspan x={labelX} dy="-0.5em">
@@ -184,20 +185,18 @@ export const CashFlowSankeyChart = ({
     );
   };
 
-  // Color scheme: income green, expenses red, saving gold (positive) or purple (negative), investment blue
   const getNodeColor = (node: { id: string }) => {
     switch (node.id) {
       case "Income":
-        return "#22c55e"; // green
+        return chartCobalt;
       case "Investment":
-        return "#3b82f6"; // blue
+        return chartCobaltSoft;
       case "Savings":
-        // Purple for negative savings, gold for positive
-        return data && data.savings < 0 ? "#a855f7" : "#eab308";
+        return chartInk;
       case "Expenses":
-        return "#ef4444"; // red
+        return chartSlate;
       default:
-        return "#6b7280"; // gray fallback
+        return chartSlate;
     }
   };
 
@@ -232,7 +231,7 @@ export const CashFlowSankeyChart = ({
               if (!data) return null;
               const value = getNodeValue(node.id);
               return (
-                <div className="rounded-lg border bg-background p-2 shadow-md">
+                <div className="rounded-2xl border border-[#e4e4e7] bg-white p-2 shadow-none">
                   <div className="font-semibold">{node.id}</div>
                   <div className="text-sm text-muted-foreground">
                     {formatCurrency(value, data.currency)}
@@ -250,7 +249,7 @@ export const CashFlowSankeyChart = ({
               }
               
               return (
-                <div className="rounded-lg border bg-background p-2 shadow-md">
+                <div className="rounded-2xl border border-[#e4e4e7] bg-white p-2 shadow-none">
                   <div className="font-semibold">
                     {link.source.id} → {link.target.id}
                   </div>
@@ -263,26 +262,18 @@ export const CashFlowSankeyChart = ({
           />
         </div>
         {/* Custom Legend */}
-        <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: "#22c55e" }} />
-            <span className="text-sm text-muted-foreground">Income</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: "#3b82f6" }} />
-            <span className="text-sm text-muted-foreground">Investment</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div 
-              className="w-4 h-4 rounded" 
-              style={{ backgroundColor: data && data.savings < 0 ? "#a855f7" : "#eab308" }} 
-            />
-            <span className="text-sm text-muted-foreground">Savings</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: "#ef4444" }} />
-            <span className="text-sm text-muted-foreground">Expenses</span>
-          </div>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-[#e4e4e7] pt-4">
+          {[
+            ["Income", chartCobalt],
+            ["Investment", chartCobaltSoft],
+            ["Savings", chartInk],
+            ["Expenses", chartSlate],
+          ].map(([label, color]) => (
+            <div key={label} className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+              <span className="text-sm text-[#717173]">{label}</span>
+            </div>
+          ))}
         </div>
       </CardContent>
     </Card>

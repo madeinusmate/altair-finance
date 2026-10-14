@@ -13,7 +13,7 @@ interface PNLChartProps {
 const chartConfig = {
   pnl: {
     label: "Profit / Loss",
-    color: "hsl(var(--chart-1))",
+    color: "#1227fd",
   },
 };
 
@@ -98,9 +98,9 @@ export const PNLChart = ({ data, currency }: PNLChartProps) => {
             <Line
               type="monotone"
               dataKey="pnl"
-              stroke="hsl(var(--chart-1))"
+              stroke="#1227fd"
               strokeWidth={2}
-              dot={{ fill: "hsl(var(--chart-1))", r: 4 }}
+              dot={{ fill: "#1227fd", r: 4 }}
               activeDot={{ r: 6 }}
             />
           </LineChart>

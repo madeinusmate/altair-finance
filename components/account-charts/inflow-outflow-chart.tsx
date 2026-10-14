@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { MonthlyInflowOutflow, formatCurrencySmart } from "@/lib/chart-data-aggregation";
 import { Card, CardContent } from "@/components/ui/card";
+import { chartCobalt, chartInk } from "@/components/charts/palette";
 
 interface InflowOutflowChartProps {
   data: MonthlyInflowOutflow[];
@@ -13,11 +14,11 @@ interface InflowOutflowChartProps {
 const chartConfig = {
   inflow: {
     label: "Inflow",
-    color: "hsl(142, 76%, 36%)", // green-600
+    color: chartCobalt,
   },
   outflow: {
     label: "Outflow",
-    color: "hsl(0, 84%, 60%)", // red-500
+    color: chartInk,
   },
 };
 
@@ -73,12 +74,12 @@ export const InflowOutflowChart = ({ data, currency }: InflowOutflowChartProps) 
             />
             <Bar
               dataKey="inflow"
-              fill="hsl(142, 76%, 36%)"
+              fill={chartCobalt}
               radius={[4, 4, 0, 0]}
             />
             <Bar
               dataKey="outflow"
-              fill="hsl(0, 84%, 60%)"
+              fill={chartInk}
               radius={[4, 4, 0, 0]}
             />
           </BarChart>

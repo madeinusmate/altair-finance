@@ -76,7 +76,7 @@ const BudgetPage = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Budget</h1>
+          <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">Budget</h1>
           <p className="text-muted-foreground">Manage your monthly budgets</p>
         </div>
         <Card>
@@ -89,10 +89,10 @@ const BudgetPage = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Budget</h1>
+          <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">Budget</h1>
           <p className="text-muted-foreground">Manage your monthly budgets</p>
         </div>
         <div className="flex items-center gap-2">
@@ -127,7 +127,7 @@ const BudgetPage = () => {
         </div>
       ) : budgetsData ? (
         <>
-          <div className="grid gap-4 grid-cols-2">
+          <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
             <BudgetSummaryCard
               overallBudget={budgetsData.overallBudget}
               overallSpent={budgetsData.overallSpent}
@@ -160,7 +160,7 @@ const BudgetPage = () => {
           />
         </>
       ) : (
-        <Card>
+        <Card className="netly-fade-in">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Wallet className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No budgets yet</h3>

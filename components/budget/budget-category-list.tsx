@@ -26,6 +26,7 @@ import {
 import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { BudgetBar } from "@/components/budget/budget-bar";
 
 interface BudgetWithSpending {
   id: string;
@@ -58,20 +59,9 @@ const formatCurrency = (amount: number, currency: string): string => {
 
 const getStatusColor = (percentage: number): string => {
   if (percentage > 100) {
-    return "text-red-600";
-  } else if (percentage >= 75) {
-    return "text-yellow-600";
+    return "text-[#1f1f1f]";
   }
-  return "text-green-600";
-};
-
-const getProgressColor = (percentage: number): string => {
-  if (percentage > 100) {
-    return "bg-red-600";
-  } else if (percentage >= 75) {
-    return "bg-yellow-600";
-  }
-  return "bg-green-600";
+  return "text-[#717173]";
 };
 
 export const BudgetCategoryList = ({
@@ -162,8 +152,6 @@ export const BudgetCategoryList = ({
               </TableHeader>
               <TableBody>
                 {budgets.map((budget) => {
-                  const progressValue = Math.min(budget.percentageUsed, 100);
-                  const progressColor = getProgressColor(budget.percentageUsed);
                   const statusColor = getStatusColor(budget.percentageUsed);
                   const allocationPercentage = overallBudget > 0 ? (budget.amount / overallBudget) * 100 : 0;
 
@@ -189,12 +177,7 @@ export const BudgetCategoryList = ({
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
-                            <div
-                              className={cn("h-full transition-all", progressColor)}
-                              style={{ width: `${progressValue}%` }}
-                            />
-                          </div>
+                          <BudgetBar percentage={budget.percentageUsed} />
                           <span className={cn("text-xs", statusColor)}>
                             {budget.percentageUsed.toFixed(1)}%
                           </span>

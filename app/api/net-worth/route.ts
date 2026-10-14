@@ -21,6 +21,7 @@ interface AccountBalance {
   // Investment-specific fields
   netContributions?: number;
   profitLoss?: number;
+  updatedAt: Date;
 }
 
 interface CurrencyNetWorth {
@@ -161,6 +162,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
           category: account.category,
           currency: account.currency,
           balance,
+          updatedAt: account.updatedAt,
         };
 
         // Add investment-specific fields only for investment accounts

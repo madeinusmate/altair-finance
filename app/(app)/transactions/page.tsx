@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +36,7 @@ import { TransferForm } from "@/components/transfer-form";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { CategoryBadge } from "@/components/category-management/category-badge";
 import { toast } from "sonner";
-import { ArrowUpRight, ArrowDownRight, Search, ArrowLeftRight, Pencil, Trash2, Plus } from "lucide-react";
+import { Search, ArrowLeftRight, Pencil, Trash2, Plus } from "lucide-react";
 import { Transaction, Account, Transfer } from "@/lib/db/schema";
 import { format } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
@@ -53,6 +53,8 @@ import {
 type UnifiedItem = 
   | { type: "transaction"; data: Transaction }
   | { type: "transfer"; data: Transfer };
+
+const DELETE_UNDO_MS = 5000;
 
 const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
@@ -85,6 +87,12 @@ const TransactionsPage = () => {
   const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
+  const pendingDeletesRef = useRef<Map<string, number>>(new Map());
+
+  const replaceUnified = (unifiedData: { transactions: Transaction[]; transfers: Transfer[] }) => {
+    setTransactions(unifiedData.transactions.filter((item) => !pendingDeletesRef.current.has(item.id)));
+    setTransfers(unifiedData.transfers.filter((item) => !pendingDeletesRef.current.has(item.id)));
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -100,8 +108,7 @@ const TransactionsPage = () => {
           apiClient.get<Account[]>("/api/accounts"),
           apiClient.get<{ categories: Array<{ name: string; color?: string | null; icon?: string | null }> }>("/api/transaction-categories"),
         ]);
-        setTransactions(unifiedData.transactions);
-        setTransfers(unifiedData.transfers);
+        replaceUnified(unifiedData);
         setAccounts(accountsData);
         setTransactionCategories(categoriesData.categories.map((c) => c.name));
         // Create a map of category name to category metadata
@@ -142,8 +149,7 @@ const TransactionsPage = () => {
     const fetchData = async () => {
       try {
         const unifiedData = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified");
-        setTransactions(unifiedData.transactions);
-        setTransfers(unifiedData.transfers);
+        replaceUnified(unifiedData);
       } catch (err) {
         toast.error("Failed to refresh transactions");
       }
@@ -151,16 +157,49 @@ const TransactionsPage = () => {
     fetchData();
   };
 
-  const handleDeleteTransaction = async (transactionId: string) => {
-    try {
-      await apiClient.delete(`/api/transactions?id=${transactionId}`);
-      const unifiedData = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified");
-      setTransactions(unifiedData.transactions);
-      setTransfers(unifiedData.transfers);
-      toast.success("Transaction deleted");
-    } catch {
-      toast.error("Failed to delete transaction");
+  const scheduleDelete = (id: string, path: string, restore: () => void, label: string) => {
+    const existing = pendingDeletesRef.current.get(id);
+    if (existing) {
+      window.clearTimeout(existing);
     }
+
+    const timeout = window.setTimeout(() => {
+      pendingDeletesRef.current.delete(id);
+      void apiClient.delete(path).catch(() => {
+        restore();
+        toast.error(`Failed to delete ${label.toLowerCase()}`);
+      });
+    }, DELETE_UNDO_MS);
+
+    pendingDeletesRef.current.set(id, timeout);
+    toast(`${label} deleted`, {
+      duration: DELETE_UNDO_MS,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          const pending = pendingDeletesRef.current.get(id);
+          if (pending) {
+            window.clearTimeout(pending);
+            pendingDeletesRef.current.delete(id);
+          }
+          restore();
+        },
+      },
+    });
+  };
+
+  const handleDeleteTransaction = (transaction: Transaction) => {
+    setTransactions((current) => current.filter((item) => item.id !== transaction.id));
+    scheduleDelete(
+      transaction.id,
+      `/api/transactions?id=${transaction.id}`,
+      () => {
+        setTransactions((current) =>
+          current.some((item) => item.id === transaction.id) ? current : [transaction, ...current]
+        );
+      },
+      "Transaction"
+    );
   };
 
   const handleTransactionCreated = () => {
@@ -169,8 +208,7 @@ const TransactionsPage = () => {
     const fetchData = async () => {
       try {
         const unifiedData = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified");
-        setTransactions(unifiedData.transactions);
-        setTransfers(unifiedData.transfers);
+        replaceUnified(unifiedData);
       } catch (err) {
         toast.error("Failed to refresh transactions");
       }
@@ -184,8 +222,7 @@ const TransactionsPage = () => {
     const fetchData = async () => {
       try {
         const unifiedData = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified");
-        setTransactions(unifiedData.transactions);
-        setTransfers(unifiedData.transfers);
+        replaceUnified(unifiedData);
         toast.success("Transfer created successfully");
       } catch (err) {
         toast.error("Failed to refresh transactions");
@@ -206,8 +243,7 @@ const TransactionsPage = () => {
     const fetchData = async () => {
       try {
         const unifiedData = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified");
-        setTransactions(unifiedData.transactions);
-        setTransfers(unifiedData.transfers);
+        replaceUnified(unifiedData);
       } catch (err) {
         toast.error("Failed to refresh transfers");
       }
@@ -215,16 +251,18 @@ const TransactionsPage = () => {
     fetchData();
   };
 
-  const handleDeleteTransfer = async (transferId: string) => {
-    try {
-      await apiClient.delete(`/api/transfers?id=${transferId}`);
-      const unifiedData = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified");
-      setTransactions(unifiedData.transactions);
-      setTransfers(unifiedData.transfers);
-      toast.success("Transfer deleted");
-    } catch {
-      toast.error("Failed to delete transfer");
-    }
+  const handleDeleteTransfer = (transfer: Transfer) => {
+    setTransfers((current) => current.filter((item) => item.id !== transfer.id));
+    scheduleDelete(
+      transfer.id,
+      `/api/transfers?id=${transfer.id}`,
+      () => {
+        setTransfers((current) =>
+          current.some((item) => item.id === transfer.id) ? current : [transfer, ...current]
+        );
+      },
+      "Transfer"
+    );
   };
 
   // Create unified items array
@@ -325,7 +363,7 @@ const TransactionsPage = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
+          <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">Transactions</h1>
           <p className="text-muted-foreground">View all transactions across accounts</p>
         </div>
         <Card>
@@ -345,7 +383,7 @@ const TransactionsPage = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
+          <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">Transactions</h1>
           <p className="text-muted-foreground">View all transactions across accounts</p>
         </div>
         <Card>
@@ -360,10 +398,10 @@ const TransactionsPage = () => {
   const transactionAccounts = accounts.filter((a) => a.type === "transaction");
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="w-full space-y-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
+          <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">Transactions</h1>
           <p className="text-muted-foreground">View all transactions across accounts</p>
         </div>
         <div className="flex items-center gap-2">
@@ -420,7 +458,7 @@ const TransactionsPage = () => {
       </div>
 
       {unifiedItems.length === 0 ? (
-        <Card>
+        <Card className="netly-fade-in">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No transactions yet</h3>
@@ -528,186 +566,184 @@ const TransactionsPage = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Account(s)</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Category</TableHead>
                       <TableHead>Description</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Account</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     <TooltipProvider>
-                      {paginatedItems.map((item) => {
-                      if (item.type === "transaction") {
-                        const transaction = item.data;
-                        const account = accountMap.get(transaction.accountId);
-                        return (
-                          <TableRow key={`transaction-${transaction.id}`}>
-                            <TableCell>
-                              {format(new Date(transaction.date), "MMM d, yyyy")}
-                            </TableCell>
-                            <TableCell>
-                              <Link
-                                href={`/accounts/${transaction.accountId}`}
-                                className="hover:underline"
-                              >
-                                {account?.name || "Unknown"}
-                              </Link>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                {transaction.type === "credit" ? (
-                                  <ArrowUpRight className="h-4 w-4 text-green-500" />
-                                ) : (
-                                  <ArrowDownRight className="h-4 w-4 text-red-500" />
-                                )}
-                                <span className="capitalize">{transaction.type}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <CategoryBadge
-                                name={transaction.category}
-                                color={categoryMap.get(transaction.category)?.color}
-                                icon={categoryMap.get(transaction.category)?.icon}
-                              />
-                            </TableCell>
-                            <TableCell className="max-w-[200px] truncate">
-                              {transaction.description || "-"}
-                            </TableCell>
-                            <TableCell
-                              className={`text-right font-medium ${
-                                transaction.type === "credit" ? "text-green-600" : "text-red-600"
-                              }`}
-                            >
-                              {transaction.type === "credit" ? "+" : "-"}
-                              {formatCurrency(transaction.amount, account?.currency || "USD")}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleEditTransaction(transaction)}
-                                  aria-label="Edit transaction"
+                      {paginatedItems.map((item, index) => {
+                        const previous = paginatedItems[index - 1];
+                        const dayKey = format(new Date(item.data.date), "yyyy-MM-dd");
+                        const showDay = !previous || format(new Date(previous.data.date), "yyyy-MM-dd") !== dayKey;
+
+                        if (item.type === "transaction") {
+                          const transaction = item.data;
+                          const account = accountMap.get(transaction.accountId);
+                          const isCredit = transaction.type === "credit";
+                          return (
+                            <Fragment key={`transaction-${transaction.id}`}>
+                              {showDay && (
+                                <TableRow>
+                                  <TableCell colSpan={5} className="bg-muted/40 text-xs font-medium text-muted-foreground">
+                                    {format(new Date(transaction.date), "EEEE, MMM d")}
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                              <TableRow>
+                                <TableCell className="max-w-[240px] font-medium">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f7f7f7] text-sm">
+                                      {(transaction.description?.trim() || transaction.category).charAt(0).toUpperCase()}
+                                    </div>
+                                    <span className="truncate">{transaction.description?.trim() || transaction.category}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <CategoryBadge
+                                    name={transaction.category}
+                                    color={categoryMap.get(transaction.category)?.color}
+                                    icon={categoryMap.get(transaction.category)?.icon}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Link href={`/accounts/${transaction.accountId}`} className="hover:underline">
+                                    {account?.name || "Unknown"}
+                                  </Link>
+                                </TableCell>
+                                <TableCell
+                                  className="text-right font-medium tabular-nums tracking-[-0.02em]"
                                 >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeleteTransaction(transaction.id)}
-                                  aria-label="Delete transaction"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      } else {
+                                  {isCredit ? "+" : "−"}
+                                  {formatCurrency(transaction.amount, account?.currency || "USD")}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleEditTransaction(transaction)}
+                                      aria-label="Edit transaction"
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleDeleteTransaction(transaction)}
+                                      aria-label="Delete transaction"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            </Fragment>
+                          );
+                        }
+
                         const transfer = item.data;
                         const fromAccount = accountMap.get(transfer.fromAccountId);
                         const toAccount = accountMap.get(transfer.toAccountId);
                         const isCrossCurrency = fromAccount?.currency !== toAccount?.currency;
-                        
+
                         return (
-                          <TableRow key={`transfer-${transfer.id}`}>
-                            <TableCell>
-                              {format(new Date(transfer.date), "MMM d, yyyy")}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <Link
-                                  href={`/accounts/${transfer.fromAccountId}`}
-                                  className="hover:underline"
-                                >
-                                  {fromAccount?.name || "Unknown"}
-                                </Link>
-                                <ArrowLeftRight className="h-3 w-3 text-muted-foreground mx-1" />
-                                <Link
-                                  href={`/accounts/${transfer.toAccountId}`}
-                                  className="hover:underline"
-                                >
-                                  {toAccount?.name || "Unknown"}
-                                </Link>
-                                {isCrossCurrency && toAccount && (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Badge variant="outline" className="ml-2">
-                                        {toAccount.currency}
-                                      </Badge>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Cross-currency transfer</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <ArrowLeftRight className="h-4 w-4 text-blue-500" />
-                                <span>Transfer</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <CategoryBadge
-                                name={transfer.category || "Transfer"}
-                                color={categoryMap.get(transfer.category || "Transfer")?.color}
-                                icon={categoryMap.get(transfer.category || "Transfer")?.icon}
-                              />
-                            </TableCell>
-                            <TableCell className="max-w-[200px] truncate">
-                              <div>
-                                {transfer.description || "-"}
+                          <Fragment key={`transfer-${transfer.id}`}>
+                            {showDay && (
+                              <TableRow>
+                                <TableCell colSpan={5} className="bg-muted/40 text-xs font-medium text-muted-foreground">
+                                  {format(new Date(transfer.date), "EEEE, MMM d")}
+                                </TableCell>
+                              </TableRow>
+                            )}
+                            <TableRow>
+                              <TableCell className="max-w-[240px] font-medium">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f7f7f7]">
+                                    <ArrowLeftRight className="h-4 w-4" />
+                                  </div>
+                                  <div className="min-w-0">
+                                <div className="truncate">{transfer.description?.trim() || "Transfer"}</div>
                                 {isCrossCurrency && transfer.exchangeRate && (
-                                  <div className="text-xs text-muted-foreground mt-1">
+                                  <div className="text-xs font-normal text-muted-foreground">
                                     Rate: {transfer.exchangeRate.toFixed(4)}
                                   </div>
                                 )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {formatCurrency(transfer.fromAmount ?? transfer.amount, fromAccount?.currency || "USD")}
-                              {isCrossCurrency && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="text-xs text-muted-foreground cursor-help">
-                                      → {formatCurrency(transfer.toAmount ?? transfer.amount, toAccount?.currency || "USD")}
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Amount in destination currency</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleEditTransfer(transfer)}
-                                  aria-label="Edit transfer"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeleteTransfer(transfer.id)}
-                                  aria-label="Delete transfer"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <CategoryBadge
+                                  name={transfer.category || "Transfer"}
+                                  color={categoryMap.get(transfer.category || "Transfer")?.color}
+                                  icon={categoryMap.get(transfer.category || "Transfer")?.icon}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Link href={`/accounts/${transfer.fromAccountId}`} className="hover:underline">
+                                    {fromAccount?.name || "Unknown"}
+                                  </Link>
+                                  <ArrowLeftRight className="mx-1 h-3 w-3 text-muted-foreground" />
+                                  <Link href={`/accounts/${transfer.toAccountId}`} className="hover:underline">
+                                    {toAccount?.name || "Unknown"}
+                                  </Link>
+                                  {isCrossCurrency && toAccount && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge variant="outline" className="ml-2">
+                                          {toAccount.currency}
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Cross-currency transfer</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right font-medium tabular-nums tracking-[-0.02em]">
+                                {formatCurrency(transfer.fromAmount ?? transfer.amount, fromAccount?.currency || "USD")}
+                                {isCrossCurrency && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="cursor-help text-xs font-normal text-muted-foreground">
+                                        → {formatCurrency(transfer.toAmount ?? transfer.amount, toAccount?.currency || "USD")}
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Amount in destination currency</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleEditTransfer(transfer)}
+                                    aria-label="Edit transfer"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteTransfer(transfer)}
+                                    aria-label="Delete transfer"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          </Fragment>
                         );
-                      }
-                    })}
+                      })}
                     </TooltipProvider>
                   </TableBody>
                 </Table>

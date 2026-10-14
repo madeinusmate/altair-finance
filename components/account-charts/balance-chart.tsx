@@ -17,7 +17,7 @@ interface BalanceChartProps {
 const chartConfig = {
   balance: {
     label: "Balance",
-    color: "var(--muted-foreground)",
+    color: "#1227fd",
   },
 } satisfies ChartConfig;
 

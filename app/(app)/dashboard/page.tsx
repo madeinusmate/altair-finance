@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight, AlertTriangle } from "lucide-react";
+import { Wallet, AlertTriangle, Plus } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Button } from "@/components/ui/button";
 import { TARGET_NET_WORTH_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
 import { startOfMonth, endOfDay, subMonths, startOfDay, format } from "date-fns";
 import { DashboardDateSelector, type DashboardDateRange } from "@/components/dashboard/dashboard-date-selector";
@@ -14,6 +15,9 @@ import { MonthlyIncomeExpensesChart } from "@/components/dashboard/monthly-incom
 import { CashFlowSankeyChart } from "@/components/dashboard/cash-flow-sankey-chart";
 import { SpendingChart } from "@/components/dashboard/spending-chart";
 import { InvestmentPerformanceChart } from "@/components/dashboard/investment-performance-chart";
+import { RecentActivity } from "@/components/dashboard/recent-activity";
+import { AccountCreateDialog } from "@/components/account-create-dialog";
+import type { Transaction, Transfer } from "@/lib/db/schema";
 
 interface AccountBalance {
   id: string;
@@ -44,13 +48,6 @@ interface NetWorthData {
   usedFallbackRates: boolean;
   hasUnsupportedCurrencies: boolean;
   unsupportedCurrencies: string[];
-}
-
-interface ExpensesIncomesData {
-  expenses: number;
-  incomes: number;
-  expensesChange: number;
-  incomesChange: number;
 }
 
 interface CashFlowData {
@@ -131,6 +128,9 @@ const DashboardPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedCurrency, setSelectedCurrency] = useState<SupportedCurrency>("USD");
   const [username, setUsername] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [activity, setActivity] = useState<{ transactions: Transaction[]; transfers: Transfer[] } | null>(null);
 
   // Date range state - default to last 3 months
   const [dateRange, setDateRange] = useState<DashboardDateRange>(() => {
@@ -147,7 +147,6 @@ const DashboardPage = () => {
   });
 
   // Dashboard data states
-  const [expensesIncomes, setExpensesIncomes] = useState<ExpensesIncomesData | null>(null);
   const [cashFlowSankeyData, setCashFlowSankeyData] = useState<CashFlowSankeyData | null>(null);
   const [spendingData, setSpendingData] = useState<SpendingData | null>(null);
   const [investmentData, setInvestmentData] = useState<InvestmentPerformanceData | null>(null);
@@ -156,18 +155,32 @@ const DashboardPage = () => {
   const [selectedInvestmentAccount, setSelectedInvestmentAccount] = useState<string | undefined>(undefined);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
 
-  // Fetch username
   useEffect(() => {
     const fetchUsername = async () => {
       try {
-        const data = await apiClient.get<{ username: string | null }>("/api/user/username");
-        setUsername(data.username);
+        const result = await apiClient.get<{ username: string | null }>("/api/user/username");
+        setUsername(result.username);
       } catch (error) {
         console.error("Failed to fetch username:", error);
       }
     };
     void fetchUsername();
   }, []);
+
+  useEffect(() => {
+    const fetchActivity = async () => {
+      try {
+        const result = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>(
+          "/api/transactions-unified"
+        );
+        setActivity(result);
+      } catch (error) {
+        console.error("Failed to fetch recent activity:", error);
+      }
+    };
+
+    void fetchActivity();
+  }, [refreshKey]);
 
   // Fetch net worth data
   useEffect(() => {
@@ -183,7 +196,7 @@ const DashboardPage = () => {
     };
 
     fetchNetWorth();
-  }, []);
+  }, [refreshKey]);
 
   // Fetch dashboard insights data
   useEffect(() => {
@@ -215,13 +228,6 @@ const DashboardPage = () => {
 
         if (cashFlowSankeyRes) {
           setCashFlowSankeyData(cashFlowSankeyRes);
-          // Calculate expenses and incomes for the net worth card
-          setExpensesIncomes({
-            expenses: cashFlowSankeyRes.expenses,
-            incomes: cashFlowSankeyRes.income,
-            expensesChange: 4.8, // Placeholder
-            incomesChange: 3.2, // Placeholder
-          });
         }
 
         if (spendingRes) {
@@ -254,6 +260,9 @@ const DashboardPage = () => {
 
 
   const hasData = data && data.accounts.length > 0;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const greetingLine = username ? `${greeting}, ${username}` : greeting;
   const netWorthSummary = data?.netWorthByCurrency[selectedCurrency];
   const ratesLabel = data ? formatRateTimestamp(data.lastRatesUpdatedAt) : "";
 
@@ -261,8 +270,7 @@ const DashboardPage = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">Your financial insights at a glance</p>
+          <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">Home</h1>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -286,10 +294,7 @@ const DashboardPage = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {username ? `Hello ${username} 👋` : "Hello 👋"}
-          </h1>
-          <p className="text-muted-foreground">Your financial insights at a glance</p>
+          <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">Home</h1>
         </div>
         <Card>
           <CardContent className="pt-6">
@@ -301,45 +306,21 @@ const DashboardPage = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {username ? `Hello ${username} 👋` : "Hello 👋"}
-          </h1>
-          <p className="text-muted-foreground">Your financial insights at a glance</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <ToggleGroup
-            type="single"
-            value={selectedCurrency}
-            onValueChange={(value) => {
-              if (value) {
-                setSelectedCurrency(value as SupportedCurrency);
-              }
-            }}
-            variant="outline"
-            size="sm"
-            spacing={0}
-          >
-            {TARGET_NET_WORTH_CURRENCIES.map((currency) => (
-              <ToggleGroupItem key={currency} value={currency}>
-                {currency}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-          <DashboardDateSelector value={dateRange} onChange={setDateRange} />
-        </div>
-      </div>
+    <div className="w-full space-y-8">
+      <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">{greetingLine}</h1>
 
       {!hasData ? (
-        <Card>
+        <Card className="netly-fade-in">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Wallet className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No accounts yet</h3>
-            <p className="text-muted-foreground text-center max-w-sm">
+            <p className="text-muted-foreground text-center max-w-sm mb-4">
               Start tracking your net worth by adding your first account.
             </p>
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Account
+            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -354,87 +335,102 @@ const DashboardPage = () => {
             </Alert>
           )}
 
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Net Worth Tiles */}
-            {data?.hasUnsupportedCurrencies || !netWorthSummary ? (
-              <Card className="col-span-2 md:col-span-3">
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                    Set a supported currency for every account to view net worth totals.
+          {data?.hasUnsupportedCurrencies || !netWorthSummary ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                  Set a supported currency for every account to view net worth totals.
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+              <div
+                className="relative overflow-hidden rounded-[22px] px-6 py-7 text-white sm:px-8 sm:py-8"
+                style={{
+                  background:
+                    "linear-gradient(165deg, #1227fd 0%, #3a4dff 46%, #8eb6ff 100%)",
+                }}
+              >
+                <div className="pointer-events-none absolute -right-10 -top-16 h-48 w-48 rounded-full bg-[#6fa0ff] opacity-80 blur-3xl" />
+                <div className="pointer-events-none absolute -bottom-16 left-1/4 h-40 w-40 rounded-full bg-[#1227fd] opacity-70 blur-3xl" />
+                <div className="relative space-y-6">
+                  <div className="flex gap-5 text-sm">
+                    {TARGET_NET_WORTH_CURRENCIES.map((currency) => (
+                      <button
+                        key={currency}
+                        type="button"
+                        onClick={() => setSelectedCurrency(currency)}
+                        className={
+                          currency === selectedCurrency
+                            ? "font-medium text-white"
+                            : "text-white/70"
+                        }
+                      >
+                        {currency}
+                      </button>
+                    ))}
                   </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                {/* Net Worth Tile */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div
-                      className={`text-2xl font-bold ${netWorthSummary.netWorth >= 0 ? "text-green-600" : "text-red-600"
-                        }`}
-                    >
+                  <div>
+                    <p className="text-[40px] font-medium leading-none tracking-[-0.03em] tabular-nums sm:text-[52px] sm:tracking-[-0.02em]">
                       {formatNetWorthCurrency(netWorthSummary.netWorth, netWorthSummary.currency)}
-                    </div>
-                  </CardContent>
-                </Card>
-                {/* Assets Tile */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                      <ArrowUpRight className="h-4 w-4 text-green-500" />
-                      Assets
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-green-600">
-                      {formatNetWorthCurrency(netWorthSummary.totalAssets, netWorthSummary.currency)}
-                    </div>
-                  </CardContent>
-                </Card>
-                {/* Liabilities Tile */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                      <ArrowDownRight className="h-4 w-4 text-red-500" />
-                      Liabilities
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-red-600">
-                      {formatNetWorthCurrency(netWorthSummary.totalLiabilities, netWorthSummary.currency)}
-                    </div>
-                  </CardContent>
-                </Card>
-                {/* P/L Tile */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                      {netWorthSummary.totalProfitLoss >= 0 ? (
-                        <TrendingUp className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <TrendingDown className="h-4 w-4 text-red-500" />
-                      )}
-                      Investment P/L
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div
-                      className={`text-2xl font-bold ${netWorthSummary.totalProfitLoss >= 0 ? "text-green-600" : "text-red-600"
-                        }`}
+                    </p>
+                    <p className="mt-2 text-sm text-white/80">{netWorthSummary.currency} net worth</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="ghost"
+                      className="border border-white/50 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                      onClick={() => setShowCreateDialog(true)}
                     >
-                      {netWorthSummary.totalProfitLoss >= 0 ? "+" : ""}
-                      {formatNetWorthCurrency(netWorthSummary.totalProfitLoss, netWorthSummary.currency)}
+                      <Plus className="h-4 w-4" />
+                      Add account
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="border border-white/50 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                      asChild
+                    >
+                      <Link href="/accounts">Accounts</Link>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="border border-white/50 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                      asChild
+                    >
+                      <Link href="/transactions">Statement</Link>
+                    </Button>
+                  </div>
+                  <div className="flex gap-8 text-sm">
+                    <div>
+                      <p className="text-white/70">Assets</p>
+                      <p className="mt-1 font-medium tabular-nums">
+                        {formatNetWorthCurrency(netWorthSummary.totalAssets, netWorthSummary.currency)}
+                      </p>
                     </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-          </div>
-          <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+                    <div>
+                      <p className="text-white/70">Liabilities</p>
+                      <p className="mt-1 font-medium tabular-nums">
+                        {formatNetWorthCurrency(netWorthSummary.totalLiabilities, netWorthSummary.currency)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <RecentActivity
+                transactions={activity?.transactions ?? []}
+                transfers={activity?.transfers ?? []}
+                accounts={data.accounts}
+                isLoading={activity === null}
+              />
+            </div>
+          )}
+          <section className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-2xl font-medium tracking-[-0.02em] text-[#717173]">Insights</h2>
+              <DashboardDateSelector value={dateRange} onChange={setDateRange} />
+            </div>
+          <div className="grid gap-4 md:grid-cols-2">
             {/* Monthly Income & Expenses Chart - First Row */}
             <MonthlyIncomeExpensesChart
               dateRange={dateRange}
@@ -445,11 +441,13 @@ const DashboardPage = () => {
 
 
             {/* Cash Flow Sankey Visualization */}
+            <div className="md:col-span-2">
             <CashFlowSankeyChart
               dateRange={dateRange}
               isLoading={isLoadingDashboard}
               data={cashFlowSankeyData}
             />
+            </div>
 
             {/* Net Spending Card */}
             <SpendingChart
@@ -474,8 +472,15 @@ const DashboardPage = () => {
               }
             />
           </div>
+          </section>
         </>
       )}
+
+      <AccountCreateDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onSuccess={() => setRefreshKey((current) => current + 1)}
+      />
     </div>
   );
 };
