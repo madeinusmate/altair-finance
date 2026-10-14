@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+oauth-relay/
 /.pnp
 .pnp.js
 .yarn/install-state.gz
