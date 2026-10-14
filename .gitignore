@@ -30,11 +30,11 @@ yarn-error.log*
 
 # env files
 .env
-.env*.local
+.env.*
+!.env.example
 
 # vercel
 .vercel
-oauth-relay/.vercel
 
 # typescript
 *.tsbuildinfo

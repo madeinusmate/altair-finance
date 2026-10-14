@@ -3,22 +3,36 @@ import archiver from "archiver";
 import { PassThrough, Readable } from "stream";
 import fs from "fs";
 import path from "path";
-import { getDbPath, dbFileExists } from "@/lib/db";
-import { getEncryptionKey } from "@/lib/api-utils";
+import { beginAuthVerifyAttempt } from "@/lib/auth-verify-rate-limit";
+import { getDbPath, dbFileExists, validateKey } from "@/lib/db";
+import { validateEncryptionKey } from "@/lib/encryption";
 
 const getTimestamp = (): string => {
   return new Date().toISOString().slice(0, 10);
 };
 
 export const POST = async (request: NextRequest): Promise<Response> => {
-  const key = getEncryptionKey(request);
-  if (!key) {
+  const key = request.headers.get("X-Encryption-Key");
+  if (!key || !validateEncryptionKey(key)) {
     return Response.json({ error: "Missing or invalid encryption key" }, { status: 401 });
   }
 
-  if (!dbFileExists()) {
-    return Response.json({ error: "Database not initialized" }, { status: 400 });
+  const attempt = beginAuthVerifyAttempt();
+  if (!attempt.ok) {
+    return Response.json(
+      { error: `Too many attempts. Try again in ${attempt.retryAfterSeconds} seconds.` },
+      {
+        status: 429,
+        headers: { "Retry-After": String(attempt.retryAfterSeconds) },
+      }
+    );
   }
+
+  if (!dbFileExists() || !validateKey(key)) {
+    attempt.finish(false);
+    return Response.json({ error: "Missing or invalid encryption key" }, { status: 401 });
+  }
+  attempt.finish(true);
 
   const dbPath = getDbPath();
   const walPath = `${dbPath}-wal`;

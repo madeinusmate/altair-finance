@@ -76,8 +76,6 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { AccountChartsContainer } from "@/components/account-charts/account-charts-container";
 import { InvestmentPerformanceChart } from "@/components/dashboard/investment-performance-chart";
 import { DashboardDateSelector, type DashboardDateRange } from "@/components/dashboard/dashboard-date-selector";
-import { SyncButton } from "@/components/open-banking/sync-button";
-import { ConnectionIndicator } from "@/components/open-banking/connection-indicator";
 import { PdfStatementImport } from "@/components/pdf-import/pdf-statement-import";
 import { FileText } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -491,70 +489,6 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                     : ` • ${formatCurrency(currentBalance, account.currency)}`}
                 </span>
               )}
-              {process.env.NEXT_PUBLIC_OPEN_BANKING_ENABLED === "true" && account.type === "transaction" && account.metadata && (() => {
-                try {
-                  const meta = JSON.parse(account.metadata);
-                  const finverseMeta = meta?.finverse;
-                  const plaidMeta = meta?.plaid;
-
-                  if (plaidMeta && plaidMeta.account_id) {
-                    // Plaid-connected account
-                    const syncStatus = plaidMeta.sync_status === "completed" ? "connected" as const
-                      : plaidMeta.sync_status === "pending" || plaidMeta.sync_status === "in_progress" ? "syncing" as const
-                      : plaidMeta.sync_status === "error" ? "error" as const
-                      : "disconnected" as const;
-
-                    return (
-                      <>
-                        <ConnectionIndicator
-                          status={syncStatus}
-                          provider="plaid"
-                          errorMessage={plaidMeta.sync_progress?.error_message}
-                        />
-                        {plaidMeta.item_id && (
-                          <SyncButton
-                            accountId={account.id}
-                            provider="plaid"
-                            providerAccountId={plaidMeta.account_id}
-                            providerIdentityId={plaidMeta.item_id}
-                            onSyncComplete={fetchData}
-                          />
-                        )}
-                      </>
-                    );
-                  }
-
-                  if (finverseMeta && finverseMeta.account_id) {
-                    // Finverse-connected account
-                    const syncStatus = finverseMeta.sync_status === "completed" ? "connected" as const
-                      : finverseMeta.sync_status === "pending" || finverseMeta.sync_status === "in_progress" ? "syncing" as const
-                      : finverseMeta.sync_status === "error" ? "error" as const
-                      : "disconnected" as const;
-                    
-                    return (
-                      <>
-                        <ConnectionIndicator 
-                          status={syncStatus}
-                          provider="finverse"
-                          errorMessage={finverseMeta.sync_progress?.error_message}
-                        />
-                        {finverseMeta.login_identity_id && (
-                          <SyncButton
-                            accountId={account.id}
-                            provider="finverse"
-                            providerAccountId={finverseMeta.account_id}
-                            providerIdentityId={finverseMeta.login_identity_id}
-                            onSyncComplete={fetchData}
-                          />
-                        )}
-                      </>
-                    );
-                  }
-                } catch {
-                  // Invalid metadata
-                }
-                return null;
-              })()}
             </div>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               <Badge className="capitalize" variant={account.nature === "asset" ? "default" : "destructive"}>

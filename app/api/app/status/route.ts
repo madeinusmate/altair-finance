@@ -1,40 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
+import { beginAuthVerifyAttempt } from "@/lib/auth-verify-rate-limit";
 import { dbFileExists, validateKey } from "@/lib/db";
+import { validateEncryptionKey } from "@/lib/encryption";
 
-// Force dynamic to ensure environment variables are read at runtime
 export const dynamic = "force-dynamic";
 
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
   try {
-    const key = request.headers.get("X-Encryption-Key");
-    
-    console.log("[API /app/status] Checking database status...");
-    console.log("[API /app/status] ELECTRON_USER_DATA:", process.env.ELECTRON_USER_DATA || "(not set)");
-    
     const dbExists = dbFileExists();
-    console.log("[API /app/status] dbExists:", dbExists);
-
     if (!dbExists) {
       return NextResponse.json({ state: "new", dbExists });
     }
 
+    const key = request.headers.get("X-Encryption-Key");
     if (!key) {
       return NextResponse.json({ state: "locked", dbExists });
     }
 
-    const isValid = validateKey(key);
-    if (isValid) {
-      return NextResponse.json({ state: "unlocked", dbExists });
+    const attempt = beginAuthVerifyAttempt();
+    if (!attempt.ok) {
+      return NextResponse.json(
+        { state: "locked", dbExists },
+        {
+          status: 429,
+          headers: { "Retry-After": String(attempt.retryAfterSeconds) },
+        }
+      );
     }
 
-    return NextResponse.json({ state: "corrupt", dbExists });
+    const isValid = validateEncryptionKey(key) && validateKey(key);
+    attempt.finish(isValid);
+    return NextResponse.json({ state: isValid ? "unlocked" : "locked", dbExists });
   } catch (error) {
-    console.error("[API /app/status] Error:", error);
-    // On error, return "new" state to allow setup rather than showing unlock
-    return NextResponse.json({ 
-      state: "new", 
-      dbExists: false, 
-      error: error instanceof Error ? error.message : "Unknown error" 
+    console.error("[API /app/status] Error:", error instanceof Error ? error.name : "unknown");
+    return NextResponse.json({
+      state: "locked",
+      dbExists: dbFileExists(),
     });
   }
 };

@@ -8,24 +8,12 @@ import fs from "fs";
 type DatabaseInstance = InstanceType<typeof Database>;
 
 const getDbPath = (): string => {
-  // ELECTRON_USER_DATA is set by the Electron main process when spawning Next.js
-  // This works for both the Electron renderer and the spawned Next.js server
+  // ELECTRON_USER_DATA is set by the Electron main process when spawning Next.js.
   const electronUserData = process.env.ELECTRON_USER_DATA;
-  
-  console.log(`[DB] getDbPath called`);
-  console.log(`[DB] ELECTRON_USER_DATA env var: ${electronUserData || "(not set)"}`);
-  console.log(`[DB] process.cwd(): ${process.cwd()}`);
-  
   if (electronUserData) {
-    const dbPath = path.join(electronUserData, "netly.db");
-    console.log(`[DB] Using Electron user data path: ${dbPath}`);
-    return dbPath;
+    return path.join(electronUserData, "netly.db");
   }
-  
-  // Fallback for development (running Next.js directly)
-  const devPath = path.join(process.cwd(), "data", "netly.db");
-  console.log(`[DB] Using development path: ${devPath}`);
-  return devPath;
+  return path.join(process.cwd(), "data", "netly.db");
 };
 
 const META_ID = "primary";
@@ -59,8 +47,22 @@ const openSqlite = (encryptionKey: string): DatabaseInstance => {
   return sqlite;
 };
 
+const ensureInstallIdColumn = (sqlite: DatabaseInstance): void => {
+  const table = sqlite
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'user_settings'")
+    .get();
+  if (!table) return;
+
+  const columns = sqlite.prepare("PRAGMA table_info(user_settings)").all() as Array<{ name: string }>;
+  if (!columns.some((column) => column.name === "install_id")) {
+    sqlite.exec("ALTER TABLE user_settings ADD COLUMN install_id TEXT");
+  }
+};
+
 export const runMigrations = (sqlite: DatabaseInstance): void => {
   try {
+    ensureInstallIdColumn(sqlite);
+
     // Migration: Create imports table if it doesn't exist
     const importsTableCheck = sqlite.prepare(`
       SELECT name FROM sqlite_master 
@@ -240,6 +242,8 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
       console.warn("[DB Migration] Could not create budgets table:", error);
     }
 
+    // Open banking tables stay in place. Account rows they once fed remain
+    // ordinary records. The app does not read these tables.
     // Migration: Create open banking tables
     try {
       const clientTokensTableCheck = sqlite.prepare(`
@@ -457,6 +461,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     CREATE TABLE IF NOT EXISTS user_settings (
       id TEXT PRIMARY KEY DEFAULT 'user',
       username TEXT NOT NULL,
+      install_id TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -609,6 +614,8 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       console.warn("[DB Migration] Could not add metadata columns:", error);
     }
 
+    // Open banking tables stay in place. Account rows they once fed remain
+    // ordinary records. The app does not read these tables.
     // Migration: Create open banking tables
     try {
       const clientTokensTableCheck = sqlite.prepare(`
@@ -659,11 +666,13 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
           CREATE TABLE user_settings (
             id TEXT PRIMARY KEY DEFAULT 'user',
             username TEXT NOT NULL,
+            install_id TEXT,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
           );
         `);
       }
+      ensureInstallIdColumn(sqlite);
     } catch (error) {
       console.warn("[DB Migration] Could not create user_settings table:", error);
     }
@@ -691,6 +700,12 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
         INSERT INTO user_settings (id, username, created_at, updated_at)
         VALUES ('user', ?, ?, ?)
       `).run(username, now, now);
+    }
+    const installRow = sqlite
+      .prepare("SELECT install_id FROM user_settings WHERE id = 'user'")
+      .get() as { install_id: string | null } | undefined;
+    if (installRow && !installRow.install_id) {
+      sqlite.prepare("UPDATE user_settings SET install_id = ? WHERE id = 'user'").run(crypto.randomUUID());
     }
   } catch (error) {
     console.warn("[DB Init] Could not store username:", error);
@@ -832,9 +847,7 @@ export const validateKey = (encryptionKey: string): boolean => {
 };
 
 export const dbFileExists = (): boolean => {
-  const dbPath = getDbPath();
-  console.log(`[DB] Checking if database exists at: ${dbPath}`);
-  return fs.existsSync(dbPath);
+  return fs.existsSync(getDbPath());
 };
 
 export { getDbPath };

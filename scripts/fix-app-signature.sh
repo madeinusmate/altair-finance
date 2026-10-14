@@ -1,6 +1,7 @@
 #!/bin/bash
-# Script to fix app signature after building
-# This removes the problematic signature and re-signs with ad-hoc signature
+# Ad-hoc sign a Netly build you just produced on this machine.
+# This is not a substitute for an Apple Developer ID signature, and it does not
+# make the app trusted for anyone else. See docs/macos-unsigned-builds.md.
 
 # Get the script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

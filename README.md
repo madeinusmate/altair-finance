@@ -1,116 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Netly
 
-## Getting Started
+Netly is an open-source desktop app for personal finance. It is an Electron shell around a local Next.js server. Your books live in a SQLCipher database on this computer, unlocked by a passphrase you choose. The app does not ship with an account server, and it is not meant to be deployed as a website.
 
-First, run the development server:
+## Security model
+
+- The Next.js server binds to `127.0.0.1` only.
+- Electron generates a random token on each launch. Every `/api` request must present it. The token is injected into the app window.
+- The database file is encrypted. The passphrase is checked with a shared rate limit on unlock, status, export, delete, and import.
+- A wrong passphrase and a file that cannot be opened look the same to the client (`locked`). The status endpoint does not say whether the file is corrupt.
+- The main window stays on the local app origin.
+
+Report vulnerabilities privately. See [SECURITY.md](SECURITY.md).
+
+## Build from source
+
+Requirements: Node.js 20, pnpm 8.15.9, and a C toolchain so `better-sqlite3-multiple-ciphers` can build.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env.local
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:8528](http://localhost:8528) with your browser to see the result.
+`pnpm dev` serves the web UI on `http://127.0.0.1:8527` for local development. Do not publish that port. The desktop app binds another loopback port starting at `8528`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm test
+pnpm typecheck
+pnpm lint
+pnpm build
+pnpm dev:electron
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`pnpm package:mac` builds a macOS app. An unsigned local build needs an ad-hoc signature. Read [docs/macos-unsigned-builds.md](docs/macos-unsigned-builds.md) before using the signing scripts. Those scripts are for an app you just built. They are not a way to run somebody else's unsigned app.
 
-## Open Banking OAuth Relay Setup
+Accounts are created by hand. Transactions can be typed in, or brought in from a CSV, a PDF statement, or a database backup. Open banking is not part of this version. See [docs/open-banking.md](docs/open-banking.md) if you need to bring that integration back from git history.
 
-Netly uses Finverse for open banking connections. Since Finverse requires a publicly accessible HTTPS redirect URL, but the app runs locally (localhost:8528), an OAuth redirect relay is needed.
+## License
 
-### Initial Setup
-
-1. **Install Vercel CLI** (if not already installed):
-   ```bash
-   npm i -g vercel
-   ```
-
-2. **Deploy the relay**:
-   ```bash
-   cd oauth-relay
-   vercel link
-   vercel --prod
-   ```
-   
-   When linking:
-   - Select your Vercel account
-   - Create a new project or link to existing
-   - **Important**: Set Root Directory to `oauth-relay` when configuring
-
-3. **Register callback URL in Finverse dashboard**:
-   - Use the Vercel deployment URL: `https://your-project.vercel.app/callback`
-   - Add this as an authorized redirect URI in your Finverse dashboard
-
-4. **Configure environment variable**:
-   - Add `NEXT_PUBLIC_OAUTH_RELAY_URL=https://your-project.vercel.app` to your `.env` file
-   - See `.env.example` for reference
-
-### Custom Domain (Optional)
-
-To use your own subdomain (e.g., `auth.yourdomain.com`):
-
-1. In Vercel project settings, add `auth.yourdomain.com` as a custom domain
-2. Add DNS CNAME: `auth` -> `cname.vercel-dns.com`
-3. Update `NEXT_PUBLIC_OAUTH_RELAY_URL` in `.env` to `https://auth.yourdomain.com`
-
-### How It Works
-
-The relay receives OAuth callbacks from Finverse and redirects them to your local application. The target URL is encoded in the state parameter, allowing the relay to forward callbacks to the correct localhost address.
-
-For more details, see [`oauth-relay/README.md`](oauth-relay/README.md).
-
-## PDF Statement Import
-
-Netly supports importing transactions from PDF bank and credit card statements using AI-powered extraction.
-
-### Setup
-
-1. **Get an OpenAI API Key**:
-   - Sign up at [OpenAI Platform](https://platform.openai.com)
-   - Navigate to [API Keys](https://platform.openai.com/api-keys)
-   - Create a new API key
-
-2. **Configure Environment Variable**:
-   - Add `OPENAI_API_KEY=your_api_key_here` to your `.env` file
-   - See `.env.example` for reference
-
-3. **Usage**:
-   - Navigate to an account detail page and click "Import PDF Statement"
-   - Or go to Settings > Import and select the "PDF Statement Import" tab
-   - Select an account, upload a PDF statement (max 50MB), and review extracted transactions
-   - Edit transactions as needed before importing
-
-### Features
-
-- **AI-Powered Extraction**: Uses OpenAI GPT-5 to automatically extract transactions from PDF statements
-- **Duplicate Detection**: Automatically flags and excludes duplicate transactions
-- **Inline Editing**: Review and edit transactions before importing
-- **Transfer Conversion**: Convert transactions to transfers during review
-- **Import Tracking**: Tracks imported files to prevent duplicate imports
-
-### Supported Formats
-
-- Bank statements (PDF)
-- Credit card statements (PDF)
-- Maximum file size: 50MB
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT. See [LICENSE](LICENSE). `package.json` already declared MIT. There was no `LICENSE` file in the tree before this was added, so confirm that the copyright line matches what you want to publish.
