@@ -1,10 +1,46 @@
-import { app, BrowserWindow, dialog } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
 import { spawn, ChildProcess } from "child_process";
+import { randomBytes } from "crypto";
 import * as path from "path";
 import * as fs from "fs";
 import findFreePort from "find-free-port";
 import waitOn from "wait-on";
 import { createMenu } from "./menu";
+
+const LOCAL_HOST = "127.0.0.1";
+const apiToken = randomBytes(32).toString("hex");
+
+// Keep the window origin on localhost (the OAuth callback target) while the
+// socket itself is the IPv4 loopback address Next binds to.
+app.commandLine.appendSwitch("host-resolver-rules", "MAP localhost 127.0.0.1");
+
+ipcMain.on("netly-get-api-token", (event) => {
+  event.returnValue = apiToken;
+});
+
+let apiTokenHeaderPort: number | null = null;
+
+const installApiTokenHeader = (port: number): void => {
+  if (apiTokenHeaderPort === port) return;
+  apiTokenHeaderPort = port;
+
+  session.defaultSession.webRequest.onBeforeSendHeaders(
+    {
+      urls: [
+        `http://${LOCAL_HOST}:${port}/api/*`,
+        `http://localhost:${port}/api/*`,
+      ],
+    },
+    (details, callback) => {
+      callback({
+        requestHeaders: {
+          ...details.requestHeaders,
+          "X-Netly-Token": apiToken,
+        },
+      });
+    }
+  );
+};
 
 let mainWindow: BrowserWindow | null = null;
 let nextServer: ChildProcess | null = null;
@@ -238,12 +274,13 @@ const startNextServer = async (port: number): Promise<void> => {
     console.log(`[Electron] Using app root: ${appRoot}`);
     console.log(`[Electron] Using .next from: ${nextBuildPath}`);
 
-    const args = ["start", "-p", port.toString()];
+    const args = ["start", "-H", LOCAL_HOST, "-p", port.toString()];
     const env = {
       ...process.env,
       PORT: port.toString(),
       NODE_ENV: "production",
       ELECTRON_USER_DATA: app.getPath("userData"),
+      NETLY_API_TOKEN: apiToken,
     };
 
     // Try bundled Node.js first, then system Node.js, then "node" from PATH
@@ -354,7 +391,7 @@ const startNextServer = async (port: number): Promise<void> => {
 
     // Give the server a moment to start before checking
     setTimeout(() => {
-      const serverUrl = `http://localhost:${port}`;
+      const serverUrl = `http://${LOCAL_HOST}:${port}`;
       console.log(`[Electron] Waiting for server at ${serverUrl}...`);
       waitOn({
         resources: [serverUrl],
@@ -396,6 +433,7 @@ app.whenReady().then(async () => {
     serverPort = await findFreePort(8528);
 
     await startNextServer(serverPort);
+    installApiTokenHeader(serverPort);
 
     splash.close();
     mainWindow = createMainWindow(serverPort);
@@ -422,6 +460,7 @@ app.on("activate", () => {
           serverPort = await findFreePort(8528);
           await startNextServer(serverPort);
         }
+        installApiTokenHeader(serverPort);
         mainWindow = createMainWindow(serverPort);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);

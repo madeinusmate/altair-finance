@@ -1,11 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbFileExists, validateKey } from "@/lib/db";
 import { validateEncryptionKey } from "@/lib/encryption";
+import { beginAuthVerifyAttempt } from "@/lib/auth-verify-rate-limit";
 
 // Force dynamic to ensure environment variables are read at runtime
 export const dynamic = "force-dynamic";
 
+const tooManyAttempts = (retryAfterSeconds: number): NextResponse => {
+  return NextResponse.json(
+    { valid: false, error: `Too many attempts. Try again in ${retryAfterSeconds} seconds.` },
+    {
+      status: 429,
+      headers: { "Retry-After": String(retryAfterSeconds) },
+    }
+  );
+};
+
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
+  const attempt = beginAuthVerifyAttempt();
+  if (!attempt.ok) {
+    return tooManyAttempts(attempt.retryAfterSeconds);
+  }
+
+  let success = false;
   try {
     const { key } = await request.json();
 
@@ -31,6 +48,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       );
     }
 
+    success = true;
     return NextResponse.json({ valid: true });
   } catch (error) {
     console.error("Auth verification error:", error);
@@ -38,5 +56,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       { valid: false, error: "Verification failed" },
       { status: 500 }
     );
+  } finally {
+    attempt.finish(success);
   }
 };

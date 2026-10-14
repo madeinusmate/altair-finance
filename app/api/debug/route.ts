@@ -1,8 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getEncryptionKey } from "@/lib/api-utils";
 
 export const dynamic = "force-dynamic";
 
-export const GET = async (): Promise<NextResponse> => {
+export const GET = async (request: NextRequest): Promise<NextResponse> => {
+  if (process.env.NODE_ENV !== "development") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (!getEncryptionKey(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const debug: Record<string, unknown> = {
     nodeVersion: process.version,
     platform: process.platform,
@@ -18,9 +27,8 @@ export const GET = async (): Promise<NextResponse> => {
   // Try to load the native module
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Database = require("better-sqlite3-multiple-ciphers");
+    require("better-sqlite3-multiple-ciphers");
     debug.sqliteModule = "loaded successfully";
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     debug.sqliteModulePath = require.resolve("better-sqlite3-multiple-ciphers");
   } catch (error) {
     debug.sqliteModule = "failed to load";
@@ -32,8 +40,6 @@ export const GET = async (): Promise<NextResponse> => {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require("fs");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const path = require("path");
     const electronUserData = process.env.ELECTRON_USER_DATA;
     
     if (electronUserData) {
