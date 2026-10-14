@@ -127,7 +127,7 @@ class FinverseClientService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Invalid response format' }));
-        console.error('Failed to get client credentials token:', errorData);
+        console.error("Failed to get client credentials token:", response.status);
         
         let errorMessage = 'Unknown error';
         if (typeof errorData === 'string') {

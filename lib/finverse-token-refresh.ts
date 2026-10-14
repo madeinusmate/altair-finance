@@ -1,7 +1,7 @@
-import { createHash } from "crypto";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "./db";
 import { getFinverseClientToken } from "./finverse-client";
+import { getProviderUserId } from "./provider-user-id";
 
 export interface TokenRefreshResult {
   success: boolean;
@@ -36,22 +36,16 @@ export const refreshFinverseToken = async (
 
     const refreshToken = tokenRecord.refreshToken;
 
-    console.log(`🔄 Refreshing access token for login identity ${loginIdentityId}`);
-
-    // Get client credentials token using the reusable service
     const clientTokenResult = await getFinverseClientToken(encryptionKey);
     
     if (!clientTokenResult.success || !clientTokenResult.accessToken) {
       return {
         success: false,
-        error: `Failed to get client credentials token: ${clientTokenResult.error}`
+        error: "Failed to get client credentials token"
       };
     }
 
-    console.log('✅ Client credentials token obtained via service');
-
-    // Generate a stable user_id from the encryption key (hash it for privacy)
-    const userId = createHash("sha256").update(encryptionKey).digest("hex").substring(0, 32);
+    const userId = getProviderUserId(encryptionKey);
 
     // Use the client token to refresh the user's access token
     const response = await fetch('https://api.prod.finverse.net/auth/token', {
@@ -69,11 +63,9 @@ export const refreshFinverseToken = async (
       }),
     });
 
-    console.log(`Finverse token refresh response: ${response.status} ${response.statusText}`);
-
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Invalid response format' }));
-      console.error('Failed to refresh token:', errorData);
+      console.error("Failed to refresh token:", response.status);
       
       // Handle different error response formats
       let errorMessage = 'Unknown error';
@@ -98,20 +90,14 @@ export const refreshFinverseToken = async (
     }
 
     const tokenData = await response.json();
-    console.log('Token response data:', { 
-      hasAccessToken: !!tokenData.access_token, 
-      hasRefreshToken: !!tokenData.refresh_token,
-      tokenType: tokenData.token_type 
-    });
-    
     const newAccessToken = tokenData.access_token;
-    const newRefreshToken = tokenData.refresh_token || refreshToken; // Use new refresh token if provided, otherwise keep the old one
+    const newRefreshToken = tokenData.refresh_token || refreshToken;
 
     if (!newAccessToken) {
-      console.error('No access token in response:', tokenData);
+      console.error("Token refresh response did not include an access token");
       return {
         success: false,
-        error: 'No access token received from refresh. Response: ' + JSON.stringify(tokenData)
+        error: "No access token received from refresh"
       };
     }
 
@@ -182,8 +168,7 @@ export const makeAuthenticatedFinverseRequest = async (
     console.log(`🔄 Access token expired for login identity ${loginIdentityId}, attempting refresh...`);
     
     const refreshResult = await refreshFinverseToken(encryptionKey, loginIdentityId);
-    console.log('Refresh result:', refreshResult);
-    
+
     if (!refreshResult.success) {
       const errorMessage = typeof refreshResult.error === 'string' 
         ? refreshResult.error 

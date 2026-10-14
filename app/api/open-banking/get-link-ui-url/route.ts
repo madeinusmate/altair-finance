@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHash } from "crypto";
 import { getFinverseClientToken } from "@/lib/finverse-client";
 import { getEncryptionKey } from "@/lib/api-utils";
+import { getLocalAppUrl } from "@/lib/local-app-url";
+import { getProviderUserId } from "@/lib/provider-user-id";
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
   const encryptionKey = getEncryptionKey(request);
@@ -32,19 +33,11 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       }, { status: 500 });
     }
 
-    console.log("✅ Client credentials token obtained via service");
-
-    // Generate a stable user_id from the encryption key (hash it for privacy)
-    const userId = createHash("sha256").update(encryptionKey).digest("hex").substring(0, 32);
+    const userId = getProviderUserId(encryptionKey);
 
     // Get relay URL from env (if configured)
     const relayUrl = process.env.NEXT_PUBLIC_OAUTH_RELAY_URL;
-    
-    // Determine final redirect target (where user should end up)
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 
-      (process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL 
-        ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}` 
-        : "http://localhost:8528");
+    const appUrl = getLocalAppUrl();
 
     // Use relay if configured, otherwise direct (for testing)
     const redirectUri = relayUrl 
@@ -83,7 +76,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     if (!linkTokenResponse.ok) {
       const errorData = await linkTokenResponse.json().catch(() => ({ error: "Invalid response format" }));
-      console.error("Failed to get link UI URL:", errorData);
+      console.error("Failed to get link UI URL:", linkTokenResponse.status);
       return NextResponse.json({ 
         error: "Failed to get link UI URL", 
         code: "LINK_URL_FAILED",

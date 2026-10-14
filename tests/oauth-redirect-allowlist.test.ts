@@ -19,7 +19,7 @@ describe("oauth redirect allowlist", () => {
     assert.equal(result.ok, true);
     if (result.ok) {
       const url = new URL(result.location);
-      assert.equal(url.origin, "http://localhost:8528");
+      assert.equal(url.origin, "http://127.0.0.1:8528");
       assert.equal(url.pathname, "/accounts/connect");
       assert.equal(url.searchParams.get("code"), "bank-code");
     }
@@ -31,6 +31,8 @@ describe("oauth redirect allowlist", () => {
       "http://127.0.0.1:8528/",
       "http://localhost:8527/accounts/connect",
       "http://127.0.0.1:8527",
+      "http://127.0.0.1:8530",
+      "http://localhost:8535/accounts/connect",
     ]) {
       const result = buildOAuthRedirect({ ...empty, code: "ok", state: stateFor(target) });
       assert.equal(result.ok, true, target);
@@ -39,7 +41,8 @@ describe("oauth redirect allowlist", () => {
         assert.equal(url.pathname, "/accounts/connect");
         assert.equal(url.protocol, "http:");
         assert.ok(url.hostname === "localhost" || url.hostname === "127.0.0.1");
-        assert.ok(url.port === "8527" || url.port === "8528");
+        const port = Number(url.port);
+        assert.ok(port === 8527 || (port >= 8528 && port <= 8535));
       }
     }
   });
@@ -52,6 +55,8 @@ describe("oauth redirect allowlist", () => {
       "http://localhost.evil.example:8528",
       "http://127.0.0.1.evil.example:8528",
       "http://localhost:1337",
+      "http://127.0.0.1:8536",
+      "http://127.0.0.1:65535",
       "http://127.0.0.1:80",
       "http://127.0.0.1",
       "https://localhost:8528",

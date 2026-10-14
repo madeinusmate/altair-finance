@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir, rm, readFile, copyFile, unlink } from "fs/promises";
 import fs from "fs";
 import path from "path";
-import os from "os";
+import { beginAuthVerifyAttempt } from "@/lib/auth-verify-rate-limit";
 import { getDbPath, dbFileExists, initializeDb, runMigrations } from "@/lib/db";
+import { createImportTempDir, IMPORT_ZIP_FILENAME, isUnsafeUploadName } from "@/lib/import-upload-path";
 import { validateEncryptionKey } from "@/lib/encryption";
 import {
   validateImportedDatabase,
@@ -115,6 +116,24 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       );
     }
 
+    if (isUnsafeUploadName(file.name)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid file name",
+          errorCode: "INVALID_ZIP_FORMAT",
+          details: [
+            {
+              category: "format",
+              technical: "Upload name must be a single file name",
+              userFriendly: "Please select a ZIP backup file exported from Netly.",
+            },
+          ],
+        },
+        { status: 400 }
+      );
+    }
+
     // Validate file type
     if (!file.name.endsWith(".zip") && file.type !== "application/zip") {
       return NextResponse.json(
@@ -140,31 +159,25 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       console.warn(`Large file being imported: ${fileSizeMB.toFixed(2)}MB`);
     }
 
-    // Create temporary directory for extraction
-    tempDir = await mkdir(path.join(os.tmpdir(), `netly-import-${Date.now()}`), {
-      recursive: true,
-    });
-
-    if (!tempDir) {
+    const attempt = beginAuthVerifyAttempt();
+    if (!attempt.ok) {
       return NextResponse.json(
         {
           success: false,
-          error: "Failed to create temporary directory",
-          errorCode: "IMPORT_FAILED",
-          details: [
-            {
-              category: "data",
-              technical: "mkdir returned undefined",
-              userFriendly: "Failed to create temporary directory for import. Please try again.",
-            },
-          ],
+          error: `Too many attempts. Try again in ${attempt.retryAfterSeconds} seconds.`,
+          errorCode: "RATE_LIMITED",
         },
-        { status: 500 }
+        {
+          status: 429,
+          headers: { "Retry-After": String(attempt.retryAfterSeconds) },
+        }
       );
     }
 
-    // Save uploaded file to temp directory
-    const zipPath = path.join(tempDir, file.name);
+    tempDir = await createImportTempDir();
+
+    // Never use the client-supplied name as a path segment.
+    const zipPath = path.join(tempDir, IMPORT_ZIP_FILENAME);
     const arrayBuffer = await file.arrayBuffer();
     await writeFile(zipPath, Buffer.from(arrayBuffer));
 
@@ -193,6 +206,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     // Validate extracted database
     const validation = await validateImportedDatabase(extractedFiles.dbPath, key);
+    attempt.finish(validation.valid);
     if (!validation.valid) {
       // Clean up temp files
       if (tempDir) {

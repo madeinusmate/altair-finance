@@ -142,8 +142,13 @@ const ConnectPage = () => {
   const provider: Provider =
     providerParam === "plaid" ? "plaid" : "finverse";
 
-  // Finverse OAuth params
-  const code = searchParams.get("code");
+  // Finverse OAuth params. The Electron bank window delivers these over IPC
+  // so the main window never navigates to the bank.
+  const queryCode = searchParams.get("code");
+  const [bankCode, setBankCode] = useState<string | null>(null);
+  const [useBankWindow, setUseBankWindow] = useState(false);
+  const [hostChecked, setHostChecked] = useState(false);
+  const code = bankCode ?? queryCode;
   const error = searchParams.get("error");
   const errorDescription = searchParams.get("error_description");
 
@@ -207,6 +212,10 @@ const ConnectPage = () => {
     setErrorMessage(null);
     try {
       const response = await apiClient.post<{ link_url: string }>("/api/open-banking/get-link-ui-url", {});
+      if (window.electron?.openBankConnect) {
+        await window.electron.openBankConnect(response.link_url);
+        return;
+      }
       window.location.href = response.link_url;
     } catch (err) {
       console.error("Error getting link URL:", err);
@@ -380,6 +389,40 @@ const ConnectPage = () => {
     [router]
   );
 
+  useEffect(() => {
+    setUseBankWindow(Boolean(window.electron?.openBankConnect));
+    setHostChecked(true);
+  }, []);
+
+  useEffect(() => {
+    return window.electron?.onBankAuthResult?.((result) => {
+      if (result.publicToken) {
+        void handlePlaidSuccess(result.publicToken, {});
+        return;
+      }
+      if (result.exited) {
+        handlePlaidExit(
+          result.plaidError
+            ? {
+                error_code: result.plaidError,
+                error_message: result.plaidErrorMessage || "Connection was cancelled",
+              }
+            : null
+        );
+        return;
+      }
+      if (result.code) {
+        setBankCode(result.code);
+        setIsConnecting(false);
+        return;
+      }
+      if (result.error) {
+        setErrorMessage(result.errorDescription || result.error);
+        setIsConnecting(false);
+      }
+    });
+  }, [handlePlaidExit, handlePlaidSuccess]);
+
   // Auto-initiate Plaid link token
   useEffect(() => {
     if (provider === "plaid" && !plaidLinkToken) {
@@ -387,6 +430,15 @@ const ConnectPage = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (provider !== "plaid" || !plaidLinkToken || !useBankWindow) return;
+    const url = `${window.location.origin}/plaid-link.html#token=${encodeURIComponent(plaidLinkToken)}`;
+    void window.electron?.openBankConnect?.(url).catch((err: unknown) => {
+      setErrorMessage(err instanceof Error ? err.message : "Failed to open the bank window");
+      setIsConnecting(false);
+    });
+  }, [plaidLinkToken, provider, useBankWindow]);
 
   // ------- Shared flow (both providers) -------
 
@@ -657,13 +709,23 @@ const ConnectPage = () => {
         <CardContent className="p-8">
           {currentStep === "connecting" && (
             <>
-              {provider === "plaid" && plaidLinkToken ? (
+              {provider === "plaid" && plaidLinkToken && useBankWindow ? (
+                <div className="flex flex-col items-center justify-center min-h-[600px]">
+                  <div className="text-center space-y-4">
+                    <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
+                    <h2 className="text-2xl font-semibold">Connecting to your bank</h2>
+                    <p className="text-muted-foreground max-w-md">
+                      Finish signing in in the bank window. This window stays on Netly.
+                    </p>
+                  </div>
+                </div>
+              ) : provider === "plaid" && plaidLinkToken && hostChecked ? (
                 <PlaidLinkStep
                   linkToken={plaidLinkToken}
                   onSuccess={handlePlaidSuccess}
                   onExit={handlePlaidExit}
                 />
-              ) : provider === "plaid" && !plaidLinkToken ? (
+              ) : provider === "plaid" ? (
                 <div className="flex flex-col items-center justify-center min-h-[600px]">
                   <div className="text-center space-y-4">
                     <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />

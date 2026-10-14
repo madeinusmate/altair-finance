@@ -1,8 +1,17 @@
 const ALLOWED_HOSTS = new Set(["127.0.0.1", "localhost"]);
-// next dev uses 8527; Electron and `next start` use 8528.
-const ALLOWED_PORTS = new Set(["8527", "8528"]);
+// Keep in sync with lib/app-ports.ts.
+// 8527 is `next dev`. Electron binds 8528 and only falls forward through 8535.
+const DEV_APP_PORT = 8527;
+const APP_PORT_MIN = 8528;
+const APP_PORT_MAX = 8535;
 const CONNECT_PATH = "/accounts/connect";
-const DEFAULT_ORIGIN = "http://localhost:8528";
+const DEFAULT_ORIGIN = "http://127.0.0.1:8528";
+
+const isAllowedPort = (port: string): boolean => {
+  if (!/^\d+$/.test(port)) return false;
+  const value = Number(port);
+  return value === DEV_APP_PORT || (value >= APP_PORT_MIN && value <= APP_PORT_MAX);
+};
 
 export type OAuthRedirectInput = {
   code: string | null;
@@ -33,7 +42,7 @@ export const allowedLoopbackOrigin = (value: string): string | null => {
 
   const host = parsed.hostname.toLowerCase();
   if (!ALLOWED_HOSTS.has(host)) return null;
-  if (!ALLOWED_PORTS.has(parsed.port)) return null;
+  if (!isAllowedPort(parsed.port)) return null;
   if (!isAllowedPath(parsed.pathname)) return null;
 
   const origin = `http://${host}:${parsed.port}`;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHash } from "crypto";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { createPlaidLinkToken, PlaidApiError } from "@/lib/plaid-client";
+import { getProviderUserId } from "@/lib/provider-user-id";
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
   const encryptionKey = getEncryptionKey(request);
@@ -20,11 +20,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       );
     }
 
-    // Generate a stable user_id from the encryption key (hash it for privacy)
-    const clientUserId = createHash("sha256")
-      .update(encryptionKey)
-      .digest("hex")
-      .substring(0, 32);
+    const clientUserId = getProviderUserId(encryptionKey);
 
     const linkTokenResponse = await createPlaidLinkToken(clientUserId);
 

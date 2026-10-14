@@ -4,7 +4,7 @@ A minimal Vercel Edge Function that acts as a redirect relay for Finverse OAuth 
 
 ## Purpose
 
-Finverse requires a publicly accessible HTTPS redirect URL, but Netly runs locally (localhost:8528) in both development and Electron production modes. This relay receives the OAuth callback from Finverse and redirects it to the local application.
+Finverse requires a publicly accessible HTTPS redirect URL. Netly binds to loopback only. This relay receives the OAuth callback and redirects to the loopback origin the desktop app put in `state`.
 
 ## Deployment
 
@@ -63,12 +63,13 @@ NEXT_PUBLIC_OAUTH_RELAY_URL=https://netly-oauth-relay.vercel.app
 2. Netly requests Finverse Link UI with `redirect_uri` pointing to this relay
 3. User completes authentication on Finverse
 4. Finverse redirects to this relay with OAuth code
-5. Relay extracts target URL from state parameter and redirects to localhost:8528
-6. Netly app receives the callback and exchanges code for tokens
+5. Relay reads the loopback origin from `state` and redirects only if it is allowlisted
+6. The Netly bank window receives the callback and the app exchanges the code for tokens
+
+The allowlist is `http://127.0.0.1` and `http://localhost`, port `8527` (dev) or `8528`–`8535` (the desktop app), path `/accounts/connect` only. Keep `oauth-relay/api/redirect-allowlist.ts` in sync with `lib/app-ports.ts`. Redeploy this function after changing the allowlist.
 
 ## Security
 
-- Stateless: No data is stored, no secrets are kept
-- Only forwards URL parameters via browser redirect
-- State parameter prevents CSRF attacks
-- All sensitive token operations happen directly between Netly and Finverse
+- Stateless: no data is stored and no secrets are kept
+- The redirect target is rebuilt from the allowlist, not taken from the raw query string
+- Token exchange happens between Netly and Finverse, not in this function

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHash } from "crypto";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { makeAuthenticatedFinverseRequest } from "@/lib/finverse-token-refresh";
 import { getFinverseClientToken } from "@/lib/finverse-client";
+import { getLocalAppUrl } from "@/lib/local-app-url";
+import { getProviderUserId } from "@/lib/provider-user-id";
 import type { FinverseAccount } from "@/lib/finverse-types";
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
@@ -61,11 +62,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       // Get relay URL from env (if configured)
       const relayUrl = process.env.NEXT_PUBLIC_OAUTH_RELAY_URL;
       
-      // Determine final redirect target (where user should end up)
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 
-        (process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL 
-          ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}` 
-          : "http://localhost:8528");
+      const appUrl = getLocalAppUrl();
 
       // Use relay if configured, otherwise direct (for testing)
       // Must match the redirect_uri used in get-link-ui-url
@@ -84,10 +81,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
         }, { status: 500 });
       }
 
-      console.log("✅ Client credentials token obtained via service");
-
-      // Generate a stable user_id from the encryption key (hash it for privacy)
-      const userId = createHash("sha256").update(encryptionKey).digest("hex").substring(0, 32);
+      const userId = getProviderUserId(encryptionKey);
 
       // Exchange authorization code for user access token
       // redirect_uri must match the one used in get-link-ui-url
@@ -108,7 +102,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
       if (!userAccessTokenResponse.ok) {
         const errorData = await userAccessTokenResponse.json().catch(() => ({ error: "Invalid response format" }));
-        console.error("Failed to get user access token:", errorData);
+        console.error("Failed to get user access token:", userAccessTokenResponse.status);
         return NextResponse.json({ 
           error: "Failed to exchange authorization code", 
           code: "TOKEN_EXCHANGE_FAILED",
@@ -136,7 +130,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
         }, { status: 400 });
       }
 
-      console.log(`✅ Received tokens for login identity: ${loginIdentityId}`);
+      console.log(`Connected login identity ${loginIdentityId}`);
 
       // Store user access token and refresh token by login_identity_id in SQLite
       const now = new Date();

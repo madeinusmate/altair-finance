@@ -73,7 +73,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     const accountsResponse = await getPlaidAccounts(access_token);
 
     // Try to get institution name
-    let institutionId = accountsResponse.item.institution_id;
+    const institutionId = accountsResponse.item.institution_id;
     let institutionName = "";
 
     if (institutionId) {

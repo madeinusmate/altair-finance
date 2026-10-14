@@ -38,7 +38,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         },
       });
       
-      // Handle non-OK responses by treating as new (fresh install)
+      if (response.status === 429) {
+        sessionStorage.removeItem(SESSION_KEY);
+        setState("locked");
+        return "locked";
+      }
+
       if (!response.ok) {
         console.error("Status API returned error:", response.status);
         sessionStorage.removeItem(SESSION_KEY);
