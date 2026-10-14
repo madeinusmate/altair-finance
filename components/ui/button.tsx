@@ -5,20 +5,20 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-semibold tracking-[-0.01em] transition-[color,transform] duration-[120ms] ease-[cubic-bezier(0.23,1,0.32,1)] enabled:active:scale-[0.98] motion-reduce:transition-none motion-reduce:enabled:active:scale-100 disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-[#1f1f1f]/20",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-semibold tracking-[-0.01em] transition-[color,transform] duration-[120ms] ease-[cubic-bezier(0.23,1,0.32,1)] enabled:active:scale-[0.98] motion-reduce:transition-none motion-reduce:enabled:active:scale-100 disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
   {
     variants: {
       variant: {
-        default: "bg-[#1f1f1f] text-white hover:bg-black",
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
         destructive:
-          "bg-[#1f1f1f] text-white hover:bg-black",
+          "bg-primary text-primary-foreground hover:bg-primary/90",
         outline:
-          "border-2 border-[#1f1f1f] bg-white text-[#1f1f1f] hover:bg-[#f7f7f7]",
+          "border-2 border-foreground bg-transparent text-foreground hover:bg-accent",
         secondary:
-          "bg-white text-[#1f1f1f] border border-[#e4e4e7] hover:bg-[#f7f7f7]",
+          "bg-card text-foreground border border-border hover:bg-accent",
         ghost:
-          "text-[#1f1f1f]/80 hover:bg-white hover:text-[#1f1f1f]",
-        link: "text-[#1f1f1f]/80 underline-offset-4 hover:underline",
+          "text-foreground/80 hover:bg-accent hover:text-foreground",
+        link: "text-foreground/80 underline-offset-4 hover:underline",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

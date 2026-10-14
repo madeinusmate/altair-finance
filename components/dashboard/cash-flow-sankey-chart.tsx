@@ -231,7 +231,7 @@ export const CashFlowSankeyChart = ({
               if (!data) return null;
               const value = getNodeValue(node.id);
               return (
-                <div className="rounded-2xl border border-[#e4e4e7] bg-white p-2 shadow-none">
+                <div className="rounded-2xl border border-border bg-popover p-2 shadow-none">
                   <div className="font-semibold">{node.id}</div>
                   <div className="text-sm text-muted-foreground">
                     {formatCurrency(value, data.currency)}
@@ -249,7 +249,7 @@ export const CashFlowSankeyChart = ({
               }
               
               return (
-                <div className="rounded-2xl border border-[#e4e4e7] bg-white p-2 shadow-none">
+                <div className="rounded-2xl border border-border bg-popover p-2 shadow-none">
                   <div className="font-semibold">
                     {link.source.id} → {link.target.id}
                   </div>
@@ -262,7 +262,7 @@ export const CashFlowSankeyChart = ({
           />
         </div>
         {/* Custom Legend */}
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-[#e4e4e7] pt-4">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-border pt-4">
           {[
             ["Income", chartCobalt],
             ["Investment", chartCobaltSoft],
@@ -271,7 +271,7 @@ export const CashFlowSankeyChart = ({
           ].map(([label, color]) => (
             <div key={label} className="flex items-center gap-2">
               <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-              <span className="text-sm text-[#717173]">{label}</span>
+              <span className="text-sm text-muted-foreground">{label}</span>
             </div>
           ))}
         </div>

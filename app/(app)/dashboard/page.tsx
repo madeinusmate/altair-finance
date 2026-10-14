@@ -15,6 +15,8 @@ import { MonthlyIncomeExpensesChart } from "@/components/dashboard/monthly-incom
 import { CashFlowSankeyChart } from "@/components/dashboard/cash-flow-sankey-chart";
 import { SpendingChart } from "@/components/dashboard/spending-chart";
 import { InvestmentPerformanceChart } from "@/components/dashboard/investment-performance-chart";
+import { NetCashChart } from "@/components/dashboard/net-cash-chart";
+import { BudgetTile } from "@/components/dashboard/budget-tile";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { AccountCreateDialog } from "@/components/account-create-dialog";
 import type { Transaction, Transfer } from "@/lib/db/schema";
@@ -344,6 +346,7 @@ const DashboardPage = () => {
               </CardContent>
             </Card>
           ) : (
+            <>
             <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
               <div
                 className="relative overflow-hidden rounded-[22px] px-6 py-7 text-white sm:px-8 sm:py-8"
@@ -401,20 +404,6 @@ const DashboardPage = () => {
                       <Link href="/transactions">Statement</Link>
                     </Button>
                   </div>
-                  <div className="flex gap-8 text-sm">
-                    <div>
-                      <p className="text-white/70">Assets</p>
-                      <p className="mt-1 font-medium tabular-nums">
-                        {formatNetWorthCurrency(netWorthSummary.totalAssets, netWorthSummary.currency)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-white/70">Liabilities</p>
-                      <p className="mt-1 font-medium tabular-nums">
-                        {formatNetWorthCurrency(netWorthSummary.totalLiabilities, netWorthSummary.currency)}
-                      </p>
-                    </div>
-                  </div>
                 </div>
               </div>
               <RecentActivity
@@ -424,54 +413,82 @@ const DashboardPage = () => {
                 isLoading={activity === null}
               />
             </div>
+            <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+              <Card className="h-full">
+                <CardContent className="py-5">
+                  <p className="text-sm text-muted-foreground">Assets</p>
+                  <p className="mt-2 text-2xl font-medium tracking-[-0.02em] tabular-nums">
+                    {formatNetWorthCurrency(netWorthSummary.totalAssets, netWorthSummary.currency)}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="h-full">
+                <CardContent className="py-5">
+                  <p className="text-sm text-muted-foreground">Liabilities</p>
+                  <p className="mt-2 text-2xl font-medium tracking-[-0.02em] tabular-nums">
+                    {formatNetWorthCurrency(netWorthSummary.totalLiabilities, netWorthSummary.currency)}
+                  </p>
+                </CardContent>
+              </Card>
+              <BudgetTile currency={selectedCurrency} />
+              <Card className="h-full">
+                <CardContent className="py-5">
+                  <p className="text-sm text-muted-foreground">Investment P/L</p>
+                  <p className="mt-2 text-2xl font-medium tracking-[-0.02em] tabular-nums">
+                    {netWorthSummary.totalProfitLoss >= 0 ? "+" : ""}
+                    {formatNetWorthCurrency(netWorthSummary.totalProfitLoss, netWorthSummary.currency)}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+            </>
           )}
           <section className="space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="text-2xl font-medium tracking-[-0.02em] text-[#717173]">Insights</h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-2xl font-medium tracking-[-0.02em] text-muted-foreground">Cash flow</h2>
+                <p className="text-sm text-muted-foreground">Where income went in this period</p>
+              </div>
               <DashboardDateSelector value={dateRange} onChange={setDateRange} />
             </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Monthly Income & Expenses Chart - First Row */}
-            <MonthlyIncomeExpensesChart
-              dateRange={dateRange}
-              currency={selectedCurrency}
-              isLoading={isLoadingDashboard}
-              data={monthlyIncomeExpenses || undefined}
-            />
-
-
-            {/* Cash Flow Sankey Visualization */}
-            <div className="md:col-span-2">
             <CashFlowSankeyChart
               dateRange={dateRange}
               isLoading={isLoadingDashboard}
               data={cashFlowSankeyData}
             />
+          </section>
+          <section className="space-y-4">
+            <h2 className="text-2xl font-medium tracking-[-0.02em] text-muted-foreground">Over time</h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              <MonthlyIncomeExpensesChart
+                dateRange={dateRange}
+                currency={selectedCurrency}
+                isLoading={isLoadingDashboard}
+                data={monthlyIncomeExpenses || undefined}
+              />
+              <NetCashChart
+                currency={selectedCurrency}
+                isLoading={isLoadingDashboard}
+                data={monthlyIncomeExpenses || undefined}
+              />
+              <SpendingChart
+                dateRange={dateRange}
+                currency={selectedCurrency}
+                isLoading={isLoadingDashboard}
+                data={spendingData || undefined}
+              />
+              <InvestmentPerformanceChart
+                dateRange={dateRange}
+                currency={selectedCurrency}
+                isLoading={isLoadingDashboard}
+                data={investmentData || undefined}
+                accounts={investmentAccounts}
+                selectedAccountId={selectedInvestmentAccount}
+                onAccountChange={(accountId) =>
+                  setSelectedInvestmentAccount(accountId === "all" ? undefined : accountId)
+                }
+              />
             </div>
-
-            {/* Net Spending Card */}
-            <SpendingChart
-              dateRange={dateRange}
-              currency={selectedCurrency}
-              isLoading={isLoadingDashboard}
-              data={spendingData || undefined}
-            />
-
-        
-
-            {/* Investment Performance */}
-            <InvestmentPerformanceChart
-              dateRange={dateRange}
-              currency={selectedCurrency}
-              isLoading={isLoadingDashboard}
-              data={investmentData || undefined}
-              accounts={investmentAccounts}
-              selectedAccountId={selectedInvestmentAccount}
-              onAccountChange={(accountId) =>
-                setSelectedInvestmentAccount(accountId === "all" ? undefined : accountId)
-              }
-            />
-          </div>
           </section>
         </>
       )}

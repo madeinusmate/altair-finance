@@ -148,7 +148,7 @@ export const InvestmentPerformanceChart = ({
                 const pnlPercentage = lastDataPoint.pnlPercentage ?? 0;
                 const isPositive = pnlPercentage >= 0;
                 return (
-                  <span className="flex items-center gap-1 text-sm text-[#717173]">
+                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
                     <TrendingUp
                       className={`h-4 w-4 ${!isPositive ? "rotate-180" : ""}`}
                     />
@@ -229,7 +229,7 @@ export const InvestmentPerformanceChart = ({
                   }
 
                   return (
-                    <div className="grid min-w-32 items-start gap-1.5 rounded-2xl border border-[#e4e4e7] bg-white px-3 py-2 text-xs shadow-none">
+                    <div className="grid min-w-32 items-start gap-1.5 rounded-2xl border border-border bg-popover px-3 py-2 text-xs shadow-none">
                               <div className="font-medium">
                                 {typeof label === "string" ? format(new Date(label), "MMM d, yyyy") : label}
                               </div>
@@ -242,14 +242,14 @@ export const InvestmentPerformanceChart = ({
                         </div>
                         <div className="flex w-full items-center justify-between gap-4">
                           <span className="text-muted-foreground">PnL (Absolute)</span>
-                          <span className="font-mono text-[#1f1f1f]">
+                          <span className="font-mono text-foreground">
                             {(dataPayload.pnl || 0) >= 0 ? "+" : ""}
                             {formatCurrencySmart(dataPayload.pnl || 0, currency)}
                           </span>
                         </div>
                         <div className="flex w-full items-center justify-between gap-4">
                           <span className="text-muted-foreground">PnL (Percentage)</span>
-                          <span className="font-mono text-[#1f1f1f]">
+                          <span className="font-mono text-foreground">
                             {(dataPayload.pnlPercentage || 0) >= 0 ? "+" : ""}
                             {(dataPayload.pnlPercentage || 0).toFixed(2)}%
                           </span>

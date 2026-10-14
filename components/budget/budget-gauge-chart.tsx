@@ -91,7 +91,7 @@ export const BudgetGaugeChart = ({
     return "Within budget";
   };
 
-  const getStatusColor = () => "fill-[#1f1f1f]";
+  const getStatusColor = () => "fill-foreground";
 
   return (
     <Card className="flex flex-col">

@@ -245,10 +245,10 @@ const AccountsPage = () => {
       <li key={account.id} className={account.id === enteredId ? "netly-account-enter" : undefined}>
         <Link
           href={`/accounts/${account.id}`}
-          className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-[#f7f7f7]"
+          className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted"
         >
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f7f7f7] text-sm font-medium">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium">
               {account.name.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
@@ -262,7 +262,7 @@ const AccountsPage = () => {
           <div className="shrink-0 text-right">
             <p className="font-medium tabular-nums tracking-[-0.02em]">{balanceLabel}</p>
             {account.type === "investment" && account.profitLoss !== undefined && (
-              <p className="flex items-center justify-end gap-1 text-sm tabular-nums text-[#717173]">
+              <p className="flex items-center justify-end gap-1 text-sm tabular-nums text-muted-foreground">
                 {account.profitLoss >= 0 ? (
                   <TrendingUp className="h-3 w-3" />
                 ) : (
@@ -322,7 +322,7 @@ const AccountsPage = () => {
             return (
               <section
                 key={group}
-                className={`overflow-hidden rounded-[22px] border border-[#e4e4e7] bg-white ${
+                className={`overflow-hidden rounded-[22px] border border-border bg-card ${
                   filledGroupCount === 1 ? "xl:col-span-2" : ""
                 }`}
               >

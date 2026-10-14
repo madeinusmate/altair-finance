@@ -89,12 +89,12 @@ export const RecentActivity = ({
                 return (
                   <li key={`transaction-${item.id}`} className="flex items-center justify-between gap-4 py-3">
                     <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f7f7f7] text-sm font-medium">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium">
                         {title.charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0">
                         <p className="truncate font-medium">{title}</p>
-                        <p className="truncate text-xs text-[#717173]">
+                        <p className="truncate text-xs text-muted-foreground">
                           {account?.name || "Unknown"} · {format(new Date(item.date), "MMM d")}
                         </p>
                       </div>
@@ -114,12 +114,12 @@ export const RecentActivity = ({
                 return (
                 <li key={`transfer-${item.id}`} className="flex items-center justify-between gap-4 py-3">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f7f7f7]">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
                       <ArrowLeftRight className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
                       <p className="truncate font-medium">{title}</p>
-                      <p className="truncate text-xs text-[#717173]">
+                      <p className="truncate text-xs text-muted-foreground">
                         {fromAccount?.name || "Unknown"} → {toAccount?.name || "Unknown"} ·{" "}
                         {format(new Date(item.date), "MMM d")}
                       </p>
@@ -137,7 +137,7 @@ export const RecentActivity = ({
   );
 
   if (embedded) {
-    return <div className="mt-6 border-t border-[#e4e4e7] pt-4">{body}</div>;
+    return <div className="mt-6 border-t border-border pt-4">{body}</div>;
   }
 
   return (

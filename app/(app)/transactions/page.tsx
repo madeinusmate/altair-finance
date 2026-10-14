@@ -596,7 +596,7 @@ const TransactionsPage = () => {
                               <TableRow>
                                 <TableCell className="max-w-[240px] font-medium">
                                   <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f7f7f7] text-sm">
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm">
                                       {(transaction.description?.trim() || transaction.category).charAt(0).toUpperCase()}
                                     </div>
                                     <span className="truncate">{transaction.description?.trim() || transaction.category}</span>
@@ -662,7 +662,7 @@ const TransactionsPage = () => {
                             <TableRow>
                               <TableCell className="max-w-[240px] font-medium">
                                 <div className="flex items-center gap-3">
-                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f7f7f7]">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
                                     <ArrowLeftRight className="h-4 w-4" />
                                   </div>
                                   <div className="min-w-0">

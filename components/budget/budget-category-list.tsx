@@ -59,9 +59,9 @@ const formatCurrency = (amount: number, currency: string): string => {
 
 const getStatusColor = (percentage: number): string => {
   if (percentage > 100) {
-    return "text-[#1f1f1f]";
+    return "text-foreground";
   }
-  return "text-[#717173]";
+  return "text-muted-foreground";
 };
 
 export const BudgetCategoryList = ({

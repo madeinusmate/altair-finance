@@ -140,14 +140,14 @@ export const MonthlyIncomeExpensesChart = ({
           </ResponsiveContainer>
         </ChartContainer>
         {/* Custom Legend */}
-        <div className="mt-4 flex items-center justify-center gap-6 border-t border-[#e4e4e7] pt-4">
+        <div className="mt-4 flex items-center justify-center gap-6 border-t border-border pt-4">
           <div className="flex items-center gap-2">
             <div className="h-2 w-2 rounded-full" style={{ backgroundColor: chartCobalt }} />
-            <span className="text-sm text-[#717173]">Income</span>
+            <span className="text-sm text-muted-foreground">Income</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="h-2 w-2 rounded-full" style={{ backgroundColor: chartInk }} />
-            <span className="text-sm text-[#717173]">Expenses</span>
+            <span className="text-sm text-muted-foreground">Expenses</span>
           </div>
         </div>
       </CardContent>

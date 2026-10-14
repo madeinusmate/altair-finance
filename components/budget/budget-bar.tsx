@@ -8,12 +8,12 @@ interface BudgetBarProps {
 
 const barColor = (percentage: number): string => {
   if (percentage > 100) {
-    return "bg-[#1f1f1f]";
+    return "bg-foreground";
   }
   if (percentage >= 75) {
-    return "bg-[#1f1f1f]/70";
+    return "bg-foreground/70";
   }
-  return "bg-[#1f1f1f]/40";
+  return "bg-foreground/40";
 };
 
 export const BudgetBar = ({ percentage }: BudgetBarProps) => {

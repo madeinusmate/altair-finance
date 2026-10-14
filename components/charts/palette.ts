@@ -1,6 +1,6 @@
-export const chartInk = "#1f1f1f";
-export const chartSlate = "#717173";
-export const chartGrid = "#e4e4e7";
+export const chartInk = "var(--foreground)";
+export const chartSlate = "var(--muted-foreground)";
+export const chartGrid = "var(--border)";
 export const chartCobalt = "#1227fd";
 export const chartCobaltSoft = "#6fa0ff";
 
