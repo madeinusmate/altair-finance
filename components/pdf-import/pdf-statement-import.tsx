@@ -26,6 +26,18 @@ import { ParsedTransaction } from "@/lib/pdf/types";
 import { calculatePdfHash } from "@/lib/pdf/file-hash";
 import { validateTransactionRows } from "@/lib/csv/import-validators";
 import { buildAccountNameMap } from "@/lib/csv/import-validators";
+import { learnImportedRows } from "@/lib/categorization/client";
+import {
+  applyRulesToRows,
+  CategoryAllowance,
+  CategorizationRule,
+  fallbackCategoryName,
+  hasDefaultedCategoryWarning,
+  reconcileReviewRow,
+  shouldBlankCategoryForRematch,
+  toCategorizationRules,
+  toCategoryAllowances,
+} from "@/lib/categorization/rules";
 
 const normalizeAccountName = (name: string) => name.trim().toLowerCase();
 
@@ -65,7 +77,8 @@ interface PdfStatementImportProps {
 export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: PdfStatementImportProps) => {
   const { getKey, usesBooksOwner } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
+  const [transactionCategories, setTransactionCategories] = useState<CategoryAllowance[]>([]);
+  const [categorizationRules, setCategorizationRules] = useState<CategorizationRule[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>(initialAccountId);
   const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | undefined>();
@@ -145,12 +158,26 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
       if (!key && !usesBooksOwner) return;
 
       try {
-        const [accountsData, categoriesData] = await Promise.all([
+        const [accountsData, categoriesData, rulesData] = await Promise.all([
           apiClient.get<Account[]>("/api/accounts"),
-          apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
+          apiClient.get<{ categories: Array<{ name: string; transactionType?: string | null }> }>(
+            "/api/transaction-categories"
+          ),
+          apiClient
+            .get<{
+              rules: Array<{
+                id: string;
+                pattern: string;
+                matchType?: string | null;
+                categoryName: string;
+                transactionType?: string | null;
+              }>;
+            }>("/api/categorization-rules")
+            .catch(() => ({ rules: [] })),
         ]);
         setAccounts(accountsData);
-        setTransactionCategories(categoriesData.categories.map((c) => c.name));
+        setTransactionCategories(toCategoryAllowances(categoriesData.categories));
+        setCategorizationRules(toCategorizationRules(rulesData.rules));
       } catch (error) {
         console.error(error);
       }
@@ -271,9 +298,13 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
         transfer_account: "",
       }));
 
-      const validated = validateTransactionRows(rawRows, accounts, transactionCategories);
+      const categoryNames = transactionCategories.map((category) => category.name);
+      const validated = validateTransactionRows(rawRows, accounts, categoryNames);
+      const categorized = applyRulesToRows(validated, categorizationRules, transactionCategories, {
+        replaceValidCategory: true,
+      });
 
-      const transactionRows: TransactionRow[] = validated.map((row, index) => {
+      const transactionRows: TransactionRow[] = categorized.map((row, index) => {
         const parserWarnings = data.transactions[index]?.warnings ?? [];
         return {
           id: `pdf-${index}`,
@@ -281,12 +312,14 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
           description: row.description,
           amount: parseFloat(row.amount) || 0,
           category: row.category,
-          type: row.type as "debit" | "credit",
+          type: row.type === "credit" ? "credit" : "debit",
           errors: row.errors,
           warnings: [...row.warnings, ...parserWarnings],
           duplicate: false,
           excluded: false,
           isTransfer: false,
+          ruleMatch: row.ruleMatch,
+          ruleHint: row.ruleHint,
         };
       });
 
@@ -307,18 +340,55 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
           return row;
         }
         const updatedRow = { ...row, ...updates };
+        const editedKey =
+          updates.category !== undefined
+            ? "category"
+            : updates.description !== undefined
+              ? "description"
+              : updates.type !== undefined
+                ? "type"
+                : "other";
 
-        // Re-validate if needed
+        let nextRow = updatedRow;
+        if (updatedRow.isTransfer) {
+          nextRow = {
+            ...updatedRow,
+            ruleMatch: undefined,
+            ruleHint: undefined,
+            categoryTouched: updates.category !== undefined ? true : row.categoryTouched,
+          };
+        } else {
+          const blankCategory = shouldBlankCategoryForRematch(row, editedKey);
+          const fallback = fallbackCategoryName(transactionCategories);
+          const validatedCategory = blankCategory ? fallback : updatedRow.category;
+          const validatedWarnings = blankCategory
+            ? [
+                ...updatedRow.warnings.filter((warning) => !hasDefaultedCategoryWarning([warning])),
+                `Category defaulted to ${fallback}`,
+              ]
+            : updatedRow.warnings;
+          nextRow = {
+            ...updatedRow,
+            ...reconcileReviewRow(
+              row,
+              { ...updatedRow, category: validatedCategory, warnings: validatedWarnings },
+              editedKey,
+              categorizationRules,
+              transactionCategories
+            ),
+          };
+        }
+
         if (updates.date || updates.amount || updates.description || updates.category || updates.type) {
-          const accountId = updatedRow.isTransfer
-            ? updatedRow.fromAccountId || selectedAccountId
+          const accountId = nextRow.isTransfer
+            ? nextRow.fromAccountId || selectedAccountId
             : selectedAccountId;
           if (accountId) {
-            return applyDuplicateFlag(updatedRow, accountId);
+            return applyDuplicateFlag(nextRow, accountId);
           }
         }
 
-        return updatedRow;
+        return nextRow;
       });
     });
   };
@@ -377,12 +447,29 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
         };
       });
 
-      // Import transactions
-      await apiClient.post("/api/import/transactions", {
+      const result = await apiClient.post<{
+        skippedDuplicates?: number;
+        skippedIndexes?: number[];
+      }>("/api/import/transactions", {
         rows: payload,
         filename: fileName,
         fileHash,
       });
+
+      const learned = await learnImportedRows(
+        validRows.map((row) => ({
+          description: row.description,
+          category: row.category,
+          type: row.isTransfer ? "transfer" : row.type,
+          categoryTouched: row.categoryTouched,
+          excluded: row.excluded,
+        })),
+        transactionCategories,
+        result
+      );
+      if (learned.failed > 0) {
+        toast.error("Imported, but a description rule could not be saved");
+      }
 
       toast.success(`Imported ${validRows.length} transactions`);
       

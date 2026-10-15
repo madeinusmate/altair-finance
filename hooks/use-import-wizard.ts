@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client";
 import { Account, BalanceHistory, InvestmentHistory, Transaction, Transfer } from "@/lib/db/schema";
 import { useAuth } from "@/lib/auth-context";
@@ -15,12 +16,29 @@ import {
 } from "@/lib/csv/import-validators";
 import { parseCsvFile, parseCsvString, countCsvRows } from "@/lib/csv/parse";
 import { calculateFileHash } from "@/lib/csv/file-hash";
+import { learnImportedRows } from "@/lib/categorization/client";
+import {
+  applyRulesToRows,
+  CategoryAllowance,
+  CategorizationRule,
+  reconcileReviewRow,
+  shouldBlankCategoryForRematch,
+  toCategorizationRules,
+  toCategoryAllowances,
+} from "@/lib/categorization/rules";
 
 export type ImportType = "transactions" | "balances" | "accounts";
 
 export type WizardStep = 1 | 2 | 3 | 4 | 5;
 
-export type TransactionRow = ParsedTransactionRow & { duplicate?: boolean };
+export type TransactionRow = ParsedTransactionRow & {
+  duplicate?: boolean;
+  ruleMatch?: string;
+  ruleHint?: string;
+  categoryTouched?: boolean;
+  excluded?: boolean;
+  overrideDuplicate?: boolean;
+};
 export type BalanceRow = ParsedBalanceRow & { duplicate?: boolean };
 export type AccountRow = ParsedAccountRow & { duplicate?: boolean };
 
@@ -150,6 +168,8 @@ export const useImportWizard = () => {
   const [completion, setCompletion] = useState<CompletionSummary | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
+  const [categoryAllowances, setCategoryAllowances] = useState<CategoryAllowance[]>([]);
+  const [categorizationRules, setCategorizationRules] = useState<CategorizationRule[]>([]);
   const [accountCategoryIdentifiers, setAccountCategoryIdentifiers] = useState<string[]>([]);
   const [existingTransactions, setExistingTransactions] = useState<Transaction[]>([]);
   const [existingTransfers, setExistingTransfers] = useState<Transfer[]>([]);
@@ -164,13 +184,26 @@ export const useImportWizard = () => {
       if (!key && !usesBooksOwner) return;
 
       try {
-        const [accountsData, txCategoriesData, acctCategoriesData] = await Promise.all([
+        const [accountsData, txCategoriesData, acctCategoriesData, rulesData] = await Promise.all([
           apiClient.get<Account[]>("/api/accounts"),
-          apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
+          apiClient.get<{ categories: Array<{ name: string; transactionType?: string | null }> }>("/api/transaction-categories"),
           apiClient.get<{ categories: Array<{ identifier: string }> }>("/api/account-categories"),
+          apiClient
+            .get<{
+              rules: Array<{
+                id: string;
+                pattern: string;
+                matchType?: string | null;
+                categoryName: string;
+                transactionType?: string | null;
+              }>;
+            }>("/api/categorization-rules")
+            .catch(() => ({ rules: [] })),
         ]);
         setAccounts(accountsData);
         setTransactionCategories(txCategoriesData.categories.map((c) => c.name));
+        setCategoryAllowances(toCategoryAllowances(txCategoriesData.categories));
+        setCategorizationRules(toCategorizationRules(rulesData.rules));
         setAccountCategoryIdentifiers(acctCategoriesData.categories.map((c) => c.identifier));
       } catch (error) {
         console.error(error);
@@ -560,7 +593,7 @@ export const useImportWizard = () => {
 
       if (importType === "transactions") {
         const validated = validateTransactionRows(result.data, accounts, transactionCategories);
-        setTransactionRows(validated);
+        setTransactionRows(applyRulesToRows(validated, categorizationRules, categoryAllowances));
       } else if (importType === "balances") {
         const validated = validateBalanceRows(result.data, accounts);
         setBalanceRows(validated);
@@ -586,6 +619,7 @@ export const useImportWizard = () => {
           }
           try {
             const updatedRow = { ...row, [key]: value };
+            const editedKey = String(key);
             const rawRow = {
               date: updatedRow.date,
               account: updatedRow.account,
@@ -593,17 +627,27 @@ export const useImportWizard = () => {
               amount: updatedRow.amount,
               from_amount: updatedRow.fromAmount,
               to_amount: updatedRow.toAmount,
-              category: updatedRow.category,
+              category: shouldBlankCategoryForRematch(row, editedKey) ? "" : updatedRow.category,
               type: updatedRow.type,
               transfer_account: updatedRow.transferAccount,
             };
             const [validated] = validateTransactionRows([rawRow], accounts, transactionCategories);
-            const updated = {
-              ...validated,
-              id: row.id,
-              rowNumber: row.rowNumber,
-            };
-            return applyTransactionDuplicateFlag(updated);
+            const reconciled = reconcileReviewRow(
+              row,
+              {
+                ...validated,
+                id: row.id,
+                rowNumber: row.rowNumber,
+              },
+              editedKey,
+              categorizationRules,
+              categoryAllowances
+            );
+            return applyTransactionDuplicateFlag({
+              ...reconciled,
+              excluded: row.excluded,
+              overrideDuplicate: row.overrideDuplicate,
+            });
           } catch (error) {
             console.error("Error updating transaction row:", error, row);
             return row; // Return original row on error
@@ -685,7 +729,7 @@ export const useImportWizard = () => {
 
     try {
       if (importType === "transactions") {
-        const validRows = transactionRows.filter((row) => row.errors.length === 0);
+        const validRows = transactionRows.filter((row) => row.errors.length === 0 && !row.excluded);
         if (validRows.length === 0) {
           throw new Error("No valid rows to import.");
         }
@@ -761,6 +805,8 @@ export const useImportWizard = () => {
           transfers: number;
           importId?: string | null;
           isDuplicate?: boolean;
+          skippedDuplicates?: number;
+          skippedIndexes?: number[];
         }>("/api/import/transactions", { 
           rows: payload,
           filename: currentFileName,
@@ -779,6 +825,11 @@ export const useImportWizard = () => {
           transfers: result.transfers,
           total: result.transactions + result.transfers,
         });
+
+        const learned = await learnImportedRows(validRows, categoryAllowances, result);
+        if (learned.failed > 0) {
+          toast.error("Imported, but a description rule could not be saved");
+        }
       } else if (importType === "balances") {
         const validRows = balanceRows.filter((row) => row.errors.length === 0);
         if (validRows.length === 0) {

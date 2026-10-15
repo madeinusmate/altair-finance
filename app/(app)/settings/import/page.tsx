@@ -19,6 +19,7 @@ import { useAuth } from "@/lib/auth-context";
 import { apiClient } from "@/lib/api-client";
 import { PdfStatementImport } from "@/components/pdf-import/pdf-statement-import";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CategoryAllowance, toCategoryAllowances } from "@/lib/categorization/rules";
 
 const steps = [
   { id: 1, label: "Select type" },
@@ -84,7 +85,7 @@ const ImportWizardPage = () => {
   }, [fileName]);
 
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
-  const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
+  const [transactionCategories, setTransactionCategories] = useState<CategoryAllowance[]>([]);
   const [accountCategoryIdentifiers, setAccountCategoryIdentifiers] = useState<string[]>([]);
   const [accountCategoryNames, setAccountCategoryNames] = useState<Map<string, string>>(new Map());
 
@@ -95,10 +96,10 @@ const ImportWizardPage = () => {
 
       try {
         const [txData, acctData] = await Promise.all([
-          apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
+          apiClient.get<{ categories: Array<{ name: string; transactionType?: string | null }> }>("/api/transaction-categories"),
           apiClient.get<{ categories: Array<{ identifier: string; name: string }> }>("/api/account-categories"),
         ]);
-        setTransactionCategories(txData.categories.map((c) => c.name));
+        setTransactionCategories(toCategoryAllowances(txData.categories));
         setAccountCategoryIdentifiers(acctData.categories.map((c) => c.identifier));
         const nameMap = new Map(acctData.categories.map((c) => [c.identifier, c.name]));
         setAccountCategoryNames(nameMap);
@@ -351,6 +352,7 @@ const ImportWizardPage = () => {
                   <CsvReviewTable
                     rows={filteredTransactionRows}
                     onRowChange={updateTransactionRow}
+                    rowHeight={112}
                     columns={[
                       { key: "date", label: "Date", inputType: "date" },
                       {
@@ -376,24 +378,42 @@ const ImportWizardPage = () => {
                       {
                         key: "category",
                         label: "Category",
-                        render: (row, onChange) => (
-                          <Select
-                            value={row.category}
-                            onValueChange={onChange}
-                            disabled={row.type === "transfer"}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {transactionCategories.map((category) => (
-                                <SelectItem key={category} value={category}>
-                                  {category}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ),
+                        render: (row, onChange) => {
+                          const legalCategories =
+                            row.type === "debit" || row.type === "credit"
+                              ? transactionCategories.filter(
+                                  (category) =>
+                                    category.transactionType === row.type || category.transactionType === null
+                                )
+                              : transactionCategories;
+                          const options = legalCategories.some((category) => category.name === row.category) || !row.category
+                            ? legalCategories
+                            : [...legalCategories, { name: row.category, transactionType: null }];
+                          const ruleLabel = row.ruleMatch || row.ruleHint;
+                          return (
+                            <div className="min-w-44 space-y-1">
+                              <Select
+                                value={options.some((category) => category.name === row.category) ? row.category : undefined}
+                                onValueChange={onChange}
+                                disabled={row.type === "transfer"}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {options.map((category) => (
+                                    <SelectItem key={category.name} value={category.name}>
+                                      {category.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {ruleLabel ? (
+                                <p className="text-xs text-muted-foreground">{ruleLabel}</p>
+                              ) : null}
+                            </div>
+                          );
+                        },
                       },
                       {
                         key: "type",

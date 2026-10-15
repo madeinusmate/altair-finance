@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import * as LucideIcons from "lucide-react";
+import { saveCategorizationRule } from "@/lib/categorization/client";
 
 interface TransactionFormProps {
   accountId?: string;
@@ -182,6 +183,19 @@ export const TransactionForm = ({
           date,
         });
         toast.success("Transaction added");
+      }
+
+      if (description.trim() && category && category !== "Transfer") {
+        try {
+          await saveCategorizationRule({
+            description,
+            categoryName: category,
+            transactionType: type,
+          });
+        } catch {
+          console.error("Failed to save categorization rule");
+          toast.error("Saved, but the description rule could not be stored");
+        }
       }
 
       onSuccess();

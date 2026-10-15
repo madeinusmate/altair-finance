@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Account } from "@/lib/db/schema";
 import { ParsedTransaction } from "@/lib/pdf/types";
 import { ArrowLeftRight } from "lucide-react";
+import { CategoryAllowance } from "@/lib/categorization/rules";
 
 export type TransactionRow = ParsedTransaction & {
   id: string;
@@ -23,6 +24,9 @@ export type TransactionRow = ParsedTransaction & {
   warnings: string[];
   duplicate?: boolean;
   excluded?: boolean;
+  ruleMatch?: string;
+  ruleHint?: string;
+  categoryTouched?: boolean;
   isTransfer?: boolean;
   fromAccountId?: string;
   toAccountId?: string;
@@ -33,7 +37,7 @@ export type TransactionRow = ParsedTransaction & {
 interface PdfReviewTableProps {
   rows: TransactionRow[];
   accounts: Account[];
-  transactionCategories: string[];
+  transactionCategories: CategoryAllowance[];
   onRowChange: (rowId: string, updates: Partial<TransactionRow>) => void;
   onToggleExclude: (rowId: string) => void;
 }
@@ -59,6 +63,15 @@ export const PdfReviewTable = ({
         row.date.includes(query)
     );
   }, [rows, searchQuery]);
+
+  const categoryChoices = (row: TransactionRow): CategoryAllowance[] => {
+    if (row.isTransfer) return transactionCategories;
+    const legal = transactionCategories.filter(
+      (category) => category.transactionType === row.type || category.transactionType === null
+    );
+    if (!row.category || legal.some((category) => category.name === row.category)) return legal;
+    return [...legal, { name: row.category, transactionType: row.type }];
+  };
 
   const transactionAccounts = accounts.filter((account) => account.type === "transaction");
   // For transfers: from and to accounts can be transaction or investment (exclude balance accounts)
@@ -169,16 +182,16 @@ export const PdfReviewTable = ({
                     </TableCell>
                     <TableCell>
                       <Select
-                        value={row.category}
+                        value={categoryChoices(row).some((category) => category.name === row.category) ? row.category : undefined}
                         onValueChange={(value) => onRowChange(row.id, { category: value })}
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {transactionCategories.map((cat) => (
-                            <SelectItem key={cat} value={cat}>
-                              {cat}
+                          {categoryChoices(row).map((cat) => (
+                            <SelectItem key={cat.name} value={cat.name}>
+                              {cat.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -234,16 +247,16 @@ export const PdfReviewTable = ({
                     </TableCell>
                     <TableCell>
                       <Select
-                        value={row.category}
+                        value={categoryChoices(row).some((category) => category.name === row.category) ? row.category : undefined}
                         onValueChange={(value) => onRowChange(row.id, { category: value })}
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {transactionCategories.map((cat) => (
-                            <SelectItem key={cat} value={cat}>
-                              {cat}
+                          {categoryChoices(row).map((cat) => (
+                            <SelectItem key={cat.name} value={cat.name}>
+                              {cat.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -334,7 +347,10 @@ export const PdfReviewTable = ({
                     {row.duplicate && !row.excluded && (
                       <Badge variant="secondary">Possible duplicate</Badge>
                     )}
-                    {row.errors.length === 0 && row.warnings.length === 0 && !row.duplicate && (
+                    {(row.ruleMatch || row.ruleHint) && (
+                      <p className="text-xs text-muted-foreground">{row.ruleMatch || row.ruleHint}</p>
+                    )}
+                    {row.errors.length === 0 && row.warnings.length === 0 && !row.duplicate && !row.ruleMatch && !row.ruleHint && (
                       <span className="text-xs text-muted-foreground">No issues</span>
                     )}
                   </div>

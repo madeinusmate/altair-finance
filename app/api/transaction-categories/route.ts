@@ -366,6 +366,10 @@ export const DELETE = async (request: NextRequest): Promise<NextResponse> => {
       }
     }
 
+    db.delete(schema.categorizationRules)
+      .where(eq(schema.categorizationRules.categoryName, category.name))
+      .run();
+
     // Delete the category
     db.delete(schema.transactionCategories)
       .where(eq(schema.transactionCategories.id, id))
