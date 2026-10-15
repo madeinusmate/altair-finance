@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type DashboardDateRange } from "./dashboard-date-selector";
+import { axisTick, chartCobalt, chartGrid, chartInk } from "@/components/charts/palette";
 
 // Format currency helper
 const formatCurrency = (amount: number, currency: string): string => {
@@ -34,11 +35,11 @@ interface MonthlyIncomeExpensesChartProps {
 const chartConfig = {
   income: {
     label: "Income",
-    color: "hsl(142, 76%, 36%)", // green-600
+    color: chartCobalt,
   },
   expenses: {
     label: "Expenses",
-    color: "hsl(0, 84%, 60%)", // red-500
+    color: chartInk,
   },
 } satisfies ChartConfig;
 
@@ -48,9 +49,6 @@ export const MonthlyIncomeExpensesChart = ({
   isLoading,
   data,
 }: MonthlyIncomeExpensesChartProps) => {
-
-console.log(data);
-
   if (isLoading) {
     return (
       <Card>
@@ -86,19 +84,21 @@ console.log(data);
         <CardTitle>Monthly Income & Expenses</CardTitle>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[400px] w-full">
+        <ChartContainer config={chartConfig} className="h-[280px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid vertical={false} stroke={chartGrid} />
               <XAxis
                 dataKey="monthLabel"
-                tick={{ fill: "hsl(var(--muted-foreground))" }}
-                angle={-45}
-                textAnchor="end"
-                height={80}
+                tick={axisTick}
+                tickLine={false}
+                axisLine={false}
               />
               <YAxis
-                tick={{ fill: "hsl(var(--muted-foreground))" }}
+                tick={axisTick}
+                tickLine={false}
+                axisLine={false}
+                width={72}
                 tickFormatter={(value) => formatCurrency(value, currency)}
               />
               <ChartTooltip
@@ -126,27 +126,27 @@ console.log(data);
 
               <Bar
                 dataKey="income"
-                fill="hsl(142, 76%, 36%)"
-                radius={[4, 4, 0, 0]}
+                fill={chartCobalt}
+                radius={[8, 8, 0, 0]}
                 name="Income"
               />
               <Bar
                 dataKey="expenses"
-                fill="hsl(0, 84%, 60%)"
-                radius={[4, 4, 0, 0]}
+                fill={chartInk}
+                radius={[8, 8, 0, 0]}
                 name="Expenses"
               />
             </BarChart>
           </ResponsiveContainer>
         </ChartContainer>
         {/* Custom Legend */}
-        <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t">
+        <div className="mt-4 flex items-center justify-center gap-6 border-t border-border pt-4">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: "hsl(142, 76%, 36%)" }} />
+            <div className="h-2 w-2 rounded-full" style={{ backgroundColor: chartCobalt }} />
             <span className="text-sm text-muted-foreground">Income</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: "hsl(0, 84%, 60%)" }} />
+            <div className="h-2 w-2 rounded-full" style={{ backgroundColor: chartInk }} />
             <span className="text-sm text-muted-foreground">Expenses</span>
           </div>
         </div>

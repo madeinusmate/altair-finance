@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from "electron";
 import { spawn, ChildProcess } from "child_process";
 import { randomBytes } from "crypto";
 import * as path from "path";
@@ -16,6 +16,27 @@ app.commandLine.appendSwitch("host-resolver-rules", "MAP localhost 127.0.0.1");
 
 ipcMain.on("netly-get-api-token", (event) => {
   event.returnValue = apiToken;
+});
+
+// Credits links leave the app window. Only https://github.com is allowed.
+const openGitHubUrl = async (value: unknown): Promise<void> => {
+  if (typeof value !== "string" || value.length === 0 || value.length > 300) return;
+
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return;
+  }
+
+  if (url.protocol !== "https:" || url.hostname !== "github.com") return;
+  if (url.port !== "" || url.username !== "" || url.password !== "") return;
+
+  await shell.openExternal(url.toString());
+};
+
+ipcMain.handle("netly-open-external", async (_event, value: unknown) => {
+  await openGitHubUrl(value);
 });
 
 let apiTokenHeaderPort: number | null = null;

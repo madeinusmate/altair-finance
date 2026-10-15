@@ -1,7 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -12,13 +12,14 @@ import {
   Target,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { apiClient } from "@/lib/api-client";
+import { PROFILE_UPDATED_EVENT, type UserProfile } from "@/lib/user-profile";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -26,6 +27,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const navItems = [
   {
@@ -52,43 +54,82 @@ const navItems = [
 
 export const AppSidebar = () => {
   const pathname = usePathname();
-  const { lock } = useAuth();
+  const { lock, isAuthenticated } = useAuth();
+  const [username, setUsername] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
+  const [avatar, setAvatar] = useState<string | null>(null);
+
+  useEffect(() => {
+    const applyProfile = (profile: Pick<UserProfile, "name" | "email" | "avatar">) => {
+      setUsername(profile.name || null);
+      setEmail(profile.email);
+      setAvatar(profile.avatar);
+    };
+
+    const fetchProfile = async () => {
+      if (!isAuthenticated) {
+        return;
+      }
+      try {
+        const data = await apiClient.get<UserProfile>("/api/user/profile");
+        applyProfile(data);
+      } catch (error) {
+        console.error("Failed to fetch profile:", error);
+      }
+    };
+
+    const handleProfileUpdated = (event: Event) => {
+      const profile = (event as CustomEvent<UserProfile>).detail;
+      if (profile) {
+        applyProfile(profile);
+      }
+    };
+
+    void fetchProfile();
+    window.addEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
+  }, [isAuthenticated]);
 
   const handleLock = () => {
     lock();
     window.location.href = "/unlock";
   };
 
+  const initial = username?.trim().charAt(0).toUpperCase() || "N";
+
   return (
-    <Sidebar>
+    <Sidebar className="border-r-0">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden">
-            <Image
-              src="/app-icon.png"
-              alt="Netly"
-              width={32}
-              height={32}
-              className="h-full w-full object-contain"
-            />
+        <div className="flex items-center gap-3 px-2 py-4">
+          <div
+            className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-medium ${avatar ? "" : "avatar-mark"}`}
+          >
+            {avatar ? (
+              <img src={avatar} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initial
+            )}
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold">Netly</span>
-            <span className="text-xs text-muted-foreground">Personal Finance Tracker</span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{username || "Netly"}</p>
+            {email ? <p className="truncate text-xs text-muted-foreground">{email}</p> : null}
           </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-1">
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.url || pathname.startsWith(item.url + "/")}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === item.url || pathname.startsWith(item.url + "/")}
+                    className="h-10 rounded-full px-3"
+                  >
                     <Link href={item.url}>
                       <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                      <span>{item.title === "Dashboard" ? "Home" : item.title}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -98,13 +139,14 @@ export const AppSidebar = () => {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <Button variant="ghost" className="w-full justify-start gap-2" asChild>
+        <ThemeToggle />
+        <Button variant="ghost" className="w-full justify-start rounded-full" asChild>
           <Link href="/settings">
             <Settings className="h-4 w-4" />
             <span>Settings</span>
           </Link>
         </Button>
-        <Button variant="ghost" className="w-full justify-start gap-2" onClick={handleLock}>
+        <Button variant="ghost" className="w-full justify-start rounded-full" onClick={handleLock}>
           <LogOut className="h-4 w-4" />
           <span>Lock</span>
         </Button>

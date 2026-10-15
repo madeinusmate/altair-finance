@@ -212,7 +212,7 @@ export const DeleteImportDialog = ({ importRecord, onDeleted, trigger }: DeleteI
           <>
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <CheckCircle2 className="h-5 w-5 text-foreground" />
                 Import Deleted Successfully
               </AlertDialogTitle>
               <AlertDialogDescription>

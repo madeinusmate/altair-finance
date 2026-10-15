@@ -26,6 +26,8 @@ import {
 import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { BudgetBar } from "@/components/budget/budget-bar";
+import { SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
 
 interface BudgetWithSpending {
   id: string;
@@ -45,6 +47,7 @@ interface BudgetCategoryListProps {
   overallBudget: number;
   isLoading?: boolean;
   onRefresh: () => void;
+  enabledCurrencies?: readonly SupportedCurrency[];
 }
 
 const formatCurrency = (amount: number, currency: string): string => {
@@ -58,20 +61,9 @@ const formatCurrency = (amount: number, currency: string): string => {
 
 const getStatusColor = (percentage: number): string => {
   if (percentage > 100) {
-    return "text-red-600";
-  } else if (percentage >= 75) {
-    return "text-yellow-600";
+    return "text-foreground";
   }
-  return "text-green-600";
-};
-
-const getProgressColor = (percentage: number): string => {
-  if (percentage > 100) {
-    return "bg-red-600";
-  } else if (percentage >= 75) {
-    return "bg-yellow-600";
-  }
-  return "bg-green-600";
+  return "text-muted-foreground";
 };
 
 export const BudgetCategoryList = ({
@@ -81,6 +73,7 @@ export const BudgetCategoryList = ({
   overallBudget,
   isLoading,
   onRefresh,
+  enabledCurrencies = SUPPORTED_CURRENCIES,
 }: BudgetCategoryListProps) => {
   const [editingBudget, setEditingBudget] = useState<BudgetWithSpending | null>(null);
   const [creatingCategory, setCreatingCategory] = useState<string | null>(null);
@@ -162,8 +155,6 @@ export const BudgetCategoryList = ({
               </TableHeader>
               <TableBody>
                 {budgets.map((budget) => {
-                  const progressValue = Math.min(budget.percentageUsed, 100);
-                  const progressColor = getProgressColor(budget.percentageUsed);
                   const statusColor = getStatusColor(budget.percentageUsed);
                   const allocationPercentage = overallBudget > 0 ? (budget.amount / overallBudget) * 100 : 0;
 
@@ -180,21 +171,13 @@ export const BudgetCategoryList = ({
                         {formatCurrency(budget.spent, currency)}
                       </TableCell>
                       <TableCell
-                        className={cn(
-                          "text-right",
-                          budget.remaining < 0 ? "text-red-600" : ""
-                        )}
+                        className="text-right tabular-nums"
                       >
                         {formatCurrency(budget.remaining, currency)}
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
-                            <div
-                              className={cn("h-full transition-all", progressColor)}
-                              style={{ width: `${progressValue}%` }}
-                            />
-                          </div>
+                          <BudgetBar percentage={budget.percentageUsed} />
                           <span className={cn("text-xs", statusColor)}>
                             {budget.percentageUsed.toFixed(1)}%
                           </span>
@@ -257,6 +240,8 @@ export const BudgetCategoryList = ({
         }}
         budget={editingBudget || undefined}
         categoryName={creatingCategory || undefined}
+        currencies={enabledCurrencies}
+        defaultCurrency={currency}
         onSuccess={onRefresh}
       />
 

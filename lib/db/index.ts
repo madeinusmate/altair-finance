@@ -47,21 +47,35 @@ const openSqlite = (encryptionKey: string): DatabaseInstance => {
   return sqlite;
 };
 
-const ensureInstallIdColumn = (sqlite: DatabaseInstance): void => {
+const ensureUserSettingsColumns = (sqlite: DatabaseInstance): void => {
   const table = sqlite
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'user_settings'")
     .get();
   if (!table) return;
 
   const columns = sqlite.prepare("PRAGMA table_info(user_settings)").all() as Array<{ name: string }>;
-  if (!columns.some((column) => column.name === "install_id")) {
+  const names = new Set(columns.map((column) => column.name));
+
+  if (!names.has("install_id")) {
     sqlite.exec("ALTER TABLE user_settings ADD COLUMN install_id TEXT");
+  }
+  if (!names.has("email")) {
+    sqlite.exec("ALTER TABLE user_settings ADD COLUMN email TEXT");
+  }
+  if (!names.has("preferred_currency")) {
+    sqlite.exec("ALTER TABLE user_settings ADD COLUMN preferred_currency TEXT");
+  }
+  if (!names.has("avatar")) {
+    sqlite.exec("ALTER TABLE user_settings ADD COLUMN avatar TEXT");
+  }
+  if (!names.has("enabled_currencies")) {
+    sqlite.exec("ALTER TABLE user_settings ADD COLUMN enabled_currencies TEXT");
   }
 };
 
 export const runMigrations = (sqlite: DatabaseInstance): void => {
   try {
-    ensureInstallIdColumn(sqlite);
+    ensureUserSettingsColumns(sqlite);
 
     // Migration: Create imports table if it doesn't exist
     const importsTableCheck = sqlite.prepare(`
@@ -461,6 +475,10 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     CREATE TABLE IF NOT EXISTS user_settings (
       id TEXT PRIMARY KEY DEFAULT 'user',
       username TEXT NOT NULL,
+      email TEXT,
+      avatar TEXT,
+      preferred_currency TEXT,
+      enabled_currencies TEXT,
       install_id TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
@@ -666,13 +684,17 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
           CREATE TABLE user_settings (
             id TEXT PRIMARY KEY DEFAULT 'user',
             username TEXT NOT NULL,
+            email TEXT,
+            avatar TEXT,
+            preferred_currency TEXT,
+            enabled_currencies TEXT,
             install_id TEXT,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
           );
         `);
       }
-      ensureInstallIdColumn(sqlite);
+      ensureUserSettingsColumns(sqlite);
     } catch (error) {
       console.warn("[DB Migration] Could not create user_settings table:", error);
     }

@@ -3,7 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import {
-  TARGET_NET_WORTH_CURRENCIES,
+  SUPPORTED_CURRENCIES,
   isSupportedCurrency,
   type SupportedCurrency,
 } from "@/lib/currencies";
@@ -21,6 +21,7 @@ interface AccountBalance {
   // Investment-specific fields
   netContributions?: number;
   profitLoss?: number;
+  updatedAt: Date;
 }
 
 interface CurrencyNetWorth {
@@ -161,6 +162,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
           category: account.category,
           currency: account.currency,
           balance,
+          updatedAt: account.updatedAt,
         };
 
         // Add investment-specific fields only for investment accounts
@@ -183,7 +185,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
 
     const fxSnapshot = await getFxSnapshot(db);
 
-    const netWorthByCurrency = TARGET_NET_WORTH_CURRENCIES.reduce<Record<SupportedCurrency, CurrencyNetWorth>>(
+    const netWorthByCurrency = SUPPORTED_CURRENCIES.reduce<Record<SupportedCurrency, CurrencyNetWorth>>(
       (acc, targetCurrency) => {
         let totalAssets = 0;
         let totalLiabilities = 0;

@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Check } from "lucide-react";
 import { type DashboardDateRange } from "./dashboard-date-selector";
+import { chartCobalt } from "@/components/charts/palette";
 
 interface FinancialHealthScoreProps {
   dateRange: DashboardDateRange;
@@ -44,7 +45,7 @@ export const FinancialHealthScore = ({ dateRange }: FinancialHealthScoreProps) =
                 cy="50"
                 r="45"
                 fill="none"
-                stroke="hsl(142, 76%, 36%)"
+                stroke={chartCobalt}
                 strokeWidth="8"
                 strokeDasharray={`${2 * Math.PI * 45}`}
                 strokeDashoffset={`${2 * Math.PI * 45 * (1 - score / 100)}`}
@@ -69,7 +70,7 @@ export const FinancialHealthScore = ({ dateRange }: FinancialHealthScoreProps) =
           <div className="w-full space-y-2">
             {achievements.map((achievement, index) => (
               <div key={index} className="flex items-center gap-2 text-sm">
-                <Check className="h-4 w-4 text-green-600" />
+                <Check className="h-4 w-4 text-foreground" />
                 <span className="text-muted-foreground">{achievement}</span>
               </div>
             ))}

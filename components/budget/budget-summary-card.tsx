@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { BudgetBar } from "@/components/budget/budget-bar";
 
 interface BudgetSummaryCardProps {
   overallBudget: number;
@@ -21,24 +21,6 @@ const formatCurrency = (amount: number, currency: string): string => {
   }).format(amount);
 };
 
-const getStatusColor = (percentage: number): string => {
-  if (percentage > 100) {
-    return "text-red-600";
-  } else if (percentage >= 75) {
-    return "text-yellow-600";
-  }
-  return "text-green-600";
-};
-
-const getProgressColor = (percentage: number): string => {
-  if (percentage > 100) {
-    return "bg-red-600";
-  } else if (percentage >= 75) {
-    return "bg-yellow-600";
-  }
-  return "bg-green-600";
-};
-
 export const BudgetSummaryCard = ({
   overallBudget,
   overallSpent,
@@ -51,7 +33,7 @@ export const BudgetSummaryCard = ({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Overall Budget</CardTitle>
+          <CardTitle>Left to spend</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -63,33 +45,32 @@ export const BudgetSummaryCard = ({
     );
   }
 
-  const statusColor = getStatusColor(overallPercentageUsed);
-
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Overall Budget</CardTitle>
+        <CardTitle className="text-sm font-medium text-muted-foreground">Left to spend</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
         <div>
-          <div className={cn("text-2xl font-bold", statusColor)}>
-            {formatCurrency(overallBudget, currency)}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Total monthly budget</p>
+          <p className="text-[40px] font-medium leading-none tracking-[-0.03em] tabular-nums">
+            {formatCurrency(overallRemaining, currency)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Remaining this month</p>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
+        <BudgetBar percentage={overallPercentageUsed} />
+
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between gap-4">
             <span className="text-muted-foreground">Spent</span>
-            <span className="font-medium">{formatCurrency(overallSpent, currency)}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Remaining</span>
-            <span className={cn("font-medium", overallRemaining < 0 ? "text-red-600" : "")}>
-              {formatCurrency(overallRemaining, currency)}
+            <span className="font-medium tabular-nums">
+              {formatCurrency(overallSpent, currency)}
             </span>
           </div>
-          
+          <div className="flex justify-between gap-4">
+            <span className="text-muted-foreground">Budget</span>
+            <span className="font-medium tabular-nums">{formatCurrency(overallBudget, currency)}</span>
+          </div>
         </div>
       </CardContent>
     </Card>

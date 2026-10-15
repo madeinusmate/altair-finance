@@ -23,7 +23,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
-import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { isSupportedCurrency, SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
 
 interface Budget {
   id: string;
@@ -37,6 +37,8 @@ interface BudgetEditDialogProps {
   onOpenChange: (open: boolean) => void;
   budget?: Budget | null;
   categoryName?: string;
+  currencies?: readonly SupportedCurrency[];
+  defaultCurrency?: string;
   onSuccess: () => void;
 }
 
@@ -45,6 +47,8 @@ export const BudgetEditDialog = ({
   onOpenChange,
   budget,
   categoryName,
+  currencies = SUPPORTED_CURRENCIES,
+  defaultCurrency = "USD",
   onSuccess,
 }: BudgetEditDialogProps) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -78,6 +82,11 @@ export const BudgetEditDialog = ({
     }
   }, [open, budget, categoryName]);
 
+  const startingCurrency =
+    isSupportedCurrency(defaultCurrency) && currencies.includes(defaultCurrency)
+      ? defaultCurrency
+      : (currencies[0] ?? "USD");
+
   useEffect(() => {
     if (budget) {
       setAmount(budget.amount.toString());
@@ -85,15 +94,15 @@ export const BudgetEditDialog = ({
       setSelectedCategory(budget.categoryName);
     } else if (categoryName) {
       setAmount("");
-      setCurrency("USD");
+      setCurrency(startingCurrency);
       setSelectedCategory(categoryName);
     } else {
       setAmount("");
-      setCurrency("USD");
+      setCurrency(startingCurrency);
       setSelectedCategory("");
     }
     setError(null);
-  }, [budget, categoryName, open]);
+  }, [budget, categoryName, open, startingCurrency]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,7 +210,10 @@ export const BudgetEditDialog = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {SUPPORTED_CURRENCIES.map((curr) => (
+                  {(isSupportedCurrency(currency) && !currencies.includes(currency)
+                    ? [currency, ...currencies]
+                    : currencies
+                  ).map((curr) => (
                     <SelectItem key={curr} value={curr}>
                       {curr}
                     </SelectItem>

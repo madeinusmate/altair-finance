@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type DashboardDateRange } from "./dashboard-date-selector";
+import { axisTick, chartCobalt, chartGrid, spendingFills } from "@/components/charts/palette";
 
 // Format currency helper
 const formatCurrency = (amount: number, currency: string): string => {
@@ -32,19 +33,10 @@ interface SpendingChartProps {
   };
 }
 
-const COLORS = [
-  "hsl(142, 76%, 36%)", // green-600
-  "hsl(221, 83%, 53%)", // blue-600
-  "hsl(262, 83%, 58%)", // purple-600
-  "hsl(0, 84%, 60%)", // red-500
-  "hsl(38, 92%, 50%)", // amber-500
-  "hsl(var(--muted-foreground))", // muted
-];
-
 const chartConfig = {
   spending: {
     label: "Spending",
-    color: "hsl(142, 76%, 36%)",
+    color: chartCobalt,
   },
 } satisfies ChartConfig;
 
@@ -86,15 +78,8 @@ export const SpendingChart = ({
   const chartData = data.categories.map((cat, index) => ({
     name: cat.category,
     spending: cat.amount,
-    fill: COLORS[index % COLORS.length],
+    fill: spendingFills[index % spendingFills.length],
   }));
-
-  // Calculate dynamic height based on number of categories
-  // Minimum 300px, add ~60px per category (accounting for bar height + spacing)
-  const categoryCount = data.categories.length;
-  const minHeight = 300;
-  const heightPerCategory = 30;
-  const chartHeight = Math.max(minHeight, categoryCount * heightPerCategory + 80);
 
   // Calculate Y-axis width based on longest category name
   const maxCategoryLength = Math.max(...data.categories.map((cat) => cat.category.length));
@@ -106,25 +91,29 @@ export const SpendingChart = ({
         <CardTitle>Spending Breakdown</CardTitle>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="w-full" style={{ height: `${chartHeight}px` }}>
+        <ChartContainer config={chartConfig} className="h-[280px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart 
               data={chartData} 
               layout="vertical" 
-              margin={{ top: 20, right: 30, left: 10, bottom: 20 }}
+              margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
               barCategoryGap="20%"
             >
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <CartesianGrid horizontal={false} stroke={chartGrid} />
               <XAxis
                 type="number"
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                tick={axisTick}
+                tickLine={false}
+                axisLine={false}
                 tickFormatter={(value) => formatCurrency(value, currency)}
                 domain={[0, 'dataMax']}
               />
               <YAxis
                 type="category"
                 dataKey="name"
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                tick={axisTick}
+                tickLine={false}
+                axisLine={false}
                 width={yAxisWidth}
                 interval={0}
               />
@@ -149,7 +138,7 @@ export const SpendingChart = ({
               />
               <Bar
                 dataKey="spending"
-                radius={[0, 4, 4, 0]}
+                radius={[0, 8, 8, 0]}
                 minPointSize={2}
               >
                 {chartData.map((entry, index) => (

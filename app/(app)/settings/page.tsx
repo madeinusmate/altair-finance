@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { DatabaseDeleteDialog } from "@/components/database-delete-dialog";
 import { DatabaseImportWizard } from "@/components/database-import-wizard";
 import { useAuth } from "@/lib/auth-context";
+import { Credits } from "@/components/settings/credits";
+import { EnabledCurrencies } from "@/components/settings/enabled-currencies";
+import { ProfileForm } from "@/components/settings/profile-form";
 
 const SettingsPage = () => {
   const [isExporting, setIsExporting] = useState(false);
@@ -54,9 +57,29 @@ const SettingsPage = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-[34px] font-semibold tracking-[-0.03em]">Settings</h1>
         <p className="text-muted-foreground">Manage your application settings</p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile</CardTitle>
+          <CardDescription>Your photo, name, email, and home currency.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ProfileForm />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Currencies</CardTitle>
+          <CardDescription>Choose which currencies appear on Home and Budget.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <EnabledCurrencies />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -135,6 +158,16 @@ const SettingsPage = () => {
             This removes all stored data and cannot be undone.
           </p>
           <DatabaseDeleteDialog />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Credits</CardTitle>
+          <CardDescription>Netly is made by @madeinusmate.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Credits />
         </CardContent>
       </Card>
     </div>

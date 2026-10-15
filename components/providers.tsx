@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
+import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/lib/auth-context";
 import { Toaster } from "@/components/ui/sonner";
 import { installApiTokenFetch } from "@/lib/install-api-token";
@@ -10,9 +11,11 @@ installApiTokenFetch();
 
 export const Providers = ({ children }: { children: ReactNode }) => {
   return (
-    <AuthProvider>
-      {children}
-      <Toaster />
-    </AuthProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <AuthProvider>
+        {children}
+        <Toaster />
+      </AuthProvider>
+    </ThemeProvider>
   );
 };

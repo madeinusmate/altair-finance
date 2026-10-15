@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiClient } from "@/lib/api-client";
-import { cn } from "@/lib/utils";
-import { Target } from "lucide-react";
 
 interface BudgetTileProps {
   currency: string;
@@ -31,15 +29,11 @@ const formatCurrency = (amount: number, currency: string): string => {
   }).format(amount);
 };
 
-const getStatusColor = (status: "under" | "approaching" | "over"): string => {
-  switch (status) {
-    case "over":
-      return "text-red-600 border-red-200 dark:border-red-900";
-    case "approaching":
-      return "text-yellow-600 border-yellow-200 dark:border-yellow-900";
-    default:
-      return "text-green-600 border-green-200 dark:border-green-900";
+const getStatusHint = (status: "under" | "approaching" | "over", percentage: number): string => {
+  if (status === "over") {
+    return `${Math.abs(percentage - 100).toFixed(0)}% over`;
   }
+  return `${percentage.toFixed(0)}% used`;
 };
 
 export const BudgetTile = ({ currency }: BudgetTileProps) => {
@@ -64,7 +58,7 @@ export const BudgetTile = ({ currency }: BudgetTileProps) => {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className="h-full">
         <CardHeader>
           <CardTitle className="text-sm font-medium">Budget</CardTitle>
         </CardHeader>
@@ -78,52 +72,23 @@ export const BudgetTile = ({ currency }: BudgetTileProps) => {
 
   if (!data || data.overallBudget === 0) {
     return (
-      <Card
-        className="cursor-pointer hover:bg-accent transition-colors"
-        onClick={() => router.push("/budget")}
-      >
-        <CardHeader>
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Target className="h-4 w-4" />
-            Budget
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold text-muted-foreground">No budget set</div>
-          <p className="text-xs text-muted-foreground mt-1">Click to create</p>
+      <Card className="h-full cursor-pointer transition-colors hover:bg-muted" onClick={() => router.push("/budget")}>
+        <CardContent className="py-5">
+          <p className="text-[13px] text-muted-foreground">Left to spend</p>
+          <p className="mt-1 text-[28px] font-semibold leading-none tracking-[-0.03em] text-muted-foreground">Set a budget</p>
         </CardContent>
       </Card>
     );
   }
 
-  const statusColor = getStatusColor(data.status);
-
   return (
-    <Card
-      className={cn(
-        "cursor-pointer hover:bg-accent transition-colors",
-        statusColor.includes("border") && `border-2 ${statusColor.split(" ")[1]}`
-      )}
-      onClick={() => router.push("/budget")}
-    >
-      <CardHeader>
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <Target className="h-4 w-4" />
-          Budget
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className={cn("text-2xl font-bold", statusColor.split(" ")[0])}>
+    <Card className="h-full cursor-pointer transition-colors hover:bg-muted" onClick={() => router.push("/budget")}>
+      <CardContent className="py-5">
+        <p className="text-[13px] text-muted-foreground">Left to spend</p>
+        <p className="mt-1 text-[28px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
           {formatCurrency(data.overallRemaining, data.currency)}
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          {data.overallPercentageUsed.toFixed(1)}% used
         </p>
-        {data.status === "over" && (
-          <p className="text-xs text-red-600 mt-1 font-medium">
-            {Math.abs(data.overallPercentageUsed - 100).toFixed(1)}% over budget
-          </p>
-        )}
+        <p className="mt-1 text-xs text-muted-foreground">{getStatusHint(data.status, data.overallPercentageUsed)}</p>
       </CardContent>
     </Card>
   );

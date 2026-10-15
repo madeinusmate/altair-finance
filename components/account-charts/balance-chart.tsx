@@ -6,6 +6,7 @@ import { MonthlyBalance, formatCurrencySmart } from "@/lib/chart-data-aggregatio
 import { BalanceHistory } from "@/lib/db/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { format, parseISO } from "date-fns";
+import { axisTick, chartGrid } from "@/components/charts/palette";
 
 interface BalanceChartProps {
   data?: MonthlyBalance[];
@@ -17,7 +18,7 @@ interface BalanceChartProps {
 const chartConfig = {
   balance: {
     label: "Balance",
-    color: "var(--muted-foreground)",
+    color: "#1227fd",
   },
 } satisfies ChartConfig;
 
@@ -69,24 +70,21 @@ export const BalanceChart = ({ data, balanceHistory, currency, accountId }: Bala
             width={undefined}
             height={undefined}
           >
-            <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
+            <CartesianGrid vertical={false} stroke={chartGrid} />
             <XAxis
               dataKey="dateLabel"
-              tick={{ fill: "hsl(var(--muted-foreground))" }}
-              angle={-45}
-              textAnchor="end"
-              height={80}
+              tick={axisTick}
               tickLine={false}
               axisLine={false}
             />
             <YAxis
-              tick={{ fill: "hsl(var(--muted-foreground))" }}
+              tick={axisTick}
               tickFormatter={(value) => formatCurrencySmart(value, currency)}
               tickLine={false}
               axisLine={false}
             />
             {showZeroLine && (
-              <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="2 2" />
+              <ReferenceLine y={0} stroke={chartGrid} />
             )}
             <ChartTooltip
               cursor={false}

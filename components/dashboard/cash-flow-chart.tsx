@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Filter } from "lucide-react";
 import { type DashboardDateRange } from "./dashboard-date-selector";
+import { chartCobalt, chartInk, axisTick, chartGrid } from "@/components/charts/palette";
 
 interface CashFlowData {
   income: Array<{ category: string; amount: number }>;
@@ -23,11 +24,11 @@ interface CashFlowChartProps {
 const chartConfig = {
   income: {
     label: "Income",
-    color: "hsl(142, 76%, 36%)", // green-600
+    color: chartCobalt,
   },
   expenses: {
     label: "Expenses",
-    color: "hsl(0, 84%, 60%)", // red-500
+    color: chartInk,
   },
 } satisfies ChartConfig;
 
@@ -130,16 +131,12 @@ export const CashFlowChart = ({
           {/* Legend */}
           <div className="flex items-center gap-4 text-xs">
             <div className="flex items-center gap-1.5">
-              <div className="h-2 w-2 rounded-full bg-[hsl(142,76%,36%)]" />
-              <span className="text-muted-foreground">Salary</span>
+              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: chartCobalt }} />
+              <span className="text-muted-foreground">Income</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-2 w-2 rounded-full bg-[hsl(142,76%,36%)] opacity-70" />
-              <span className="text-muted-foreground">Freelance</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="h-2 w-2 rounded-full bg-[hsl(142,76%,36%)] opacity-50" />
-              <span className="text-muted-foreground">Savings</span>
+              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: chartInk }} />
+              <span className="text-muted-foreground">Expenses</span>
             </div>
           </div>
 
@@ -147,16 +144,20 @@ export const CashFlowChart = ({
           <ChartContainer config={chartConfig} className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={sideBySideData} layout="vertical" margin={{ left: 20, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <CartesianGrid vertical={false} stroke={chartGrid} />
                 <XAxis
                   type="number"
-                  tick={{ fill: "hsl(var(--muted-foreground))" }}
+                  tick={axisTick}
+                  tickLine={false}
+                  axisLine={false}
                   tickFormatter={(value) => formatCurrency(Math.abs(value), data.currency)}
                 />
                 <YAxis
                   type="category"
                   dataKey="category"
-                  tick={{ fill: "hsl(var(--muted-foreground))" }}
+                  tick={axisTick}
+                  tickLine={false}
+                  axisLine={false}
                   width={120}
                 />
                 <Tooltip
@@ -178,7 +179,7 @@ export const CashFlowChart = ({
                   {sideBySideData.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={entry.type === "Income" ? "hsl(142, 76%, 36%)" : "hsl(0, 84%, 60%)"}
+                      fill={entry.type === "Income" ? chartCobalt : chartInk}
                     />
                   ))}
                 </Bar>
@@ -190,7 +191,7 @@ export const CashFlowChart = ({
           <div className="flex items-center justify-between text-sm border-t pt-4">
             <div>
               <span className="text-muted-foreground">Total Income: </span>
-              <span className="font-medium text-green-600">
+              <span className="font-medium text-foreground">
                 {formatCurrency(
                   data.income.reduce((sum, item) => sum + item.amount, 0),
                   data.currency
@@ -199,7 +200,7 @@ export const CashFlowChart = ({
             </div>
             <div>
               <span className="text-muted-foreground">Total Expenses: </span>
-              <span className="font-medium text-red-600">
+              <span className="font-medium text-foreground">
                 {formatCurrency(
                   data.expenses.reduce((sum, item) => sum + item.amount, 0),
                   data.currency

@@ -8,4 +8,5 @@ contextBridge.exposeInMainWorld("electron", {
   clipboard: {
     readText: () => clipboard.readText(),
   },
+  openExternal: (url: string) => ipcRenderer.invoke("netly-open-external", url),
 });

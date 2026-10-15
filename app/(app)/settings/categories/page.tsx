@@ -77,7 +77,7 @@ const CategoriesPage = () => {
           </Link>
         </Button>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Category Management</h1>
+          <h1 className="text-[34px] font-semibold tracking-[-0.03em]">Category Management</h1>
           <p className="text-muted-foreground">Manage transaction and account categories</p>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { MonthlyInflowOutflow, formatCurrencySmart } from "@/lib/chart-data-aggregation";
 import { Card, CardContent } from "@/components/ui/card";
+import { axisTick, chartCobalt, chartGrid, chartInk } from "@/components/charts/palette";
 
 interface InflowOutflowChartProps {
   data: MonthlyInflowOutflow[];
@@ -13,11 +14,11 @@ interface InflowOutflowChartProps {
 const chartConfig = {
   inflow: {
     label: "Inflow",
-    color: "hsl(142, 76%, 36%)", // green-600
+    color: chartCobalt,
   },
   outflow: {
     label: "Outflow",
-    color: "hsl(0, 84%, 60%)", // red-500
+    color: chartInk,
   },
 };
 
@@ -37,16 +38,17 @@ export const InflowOutflowChart = ({ data, currency }: InflowOutflowChartProps) 
       <CardContent className="pt-6">
         <ChartContainer config={chartConfig} className="h-[300px] w-full">
           <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} width={undefined} height={undefined}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <CartesianGrid vertical={false} stroke={chartGrid} />
             <XAxis
               dataKey="monthLabel"
-              tick={{ fill: "hsl(var(--muted-foreground))" }}
-              angle={-45}
-              textAnchor="end"
-              height={80}
+              tick={axisTick}
+              tickLine={false}
+              axisLine={false}
             />
             <YAxis
-              tick={{ fill: "hsl(var(--muted-foreground))" }}
+              tick={axisTick}
+              tickLine={false}
+              axisLine={false}
               tickFormatter={(value) => {
                 return formatCurrencySmart(value, currency);
               }}
@@ -73,12 +75,12 @@ export const InflowOutflowChart = ({ data, currency }: InflowOutflowChartProps) 
             />
             <Bar
               dataKey="inflow"
-              fill="hsl(142, 76%, 36%)"
+              fill={chartCobalt}
               radius={[4, 4, 0, 0]}
             />
             <Bar
               dataKey="outflow"
-              fill="hsl(0, 84%, 60%)"
+              fill={chartInk}
               radius={[4, 4, 0, 0]}
             />
           </BarChart>

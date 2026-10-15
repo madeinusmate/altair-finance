@@ -8,6 +8,7 @@ declare global {
       clipboard?: {
         readText: () => string;
       };
+      openExternal?: (url: string) => Promise<void>;
     };
   }
 }
