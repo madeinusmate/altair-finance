@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { normalizePayeeIconImage, PayeeIconImageError } from "../lib/payees/icon-image";
+import { normalizePayeeIconImage, PayeeIconImageError, payeeIconImageSize } from "../lib/payees/icon-image";
 
 const TINY_PNG =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
@@ -8,6 +8,7 @@ const TINY_PNG =
 describe("normalizePayeeIconImage", () => {
   it("accepts a small PNG data URL", () => {
     assert.equal(normalizePayeeIconImage(TINY_PNG), TINY_PNG);
+    assert.deepEqual(payeeIconImageSize(TINY_PNG), { width: 1, height: 1 });
     assert.equal(normalizePayeeIconImage(""), null);
     assert.equal(normalizePayeeIconImage(null), null);
   });

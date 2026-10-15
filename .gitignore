@@ -13,6 +13,9 @@ oauth-relay/
 # statements
 /statements/
 
+# regenerated payee-image fetch cache
+/scripts/.cache/
+
 # next.js
 /.next/
 /.next-fresh/
