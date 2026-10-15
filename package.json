@@ -3,8 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "main": "electron/dist/main.js",
+  "description": "Personal finance for macOS. The books stay on this computer, encrypted with a passphrase you choose.",
   "author": "@madeinusmate",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/madeinusmate/netly.git"
+  },
+  "bugs": {
+    "url": "https://github.com/madeinusmate/netly/issues"
+  },
+  "homepage": "https://github.com/madeinusmate/netly#readme",
   "scripts": {
     "dev": "next dev --turbopack -H 127.0.0.1 -p 8527",
     "dev:fresh": "tsx scripts/dev-fresh.ts",

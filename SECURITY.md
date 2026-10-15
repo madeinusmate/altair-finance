@@ -1,10 +1,12 @@
-# Security policy
+# Security
+
+Report a vulnerability through [GitHub private security advisories](https://github.com/madeinusmate/netly/security/advisories/new) on this repository.
 
 Netly keeps financial records in an encrypted database on the local machine. Please report vulnerabilities privately until a fix is released. Do not open a public GitHub issue for a security bug.
 
-## Reporting
+Leave secrets out of issues and pull requests. That includes passphrases, the per-launch API token, `.env.local`, and `OPENAI_API_KEY`.
 
-Email the maintainers, or use GitHub private vulnerability reporting on this repository once it is public. Include steps to reproduce, the affected version, and whether the issue needs a local process, a machine on the same network, or a remote attacker.
+Include steps to reproduce, the affected version, and whether the issue needs a local process, a machine on the same network, or a remote attacker.
 
 ## What is in scope
 
