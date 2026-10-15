@@ -1,16 +1,107 @@
 import { NextRequest, NextResponse } from "next/server";
-import { gte, lte, and, eq } from "drizzle-orm";
+import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
-import { convertAmount, getFxSnapshot } from "@/lib/fx";
+import { getFxSnapshot } from "@/lib/fx";
 import { type SupportedCurrency } from "@/lib/currencies";
+import { earliestTimestamp, parseLocalDateRange, previousPeriod, yearAgoPeriod } from "@/lib/insights/range";
+import {
+  buildSpendingComparison,
+  yearAgoWindowForLedger,
+  type SpendingAccount,
+  type SpendingLedgerEntry,
+} from "@/lib/insights/spending";
 
-interface SpendingCategory {
-  categoryId: number;
-  category: string;
-  amount: number;
-  percentage: number;
-}
+type DashboardDb = ReturnType<typeof getDb>;
+
+const readOldestLedgerDate = (db: DashboardDb): Date | null => {
+  const transaction = db
+    .select({ date: schema.transactions.date })
+    .from(schema.transactions)
+    .orderBy(asc(schema.transactions.date))
+    .limit(1)
+    .get();
+  const transfer = db
+    .select({ date: schema.transfers.date })
+    .from(schema.transfers)
+    .orderBy(asc(schema.transfers.date))
+    .limit(1)
+    .get();
+  const balance = db
+    .select({ date: schema.balanceHistory.date })
+    .from(schema.balanceHistory)
+    .orderBy(asc(schema.balanceHistory.date))
+    .limit(1)
+    .get();
+  const investment = db
+    .select({ date: schema.investmentHistory.date })
+    .from(schema.investmentHistory)
+    .orderBy(asc(schema.investmentHistory.date))
+    .limit(1)
+    .get();
+  const account = db
+    .select({ date: schema.accounts.createdAt })
+    .from(schema.accounts)
+    .orderBy(asc(schema.accounts.createdAt))
+    .limit(1)
+    .get();
+
+  return earliestTimestamp([
+    transaction?.date,
+    transfer?.date,
+    balance?.date,
+    investment?.date,
+    account?.date,
+  ]);
+};
+
+const loadDebits = (
+  db: DashboardDb,
+  start: Date,
+  end: Date,
+): { entries: SpendingLedgerEntry[]; accounts: SpendingAccount[] } => {
+  const rows = db
+    .select({
+      accountId: schema.transactions.accountId,
+      type: schema.transactions.type,
+      category: schema.transactionCategories.name,
+      amount: schema.transactions.amount,
+      date: schema.transactions.date,
+      accountType: schema.accounts.type,
+      currency: schema.accounts.currency,
+    })
+    .from(schema.transactions)
+    .innerJoin(schema.accounts, eq(schema.transactions.accountId, schema.accounts.id))
+    .innerJoin(
+      schema.transactionCategories,
+      eq(schema.transactions.categoryId, schema.transactionCategories.id),
+    )
+    .where(
+      and(
+        eq(schema.transactions.type, "debit"),
+        eq(schema.accounts.type, "transaction"),
+        gte(schema.transactions.date, start),
+        lte(schema.transactions.date, end),
+      ),
+    )
+    .all();
+
+  return {
+    entries: rows.map((row) => ({
+      kind: "transaction" as const,
+      accountId: row.accountId,
+      type: row.type,
+      category: row.category,
+      amount: row.amount,
+      date: row.date,
+    })),
+    accounts: rows.map((row) => ({
+      id: row.accountId,
+      type: row.accountType,
+      currency: row.currency,
+    })),
+  };
+};
 
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
@@ -28,82 +119,36 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "startDate and endDate are required" }, { status: 400 });
     }
 
-    const startDate = new Date(startDateParam);
-    const endDate = new Date(endDateParam);
-
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    // Local day bounds, same split as monthly income. The previous UTC parse
+    // could move a boundary transaction across the window on a device off UTC.
+    const range = parseLocalDateRange(startDateParam, endDateParam);
+    if (!range) {
       return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
     }
 
     const db = getDb(key);
     const fxSnapshot = await getFxSnapshot(db);
+    const previous = previousPeriod(range.start, range.end);
+    const yearAgoCandidate = yearAgoPeriod(range.start, range.end);
+    const yearAgo = yearAgoCandidate
+      ? yearAgoWindowForLedger(range.start, range.end, readOldestLedgerDate(db))
+      : null;
 
-    // Get all debit transactions in date range
-    const transactions = db
-      .select({
-        categoryId: schema.transactions.categoryId,
-        category: schema.transactionCategories.name,
-        amount: schema.transactions.amount,
-        accountId: schema.transactions.accountId,
-      })
-      .from(schema.transactions)
-      .innerJoin(
-        schema.transactionCategories,
-        eq(schema.transactions.categoryId, schema.transactionCategories.id)
-      )
-      .where(
-        and(
-          eq(schema.transactions.type, "debit"),
-          gte(schema.transactions.date, startDate),
-          lte(schema.transactions.date, endDate)
-        )
-      )
-      .all();
+    const current = loadDebits(db, range.start, range.end);
+    const prior = loadDebits(db, previous.start, previous.end);
+    const yearAgoRows = yearAgo ? loadDebits(db, yearAgo.start, yearAgo.end) : { entries: [], accounts: [] };
 
-    // Get account currencies for conversion
-    const accounts = db.select().from(schema.accounts).all();
-    const accountCurrencyMap = new Map(accounts.map((acc) => [acc.id, acc.currency]));
-
-    // Aggregate spending by category id and label the slice with the current name.
-    const categoryMap = new Map<number, { category: string; amount: number }>();
-
-    transactions.forEach((transaction) => {
-      if (transaction.categoryId == null) {
-        return;
-      }
-      const accountCurrency = accountCurrencyMap.get(transaction.accountId) || "USD";
-      const convertedAmount = convertAmount(
-        transaction.amount,
-        accountCurrency as SupportedCurrency,
-        currency,
-        fxSnapshot.rates
-      );
-
-      const current = categoryMap.get(transaction.categoryId);
-      categoryMap.set(transaction.categoryId, {
-        category: transaction.category,
-        amount: (current?.amount ?? 0) + convertedAmount,
-      });
+    const comparison = buildSpendingComparison({
+      entries: [...current.entries, ...prior.entries, ...yearAgoRows.entries],
+      accounts: [...current.accounts, ...prior.accounts, ...yearAgoRows.accounts],
+      rates: fxSnapshot.rates,
+      displayCurrency: currency,
+      current: range,
+      previous,
+      yearAgo,
     });
 
-    // Calculate total for percentage calculation
-    const total = Array.from(categoryMap.values()).reduce((sum, item) => sum + item.amount, 0);
-
-    // Convert to array, calculate percentages, and sort by amount descending
-    const categories: SpendingCategory[] = Array.from(categoryMap.entries())
-      .map(([categoryId, item]) => ({
-        categoryId,
-        category: item.category,
-        amount: item.amount,
-        percentage: total > 0 ? (item.amount / total) * 100 : 0,
-      }))
-      .sort((a, b) => b.amount - a.amount);
-
-    return NextResponse.json({
-      categories,
-      total,
-      currency,
-    });
+    return NextResponse.json(comparison);
   } catch (error) {
     console.error("Error calculating spending:", error);
     return NextResponse.json({ error: "Failed to calculate spending" }, { status: 500 });

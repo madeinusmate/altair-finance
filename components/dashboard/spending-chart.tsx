@@ -1,13 +1,14 @@
 "use client";
 
+import { format } from "date-fns";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type DashboardDateRange } from "./dashboard-date-selector";
-import { axisTick, chartCobalt, chartGrid, spendingFills } from "@/components/charts/palette";
+import { axisTick, chartCobalt, chartGrid, chartInk, chartSlate, spendingFills } from "@/components/charts/palette";
+import type { SpendingComparison, SpendingDirection } from "@/lib/insights/spending";
 
-// Format currency helper
 const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -17,21 +18,37 @@ const formatCurrency = (amount: number, currency: string): string => {
   }).format(amount);
 };
 
-interface SpendingCategory {
-  categoryId: number;
-  category: string;
-  amount: number;
-  percentage: number;
-}
+const formatChange = (
+  delta: number,
+  percentChange: number | null,
+  direction: SpendingDirection,
+  currency: string,
+): string => {
+  if (direction === "flat") return "unchanged";
+  const amount = formatCurrency(Math.abs(delta), currency);
+  if (percentChange === null) return `${direction} ${amount}`;
+  return `${direction} ${amount} (${Math.abs(percentChange).toFixed(1)}%)`;
+};
+
+const formatIsoDate = (value: string): string => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return format(date, "MMM d, yyyy");
+};
+
+const formatMonthLabel = (value: string): string => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return format(date, "MMM yyyy");
+};
 
 interface SpendingChartProps {
   dateRange: DashboardDateRange;
   currency: string;
   isLoading?: boolean;
-  data?: {
-    categories: SpendingCategory[];
-    total: number;
-  };
+  data?: SpendingComparison;
 }
 
 const chartConfig = {
@@ -42,7 +59,6 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export const SpendingChart = ({
-  dateRange,
   currency,
   isLoading,
   data,
@@ -61,11 +77,12 @@ export const SpendingChart = ({
     );
   }
 
-  if (!data || data.categories.length === 0) {
+  const hasRows = (data?.categories.length ?? 0) > 0 || (data?.previousTotal ?? 0) > 0 || (data?.total ?? 0) > 0;
+  if (!data || !hasRows) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Net Spending</CardTitle>
+          <CardTitle>Spending Breakdown</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex h-[300px] items-center justify-center">
@@ -76,80 +93,133 @@ export const SpendingChart = ({
     );
   }
 
-  const chartData = data.categories.map((cat, index) => ({
-    categoryId: cat.categoryId,
-    name: cat.category,
-    spending: cat.amount,
+  const chartCategories = data.categories.filter((category) => category.amount > 0);
+  const newNames: string[] = [];
+  const goneNames: string[] = [];
+  for (const category of data.categories) {
+    if (category.status === "new") newNames.push(category.category);
+    else if (category.status === "gone") goneNames.push(category.category);
+  }
+
+  const chartData = chartCategories.map((category, index) => ({
+    name: category.category,
+    spending: category.amount,
+    percentage: category.percentage,
+    previousAmount: category.previousAmount,
+    percentChange: category.percentChange,
+    direction: category.direction,
+    delta: category.delta,
+    status: category.status,
     fill: spendingFills[index % spendingFills.length],
   }));
 
-  // Calculate Y-axis width based on longest category name
-  const maxCategoryLength = Math.max(...data.categories.map((cat) => cat.category.length));
+  const maxCategoryLength = chartData.reduce((longest, category) => Math.max(longest, category.name.length), 0);
   const yAxisWidth = Math.max(120, Math.min(200, maxCategoryLength * 8 + 20));
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Spending Breakdown</CardTitle>
+        <CardDescription className="flex flex-col gap-1">
+          <span>
+            <span className="font-medium tabular-nums" style={{ color: chartInk }}>
+              {formatCurrency(data.total, currency)}
+            </span>
+            <span className="tabular-nums" style={{ color: chartInk }}>
+              {" "}
+              {formatChange(data.totalDelta, data.totalPercentChange, data.totalDirection, currency)}
+            </span>
+            <span style={{ color: chartSlate }}>
+              {" "}
+              vs {formatIsoDate(data.comparison.startDate)} – {formatIsoDate(data.comparison.endDate)}
+            </span>
+          </span>
+          {data.yearAgo ? (
+            <span style={{ color: chartSlate }}>
+              vs {formatMonthLabel(data.yearAgo.startDate)}
+              <span className="tabular-nums" style={{ color: chartInk }}>
+                {" "}
+                {formatChange(
+                  data.yearAgo.totalDelta,
+                  data.yearAgo.totalPercentChange,
+                  data.yearAgo.totalDirection,
+                  currency,
+                )}
+              </span>
+            </span>
+          ) : null}
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[280px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart 
-              data={chartData} 
-              layout="vertical" 
-              margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-              barCategoryGap="20%"
-            >
-              <CartesianGrid horizontal={false} stroke={chartGrid} />
-              <XAxis
-                type="number"
-                tick={axisTick}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value) => formatCurrency(value, currency)}
-                domain={[0, 'dataMax']}
-              />
-              <YAxis
-                type="category"
-                dataKey="name"
-                tick={axisTick}
-                tickLine={false}
-                axisLine={false}
-                width={yAxisWidth}
-                interval={0}
-              />
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    labelFormatter={(label) => label}
-                    formatter={(value, _, item) => {
-                      const numericValue = typeof value === "number" ? value : Number(value);
-                      const payload = item?.payload as { categoryId?: number; name?: string; fill?: string };
-                      const category = data.categories.find((cat) => cat.categoryId === payload?.categoryId);
-                      const percentage = category?.percentage || 0;
-                      return (
-                        <div className="flex flex-col gap-1">
-                          <span className="font-mono">{formatCurrency(numericValue, currency)}</span>
-                          <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
-                        </div>
-                      );
-                    }}
-                  />
-                }
-              />
-              <Bar
-                dataKey="spending"
-                radius={[0, 8, 8, 0]}
-                minPointSize={2}
+        {chartData.length > 0 ? (
+          <ChartContainer config={chartConfig} className="h-[280px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                barCategoryGap="20%"
               >
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.fill} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartContainer>
+                <CartesianGrid horizontal={false} stroke={chartGrid} />
+                <XAxis
+                  type="number"
+                  tick={axisTick}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value) => formatCurrency(value, currency)}
+                  domain={[0, "dataMax"]}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  tick={axisTick}
+                  tickLine={false}
+                  axisLine={false}
+                  width={yAxisWidth}
+                  interval={0}
+                />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      labelFormatter={(label) => label}
+                      formatter={(value, _, item) => {
+                        const numericValue = typeof value === "number" ? value : Number(value);
+                        const payload = item?.payload as (typeof chartData)[number] | undefined;
+                        const percentage = payload?.percentage ?? 0;
+                        const change =
+                          payload?.status === "new" || !payload
+                            ? "New"
+                            : `Previous ${formatCurrency(payload.previousAmount, currency)} · ${formatChange(payload.delta, payload.percentChange, payload.direction, currency)}`;
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <span className="font-mono tabular-nums">{formatCurrency(numericValue, currency)}</span>
+                            <span className="text-xs" style={{ color: chartSlate }}>
+                              {percentage.toFixed(1)}% of this period
+                            </span>
+                            <span className="text-xs tabular-nums" style={{ color: chartInk }}>
+                              {change}
+                            </span>
+                          </div>
+                        );
+                      }}
+                    />
+                  }
+                />
+                <Bar dataKey="spending" radius={[0, 8, 8, 0]} minPointSize={2}>
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartContainer>
+        ) : null}
+        {newNames.length > 0 || goneNames.length > 0 ? (
+          <div className={`flex flex-col gap-1 text-sm ${chartData.length > 0 ? "mt-3" : ""}`} style={{ color: chartSlate }}>
+            {newNames.length > 0 ? <p>New: {newNames.join(", ")}</p> : null}
+            {goneNames.length > 0 ? <p>Gone: {goneNames.join(", ")}</p> : null}
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
