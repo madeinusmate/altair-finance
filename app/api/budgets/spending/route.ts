@@ -34,22 +34,9 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
 
     const db = getDb(key);
     const fxSnapshot = await getFxSnapshot(db);
-
-    const budgets = db
-      .select({
-        categoryId: schema.budgets.categoryId,
-        transactionType: schema.transactionCategories.transactionType,
-      })
-      .from(schema.budgets)
-      .innerJoin(
-        schema.transactionCategories,
-        eq(schema.budgets.categoryId, schema.transactionCategories.id)
-      )
-      .all();
-    const budgetCategories = new Set(
-      budgets
-        .filter((budget) => budget.transactionType === "debit" && budget.categoryId != null)
-        .map((budget) => budget.categoryId as number)
+    const budgets = db.select().from(schema.budgets).all();
+    const budgetCategoryIds = new Set(
+      budgets.flatMap((budget) => (budget.categoryId == null ? [] : [budget.categoryId]))
     );
 
     const transactions = db
@@ -57,7 +44,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
         categoryId: schema.transactions.categoryId,
         categoryName: schema.transactionCategories.name,
         amount: schema.transactions.amount,
-        accountId: schema.transactions.accountId,
+        accountCurrency: schema.accounts.currency,
       })
       .from(schema.transactions)
       .innerJoin(schema.accounts, eq(schema.transactions.accountId, schema.accounts.id))
@@ -75,40 +62,45 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       )
       .all();
 
-    const accounts = db.select().from(schema.accounts).all();
-    const accountCurrencyMap = new Map(accounts.map((acc) => [acc.id, acc.currency]));
-    const spendingMap = new Map<number, { categoryName: string; spent: number }>();
+    const spendingMap = new Map<number, { categoryId: number; categoryName: string; spent: number }>();
 
-    transactions.forEach((transaction) => {
-      if (transaction.categoryId == null || !budgetCategories.has(transaction.categoryId)) {
-        return;
+    for (const transaction of transactions) {
+      if (transaction.categoryId == null || !budgetCategoryIds.has(transaction.categoryId)) {
+        continue;
       }
-
-      const accountCurrency = accountCurrencyMap.get(transaction.accountId);
-      if (!accountCurrency || !isSupportedCurrency(accountCurrency)) {
-        return;
+      if (!isSupportedCurrency(transaction.accountCurrency)) {
+        continue;
       }
 
       try {
-        const convertedAmount = convertAmount(transaction.amount, accountCurrency, currency, fxSnapshot.rates);
+        const convertedAmount = convertAmount(
+          transaction.amount,
+          transaction.accountCurrency,
+          currency,
+          fxSnapshot.rates
+        );
         const current = spendingMap.get(transaction.categoryId);
-        spendingMap.set(transaction.categoryId, {
-          categoryName: transaction.categoryName,
-          spent: (current?.spent ?? 0) + convertedAmount,
-        });
-      } catch (error) {
-        console.error("Error converting amount:", error);
+        if (current) {
+          current.spent += convertedAmount;
+        } else {
+          spendingMap.set(transaction.categoryId, {
+            categoryId: transaction.categoryId,
+            categoryName: transaction.categoryName,
+            spent: convertedAmount,
+          });
+        }
+      } catch {
+        console.error("Error converting amount");
       }
-    });
+    }
 
-    const spending = Array.from(spendingMap.entries()).map(([categoryId, value]) => ({
-      categoryId,
-      categoryName: value.categoryName,
-      spent: value.spent,
+    const spending = Array.from(spendingMap.values()).map((row) => ({
+      categoryId: row.categoryId,
+      categoryName: row.categoryName,
+      spent: row.spent,
       currency,
     }));
-
-    const totalSpent = spending.reduce((sum, item) => sum + item.spent, 0);
+    const totalSpent = spending.reduce((sum, row) => sum + row.spent, 0);
 
     return NextResponse.json({
       spending,

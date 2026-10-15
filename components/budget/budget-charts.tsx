@@ -3,7 +3,7 @@
 import { BudgetGaugeChart } from "./budget-gauge-chart";
 
 interface BudgetWithSpending {
-  id: string;
+  id: string | null;
   categoryId: number;
   categoryName: string;
   amount: number;
@@ -25,11 +25,9 @@ interface BudgetChartsProps {
 }
 
 export const BudgetCharts = ({
-  budgets,
   overallBudget,
   overallSpent,
   overallPercentageUsed,
-  month,
   currency,
   isLoading,
 }: BudgetChartsProps) => {

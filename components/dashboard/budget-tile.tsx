@@ -15,6 +15,7 @@ interface BudgetSummary {
   overallSpent: number;
   overallRemaining: number;
   overallPercentageUsed: number;
+  unbudgetedSpent?: number;
   currency: string;
   status: "under" | "approaching" | "over";
   month: string;
@@ -89,6 +90,11 @@ export const BudgetTile = ({ currency }: BudgetTileProps) => {
           {formatCurrency(data.overallRemaining, data.currency)}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">{getStatusHint(data.status, data.overallPercentageUsed)}</p>
+        {data.unbudgetedSpent ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Unbudgeted {formatCurrency(data.unbudgetedSpent, data.currency)}
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );

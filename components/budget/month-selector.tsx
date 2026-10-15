@@ -9,9 +9,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { format, startOfMonth, subMonths, addMonths } from "date-fns";
+import { budgetMonthLabel, parseYearMonth } from "@/lib/budget/resolve-month";
 
 interface MonthSelectorProps {
-  value: string; // YYYY-MM format
+  value: string;
   onChange: (month: string) => void;
   disabled?: boolean;
 }
@@ -20,7 +21,6 @@ export const MonthSelector = ({ value, onChange, disabled }: MonthSelectorProps)
   const currentMonth = format(new Date(), "yyyy-MM");
   const isCurrentMonth = value === currentMonth;
 
-  // Generate list of months (current month and 11 previous months)
   const months: string[] = [];
   const now = new Date();
   for (let i = 0; i < 12; i++) {
@@ -28,23 +28,32 @@ export const MonthSelector = ({ value, onChange, disabled }: MonthSelectorProps)
     months.push(format(startOfMonth(month), "yyyy-MM"));
   }
 
+  const oldestMonth = months[months.length - 1] ?? currentMonth;
+
   const handlePrevious = () => {
-    const current = new Date(value + "-01");
-    const previous = subMonths(current, 1);
-    onChange(format(startOfMonth(previous), "yyyy-MM"));
+    const current = parseYearMonth(value);
+    if (!current || !oldestMonth) {
+      return;
+    }
+    const previousMonth = format(startOfMonth(subMonths(current, 1)), "yyyy-MM");
+    if (previousMonth < oldestMonth) {
+      return;
+    }
+    onChange(previousMonth);
   };
 
   const handleNext = () => {
-    const current = new Date(value + "-01");
-    const next = addMonths(current, 1);
-    const nextMonthStr = format(startOfMonth(next), "yyyy-MM");
-    // Don't allow future months
+    const current = parseYearMonth(value);
+    if (!current) {
+      return;
+    }
+    const nextMonthStr = format(startOfMonth(addMonths(current, 1)), "yyyy-MM");
     if (nextMonthStr <= currentMonth) {
       onChange(nextMonthStr);
     }
   };
 
-  const displayValue = value ? format(new Date(value + "-01"), "MMMM yyyy") : "";
+  const displayValue = value ? budgetMonthLabel(value) : "";
 
   return (
     <div className="flex items-center gap-2">
@@ -53,7 +62,7 @@ export const MonthSelector = ({ value, onChange, disabled }: MonthSelectorProps)
         variant="outline"
         size="icon"
         onClick={handlePrevious}
-        disabled={disabled}
+        disabled={disabled || value <= oldestMonth}
       >
         ←
       </Button>
@@ -64,7 +73,7 @@ export const MonthSelector = ({ value, onChange, disabled }: MonthSelectorProps)
         <SelectContent>
           {months.map((month) => (
             <SelectItem key={month} value={month}>
-              {format(new Date(month + "-01"), "MMMM yyyy")}
+              {budgetMonthLabel(month)}
               {month === currentMonth && " (Current)"}
             </SelectItem>
           ))}

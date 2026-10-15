@@ -133,6 +133,7 @@ export const budgets = sqliteTable("budgets", {
   // Identity is categoryId. A rename must not copy the new name back here.
   categoryName: text("category_name").notNull(),
   categoryId: integer("category_id").references(() => transactionCategories.id, { onDelete: "restrict" }),
+  yearMonth: text("year_month"),
   amount: real("amount").notNull(),
   currency: text("currency").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),

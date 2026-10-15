@@ -18,6 +18,7 @@ const applyCipherPragmas = (sqlite: DatabaseInstance, encryptionKey: string): vo
   sqlite.pragma(`key = '${escapeSqlString(encryptionKey)}'`);
   sqlite.pragma("foreign_keys = ON");
   sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma("foreign_keys = ON");
 };
 
 const openSqliteAtPath = (dbPath: string, encryptionKey: string): DatabaseInstance => {

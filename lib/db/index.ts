@@ -1,6 +1,7 @@
 import Database from "better-sqlite3-multiple-ciphers";
 import { drizzle, BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
+import { ensureBudgetMonths } from "./ensure-budget-months";
 import { ensureCategoryIds } from "./category-ids";
 import * as crypto from "crypto";
 import path from "path";
@@ -338,6 +339,7 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
 
     // Category ids must run even when later migrations return early because transfers is missing.
     ensureCategoryIds(sqlite);
+    ensureBudgetMonths(sqlite);
 
     // Migration: Add new columns to transfers table if they don't exist
     // First check if transfers table exists
@@ -451,6 +453,7 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
             id TEXT PRIMARY KEY,
             category_name TEXT NOT NULL,
             category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
+            year_month TEXT,
             amount REAL NOT NULL,
             currency TEXT NOT NULL,
             created_at INTEGER NOT NULL,
@@ -659,6 +662,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       id TEXT PRIMARY KEY,
       category_name TEXT NOT NULL,
       category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
+      year_month TEXT,
       amount REAL NOT NULL,
       currency TEXT NOT NULL,
       created_at INTEGER NOT NULL,
@@ -772,6 +776,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
             id TEXT PRIMARY KEY,
             category_name TEXT NOT NULL,
             category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
+            year_month TEXT,
             amount REAL NOT NULL,
             currency TEXT NOT NULL,
             created_at INTEGER NOT NULL,
@@ -912,6 +917,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
   }
 
   ensureCategoryIds(sqlite);
+  ensureBudgetMonths(sqlite);
 
   sqlite.close();
 };
