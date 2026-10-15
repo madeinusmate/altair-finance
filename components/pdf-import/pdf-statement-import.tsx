@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import { Account, Transaction, Transfer } from "@/lib/db/schema";
 import { useAuth } from "@/lib/auth-context";
@@ -25,21 +25,20 @@ import {
 import { ParsedTransaction } from "@/lib/pdf/openai-client";
 import { calculatePdfHash } from "@/lib/pdf/file-hash";
 import { validateTransactionRows } from "@/lib/csv/import-validators";
-import { buildAccountNameMap } from "@/lib/csv/import-validators";
+import { transactionFingerprint, transferFingerprint } from "@/lib/import/fingerprint";
+import { applyReviewDuplicates } from "@/lib/import/review-duplicates";
 
-const normalizeAccountName = (name: string) => name.trim().toLowerCase();
-
-const getDateKey = (value: number | Date | string) => {
-  if (typeof value === "string") return value.split("T")[0];
-  if (value instanceof Date) return value.toISOString().split("T")[0];
-  return new Date(value).toISOString().split("T")[0];
-};
-
-const buildTransactionKey = (accountId: string, date: string, amount: number, description: string) =>
-  `${accountId}|${date}|${amount}|${description.trim().toLowerCase()}`;
-
-const buildTransferKey = (fromId: string, toId: string, date: string, fromAmount: number, toAmount: number) =>
-  `${fromId}|${toId}|${date}|${fromAmount}|${toAmount}`;
+const PDF_IDENTITY_FIELDS = [
+  "date",
+  "amount",
+  "description",
+  "type",
+  "fromAccountId",
+  "toAccountId",
+  "fromAmount",
+  "toAmount",
+  "isTransfer",
+] as const;
 
 const getSummary = (rows: TransactionRow[]) => {
   const total = rows.length;
@@ -78,64 +77,111 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
   const [existingTransfers, setExistingTransfers] = useState<Transfer[]>([]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
-  const accountMap = useMemo(() => buildAccountNameMap(accounts), [accounts]);
+  const rowsRef = useRef<TransactionRow[]>([]);
+  const flagVersion = useRef(0);
+  rowsRef.current = rows;
 
-  const applyDuplicateFlag = (row: TransactionRow, accountId: string): TransactionRow => {
-    const amountValue = row.isTransfer ? (row.fromAmount || 0) : row.amount;
-    const descriptionValue = row.description || "";
-    let isDuplicate = false;
+  const rememberRows = (nextRows: TransactionRow[]) => {
+    rowsRef.current = nextRows;
+    setRows(nextRows);
+  };
 
-    if (row.isTransfer && row.fromAccountId && row.toAccountId) {
-      const key = buildTransferKey(
-        row.fromAccountId,
-        row.toAccountId,
-        row.date,
-        row.fromAmount || 0,
-        row.toAmount || 0
-      );
-      isDuplicate = existingTransfers.some(
-        (transfer) =>
-          buildTransferKey(
-            transfer.fromAccountId,
-            transfer.toAccountId,
-            getDateKey(transfer.date),
-            transfer.fromAmount ?? transfer.amount,
-            transfer.toAmount ?? transfer.amount
-          ) === key
-      );
-    } else {
-      const key = buildTransactionKey(accountId, row.date, amountValue, descriptionValue);
-      isDuplicate = existingTransactions.some(
-        (transaction) =>
-          buildTransactionKey(
-            transaction.accountId,
-            getDateKey(transaction.date),
-            transaction.amount,
-            transaction.description || ""
-          ) === key
-      );
+  const fingerprintForRow = async (row: TransactionRow): Promise<string | null> => {
+    if (!selectedAccountId) {
+      return null;
     }
+    if (row.isTransfer) {
+      if (!row.fromAccountId || !row.toAccountId) {
+        return null;
+      }
+      return transferFingerprint({
+        fromAccountId: row.fromAccountId,
+        toAccountId: row.toAccountId,
+        date: row.date,
+        fromAmount: row.fromAmount || 0,
+        toAmount: row.toAmount || 0,
+      });
+    }
+    if (row.type !== "debit" && row.type !== "credit") {
+      return null;
+    }
+    return transactionFingerprint({
+      accountId: selectedAccountId,
+      date: row.date,
+      amount: row.amount,
+      description: row.description,
+      type: row.type,
+    });
+  };
 
-    const warningMessage = "Possible duplicate";
-    const hasWarning = row.warnings.includes(warningMessage);
-    
-    if (isDuplicate && !hasWarning) {
-      return {
+  const flagRows = async (currentRows: TransactionRow[]): Promise<TransactionRow[]> => {
+    const existing = new Set<string>();
+    await Promise.all([
+      ...existingTransactions.map(async (transaction) => {
+        if (transaction.fingerprint) {
+          existing.add(transaction.fingerprint);
+        }
+        if (transaction.sourceFingerprint) {
+          existing.add(transaction.sourceFingerprint);
+        }
+        if (transaction.type !== "debit" && transaction.type !== "credit") {
+          return;
+        }
+        const hash = await transactionFingerprint({
+          accountId: transaction.accountId,
+          date: transaction.date,
+          amount: transaction.amount,
+          description: transaction.description,
+          type: transaction.type,
+        });
+        if (hash) {
+          existing.add(hash);
+        }
+      }),
+      ...existingTransfers.map(async (transfer) => {
+        if (transfer.fingerprint) {
+          existing.add(transfer.fingerprint);
+        }
+        if (transfer.sourceFingerprint) {
+          existing.add(transfer.sourceFingerprint);
+        }
+        const hash = await transferFingerprint({
+          fromAccountId: transfer.fromAccountId,
+          toAccountId: transfer.toAccountId,
+          date: transfer.date,
+          fromAmount: transfer.fromAmount ?? transfer.amount,
+          toAmount: transfer.toAmount ?? transfer.amount,
+        });
+        if (hash) {
+          existing.add(hash);
+        }
+      }),
+    ]);
+    const withFingerprints = await Promise.all(
+      currentRows.map(async (row) => ({
         ...row,
-        duplicate: true,
-        excluded: true, // Auto-exclude duplicates
-        warnings: [...row.warnings, warningMessage],
-      };
-    }
-    if (!isDuplicate && hasWarning) {
-      return {
-        ...row,
-        duplicate: false,
-        excluded: false,
-        warnings: row.warnings.filter((warning) => warning !== warningMessage),
-      };
-    }
-    return { ...row, duplicate: isDuplicate, excluded: isDuplicate ? (row.excluded ?? true) : false };
+        fingerprint: await fingerprintForRow(row),
+      }))
+    );
+    return applyReviewDuplicates(withFingerprints, existing).map((row) => {
+      const { fingerprint, ...rest } = row;
+      void fingerprint;
+      return rest;
+    });
+  };
+
+  const scheduleFlags = (currentRows: TransactionRow[]) => {
+    const version = ++flagVersion.current;
+    void flagRows(currentRows)
+      .then((flagged) => {
+        if (version !== flagVersion.current) {
+          return;
+        }
+        rememberRows(flagged);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
   };
 
   useEffect(() => {
@@ -180,20 +226,13 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
   }, [rows.length]);
 
   useEffect(() => {
-    if (rows.length === 0 || (existingTransactions.length === 0 && existingTransfers.length === 0)) {
+    if (rows.length === 0 || !selectedAccountId) {
       return;
     }
-
-    if (!selectedAccountId) return;
-
-    setRows((currentRows) => {
-      return currentRows.map((row) => {
-        const accountId = row.isTransfer ? row.fromAccountId || selectedAccountId : selectedAccountId;
-        if (!accountId) return row;
-        return applyDuplicateFlag(row, accountId);
-      });
-    });
-  }, [accountMap, existingTransactions, existingTransfers, rows.length, selectedAccountId]);
+    scheduleFlags(rowsRef.current);
+    // Edits schedule their own pass. This covers ledger prefetch and a new file.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingTransactions, existingTransfers, rows.length, selectedAccountId]);
 
   const summary = getSummary(rows);
 
@@ -296,37 +335,39 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
   };
 
   const handleRowChange = (rowId: string, updates: Partial<TransactionRow>) => {
-    setRows((currentRows) => {
-      return currentRows.map((row) => {
-        if (row.id !== rowId) {
-          return row;
-        }
-        const updatedRow = { ...row, ...updates };
-
-        // Re-validate if needed
-        if (updates.date || updates.amount || updates.description || updates.category || updates.type) {
-          const accountId = updatedRow.isTransfer
-            ? updatedRow.fromAccountId || selectedAccountId
-            : selectedAccountId;
-          if (accountId) {
-            return applyDuplicateFlag(updatedRow, accountId);
-          }
-        }
-
+    const identityChanged = PDF_IDENTITY_FIELDS.some((field) => field in updates);
+    const nextRows = rowsRef.current.map((row) => {
+      if (row.id !== rowId) {
+        return row;
+      }
+      const updatedRow = { ...row, ...updates };
+      if (!identityChanged) {
         return updatedRow;
-      });
+      }
+      return {
+        ...updatedRow,
+        duplicate: false,
+        excluded: false,
+        overrideDuplicate: false,
+      };
     });
+    rememberRows(nextRows);
+    scheduleFlags(nextRows);
   };
 
   const handleToggleExclude = (rowId: string) => {
-    setRows((currentRows) => {
-      return currentRows.map((row) => {
-        if (row.id !== rowId) {
-          return row;
-        }
-        return { ...row, excluded: !row.excluded };
-      });
+    const nextRows = rowsRef.current.map((row) => {
+      if (row.id !== rowId) {
+        return row;
+      }
+      const excluded = !row.excluded;
+      return {
+        ...row,
+        excluded,
+        overrideDuplicate: row.duplicate ? !excluded : false,
+      };
     });
+    rememberRows(nextRows);
   };
 
   const handleImport = async () => {
@@ -351,35 +392,48 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
       // Prepare payload
       const payload = validRows.map((row) => {
         if (row.isTransfer && row.fromAccountId && row.toAccountId) {
-          return {
-            type: "transfer",
-            fromAccountId: row.fromAccountId,
-            toAccountId: row.toAccountId,
-            fromAmount: row.fromAmount || 0,
-            toAmount: row.toAmount || 0,
-            description: row.description || null,
-            date: row.date,
-          };
-        }
-
         return {
-          type: row.type,
-          accountId: selectedAccountId,
-          category: row.category,
-          amount: row.amount,
+          type: "transfer" as const,
+          fromAccountId: row.fromAccountId,
+          toAccountId: row.toAccountId,
+          fromAmount: row.fromAmount || 0,
+          toAmount: row.toAmount || 0,
           description: row.description || null,
           date: row.date,
+          ...(row.duplicate ? { overrideDuplicate: true } : {}),
         };
-      });
+      }
 
-      // Import transactions
-      await apiClient.post("/api/import/transactions", {
-        rows: payload,
-        filename: fileName,
-        fileHash,
-      });
+      return {
+        type: row.type,
+        accountId: selectedAccountId,
+        category: row.category,
+        amount: row.amount,
+        description: row.description || null,
+        date: row.date,
+        ...(row.duplicate ? { overrideDuplicate: true } : {}),
+      };
+    });
 
-      toast.success(`Imported ${validRows.length} transactions`);
+    const result = await apiClient.post<{
+      transactions: number;
+      transfers: number;
+      skippedDuplicates?: number;
+      isDuplicate?: boolean;
+    }>("/api/import/transactions", {
+      rows: payload,
+      filename: fileName,
+      fileHash,
+    });
+
+    const imported = result.transactions + result.transfers;
+    toast.success(`Imported ${imported} transaction${imported === 1 ? "" : "s"}`);
+    if ((result.skippedDuplicates ?? 0) > 0) {
+      toast(`Skipped ${result.skippedDuplicates} duplicate ${result.skippedDuplicates === 1 ? "row" : "rows"}`);
+    }
+    if (result.isDuplicate) {
+      toast("This file was imported before");
+    }
       
       if (onSuccess) {
         onSuccess();

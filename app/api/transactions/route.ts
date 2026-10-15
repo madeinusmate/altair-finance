@@ -3,7 +3,8 @@ import { v4 as uuidv4 } from "uuid";
 import { eq, desc } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
-import { isValidTransactionCategory, isValidTransactionCategoryForType } from "@/lib/db/category-helpers";
+import { isValidTransactionCategoryForType } from "@/lib/db/category-helpers";
+import { transactionFingerprint } from "@/lib/import/fingerprint";
 
 // GET all transactions or by account
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
@@ -95,6 +96,13 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     const now = new Date();
     const id = uuidv4();
+    const fingerprint = await transactionFingerprint({
+      accountId,
+      type: type as "debit" | "credit",
+      amount: Number(amount),
+      description: description || null,
+      date,
+    });
 
     const newTransaction = {
       id,
@@ -105,6 +113,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       description: description || null,
       date: new Date(date),
       createdAt: now,
+      fingerprint,
     };
 
     db.insert(schema.transactions).values(newTransaction).run();
@@ -176,12 +185,21 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
+    const fingerprint = await transactionFingerprint({
+      accountId: existingTransaction.accountId,
+      type: type as "debit" | "credit",
+      amount: amountValue,
+      description: description || null,
+      date,
+    });
+
     const updates = {
       type: type as "debit" | "credit",
       category,
       amount: amountValue,
       description: description || null,
       date: new Date(date),
+      fingerprint,
     };
 
     db.update(schema.transactions).set(updates).where(eq(schema.transactions.id, id)).run();

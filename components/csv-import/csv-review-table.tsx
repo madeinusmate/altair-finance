@@ -10,11 +10,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 type RowWithIssues = {
   id: string;
   errors: string[];
   warnings: string[];
+  duplicate?: boolean;
+  excluded?: boolean;
 };
 
 type CsvReviewColumn<Row> = {
@@ -28,6 +31,7 @@ interface CsvReviewTableProps<Row extends RowWithIssues> {
   columns: CsvReviewColumn<Row>[];
   rows: Row[];
   onRowChange: (rowId: string, key: keyof Row, value: string) => void;
+  onToggleExclude?: (rowId: string) => void;
   height?: number;
   rowHeight?: number;
   overscan?: number;
@@ -37,6 +41,7 @@ export const CsvReviewTable = <Row extends RowWithIssues>({
   columns,
   rows,
   onRowChange,
+  onToggleExclude,
   height = 520,
   rowHeight = 72,
   overscan = 6,
@@ -97,7 +102,7 @@ export const CsvReviewTable = <Row extends RowWithIssues>({
             </TableRow>
           )}
           {visibleRows.map((row) => (
-            <TableRow key={row.id} style={{ height: rowHeight }}>
+            <TableRow key={row.id} className={row.excluded ? "opacity-60" : undefined} style={{ height: rowHeight }}>
               {columns.map((column) => {
                 const value = String(row[column.key] ?? "");
                 const handleChange = (newValue: string) => {
@@ -120,6 +125,16 @@ export const CsvReviewTable = <Row extends RowWithIssues>({
               })}
               <TableCell>
                 <div className="max-h-20 space-y-2 overflow-auto">
+                  {row.duplicate && onToggleExclude && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={row.excluded ? "default" : "outline"}
+                      onClick={() => onToggleExclude(row.id)}
+                    >
+                      {row.excluded ? "Include" : "Exclude"}
+                    </Button>
+                  )}
                   {row.errors.length > 0 && (
                     <div className="space-y-1">
                       <Badge variant="destructive">{row.errors.length} errors</Badge>

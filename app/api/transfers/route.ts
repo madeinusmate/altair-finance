@@ -4,6 +4,7 @@ import { eq, or, desc } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { isValidTransactionCategory } from "@/lib/db/category-helpers";
+import { transferFingerprint } from "@/lib/import/fingerprint";
 // Note: Transfers use "Transfer" category which has transactionType = null, bypassing type constraints
 
 // GET all transfers or by account
@@ -129,6 +130,13 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     const now = new Date();
     const id = uuidv4();
+    const fingerprint = await transferFingerprint({
+      fromAccountId,
+      toAccountId,
+      fromAmount: finalFromAmount,
+      toAmount: finalToAmount,
+      date,
+    });
 
     const newTransfer = {
       id,
@@ -142,6 +150,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       description: description || null,
       date: new Date(date),
       createdAt: now,
+      fingerprint,
     };
 
     db.insert(schema.transfers).values(newTransfer).run();
@@ -250,6 +259,14 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       finalExchangeRate = null; // Same currency, no exchange rate needed
     }
 
+    const fingerprint = await transferFingerprint({
+      fromAccountId,
+      toAccountId,
+      fromAmount: finalFromAmount,
+      toAmount: finalToAmount,
+      date,
+    });
+
     const updatedTransfer = {
       fromAccountId,
       toAccountId,
@@ -260,6 +277,7 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       category,
       description: description || null,
       date: new Date(date),
+      fingerprint,
     };
 
     db.update(schema.transfers)

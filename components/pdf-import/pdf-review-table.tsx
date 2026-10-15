@@ -28,6 +28,7 @@ export type TransactionRow = {
   warnings: string[];
   duplicate?: boolean;
   excluded?: boolean;
+  overrideDuplicate?: boolean;
   // For transfers
   isTransfer?: boolean;
   fromAccountId?: string;
