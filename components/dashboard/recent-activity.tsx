@@ -85,7 +85,9 @@ export const RecentActivity = ({
               if (item.kind === "transaction") {
                 const account = accountById.get(item.transaction.accountId);
                 const isCredit = item.transaction.type === "credit";
-                const title = item.transaction.description?.trim() || item.transaction.category;
+                const categoryName = item.transaction.category;
+                const description = item.transaction.description?.trim();
+                const title = description || categoryName;
 
                 return (
                   <li key={`transaction-${item.id}`} className="flex items-center justify-between gap-4 py-3">
@@ -99,7 +101,8 @@ export const RecentActivity = ({
                       <div className="min-w-0">
                         <p className="truncate font-semibold">{title}</p>
                         <p className="truncate text-[13px] text-muted-foreground">
-                          {account?.name || "Unknown"} · {format(new Date(item.date), "MMM d")}
+                          {account?.name || "Unknown"}
+                          {description ? ` · ${categoryName}` : ""} · {format(new Date(item.date), "MMM d")}
                         </p>
                       </div>
                     </div>
@@ -113,7 +116,9 @@ export const RecentActivity = ({
 
               const fromAccount = accountById.get(item.transfer.fromAccountId);
               const toAccount = accountById.get(item.transfer.toAccountId);
-              const title = item.transfer.description?.trim() || "Transfer";
+              const categoryName = item.transfer.category || "Transfer";
+              const description = item.transfer.description?.trim();
+              const title = description || categoryName;
 
               return (
                 <li key={`transfer-${item.id}`} className="flex items-center justify-between gap-4 py-3">
@@ -127,8 +132,8 @@ export const RecentActivity = ({
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{title}</p>
                       <p className="truncate text-[13px] text-muted-foreground">
-                        {fromAccount?.name || "Unknown"} → {toAccount?.name || "Unknown"} ·{" "}
-                        {format(new Date(item.date), "MMM d")}
+                        {fromAccount?.name || "Unknown"} → {toAccount?.name || "Unknown"}
+                        {description ? ` · ${categoryName}` : ""} · {format(new Date(item.date), "MMM d")}
                       </p>
                     </div>
                   </div>

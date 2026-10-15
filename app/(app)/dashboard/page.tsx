@@ -54,8 +54,8 @@ interface NetWorthData {
 }
 
 interface CashFlowData {
-  income: Array<{ category: string; amount: number }>;
-  expenses: Array<{ category: string; amount: number }>;
+  income: Array<{ categoryId: number; category: string; amount: number }>;
+  expenses: Array<{ categoryId: number; category: string; amount: number }>;
   currency: string;
 }
 
@@ -68,7 +68,7 @@ interface CashFlowSankeyData {
 }
 
 interface SpendingData {
-  categories: Array<{ category: string; amount: number; percentage: number }>;
+  categories: Array<{ categoryId: number; category: string; amount: number; percentage: number }>;
   total: number;
   currency: string;
 }

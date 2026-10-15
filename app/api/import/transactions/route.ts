@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
-import { isValidTransactionCategory, isValidTransactionCategoryForType } from "@/lib/db/category-helpers";
+import { isValidCategoryIdForType, isValidTransferCategoryId } from "@/lib/db/category-helpers";
 import { transactionFingerprint, transferFingerprint } from "@/lib/import/fingerprint";
 import { loadTransactionFingerprints, loadTransferFingerprints } from "@/lib/import/load-fingerprints";
 import { planImportRows } from "@/lib/import/plan-import-rows";
@@ -113,6 +113,10 @@ export const commitTransactionImport = async (
       const accounts = txDb.select().from(schema.accounts).all();
       const accountMap = new Map(accounts.map((account) => [account.id, account]));
 
+      const categories = txDb.select().from(schema.transactionCategories).all();
+      const categoryByName = new Map(categories.map((category) => [category.name, category]));
+      const transferCategory = categoryByName.get("Transfer");
+
       const transactionAccountIds = fingerprinted
         .filter((entry) => entry.row?.type !== "transfer")
         .map((entry) => (entry.row as TransactionImportRow).accountId);
@@ -169,6 +173,9 @@ export const commitTransactionImport = async (
             );
           }
           const exchangeRate = fromAccount.currency !== toAccount.currency ? toAmount / fromAmount : null;
+          if (!transferCategory || !isValidTransferCategoryId(txDb, transferCategory.id)) {
+            throw importRowError(`Row ${index + 1}: Transfer category is not available`);
+          }
           pending.push({
             kind: "transfer",
             values: {
@@ -179,6 +186,7 @@ export const commitTransactionImport = async (
               fromAmount,
               toAmount,
               exchangeRate,
+              categoryId: transferCategory.id,
               description: row.description || null,
               date: parsedDate,
               createdAt: now,
@@ -202,13 +210,13 @@ export const commitTransactionImport = async (
           if (row.type !== "debit" && row.type !== "credit") {
             throw importRowError(`Row ${index + 1}: Type must be debit or credit`);
           }
-          if (!row.category || !isValidTransactionCategory(txDb, row.category)) {
-            const validCategories = txDb.select().from(schema.transactionCategories).all();
-            const categoryNames = validCategories.map((category) => category.name).join(", ");
+          const category = row.category ? categoryByName.get(row.category) : undefined;
+          if (!category) {
+            const categoryNames = categories.map((item) => item.name).join(", ");
             throw importRowError(`Row ${index + 1}: Invalid category. Valid categories: ${categoryNames}`);
           }
-          if (!isValidTransactionCategoryForType(txDb, row.category, row.type)) {
-            console.warn(
+          if (!isValidCategoryIdForType(txDb, category.id, row.type)) {
+            throw importRowError(
               `Row ${index + 1}: Category "${row.category}" does not match transaction type "${row.type}"`
             );
           }
@@ -218,7 +226,8 @@ export const commitTransactionImport = async (
               id: uuidv4(),
               accountId: account.id,
               type: row.type,
-              category: row.category,
+              category: category.name,
+              categoryId: category.id,
               amount,
               description: row.description || null,
               date: parsedDate,

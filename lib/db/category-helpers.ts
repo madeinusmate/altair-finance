@@ -1,52 +1,93 @@
-import { eq, or, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb, schema } from "./index";
+
+type Db = ReturnType<typeof getDb>;
+
+export const parseCategoryId = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const loadCategoryById = (db: Db, categoryId: number) => {
+  return db
+    .select()
+    .from(schema.transactionCategories)
+    .where(eq(schema.transactionCategories.id, categoryId))
+    .get();
+};
+
+const loadCategoryByName = (db: Db, category: string) => {
+  return db
+    .select()
+    .from(schema.transactionCategories)
+    .where(eq(schema.transactionCategories.name, category))
+    .get();
+};
 
 /**
  * Check if a transaction category exists in the database
  */
-export const isValidTransactionCategory = (db: ReturnType<typeof getDb>, category: string): boolean => {
-  const categoryRecord = db
-    .select()
-    .from(schema.transactionCategories)
-    .where(eq(schema.transactionCategories.name, category))
-    .get();
-  return !!categoryRecord;
+export const isValidTransactionCategory = (db: Db, category: string): boolean => {
+  return !!loadCategoryByName(db, category);
 };
 
 /**
- * Check if a transaction category exists and is valid for the given transaction type
- * Returns true if:
- * - Category exists AND transactionType matches the transaction type, OR
- * - Category exists AND transactionType is NULL (special category like Transfer)
+ * A null transaction_type is allowed on debit and credit. Otherwise the type must match.
  */
-export const isValidTransactionCategoryForType = (
-  db: ReturnType<typeof getDb>,
-  category: string,
+export const isValidCategoryIdForType = (
+  db: Db,
+  categoryId: number,
   transactionType: "debit" | "credit"
 ): boolean => {
-  const categoryRecord = db
-    .select()
-    .from(schema.transactionCategories)
-    .where(eq(schema.transactionCategories.name, category))
-    .get();
-
+  const categoryRecord = loadCategoryById(db, categoryId);
   if (!categoryRecord) {
     return false;
   }
-
-  // If transactionType is NULL, it's a special category (like Transfer) that bypasses constraints
   if (categoryRecord.transactionType === null) {
     return true;
   }
-
-  // Otherwise, transactionType must match
   return categoryRecord.transactionType === transactionType;
+};
+
+/**
+ * Transfers may only use a catalog row whose transaction_type is null.
+ * Rows already pointing at a typed category stay valid until they are edited.
+ */
+export const isValidTransferCategoryId = (db: Db, categoryId: number): boolean => {
+  const categoryRecord = loadCategoryById(db, categoryId);
+  if (!categoryRecord) {
+    return false;
+  }
+  return categoryRecord.transactionType === null;
+};
+
+/**
+ * Name lookup kept for the import review UI, which still edits names before commit.
+ */
+export const isValidTransactionCategoryForType = (
+  db: Db,
+  category: string,
+  transactionType: "debit" | "credit"
+): boolean => {
+  const categoryRecord = loadCategoryByName(db, category);
+  if (!categoryRecord) {
+    return false;
+  }
+  return isValidCategoryIdForType(db, categoryRecord.id, transactionType);
 };
 
 /**
  * Get all transaction category names from the database
  */
-export const getTransactionCategoryNames = (db: ReturnType<typeof getDb>): string[] => {
+export const getTransactionCategoryNames = (db: Db): string[] => {
   const categories = db.select().from(schema.transactionCategories).all();
   return categories.map((c) => c.name);
 };
@@ -54,7 +95,7 @@ export const getTransactionCategoryNames = (db: ReturnType<typeof getDb>): strin
 /**
  * Check if an account category identifier exists in the database
  */
-export const isValidAccountCategoryIdentifier = (db: ReturnType<typeof getDb>, identifier: string): boolean => {
+export const isValidAccountCategoryIdentifier = (db: Db, identifier: string): boolean => {
   const categoryRecord = db
     .select()
     .from(schema.accountCategories)
@@ -66,7 +107,7 @@ export const isValidAccountCategoryIdentifier = (db: ReturnType<typeof getDb>, i
 /**
  * Get all account category identifiers from the database
  */
-export const getAccountCategoryIdentifiers = (db: ReturnType<typeof getDb>): string[] => {
+export const getAccountCategoryIdentifiers = (db: Db): string[] => {
   const categories = db.select().from(schema.accountCategories).all();
   return categories.map((c) => c.identifier);
 };
@@ -74,7 +115,7 @@ export const getAccountCategoryIdentifiers = (db: ReturnType<typeof getDb>): str
 /**
  * Get account category by identifier, returns the display name
  */
-export const getAccountCategoryName = (db: ReturnType<typeof getDb>, identifier: string): string | null => {
+export const getAccountCategoryName = (db: Db, identifier: string): string | null => {
   const category = db
     .select()
     .from(schema.accountCategories)

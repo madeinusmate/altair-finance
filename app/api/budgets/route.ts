@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and, gte, lte, ne } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
-import { type Budget } from "@/lib/db/schema";
 import { getEncryptionKey } from "@/lib/api-utils";
+import { parseCategoryId } from "@/lib/db/category-helpers";
 import { convertAmount, getFxSnapshot } from "@/lib/fx";
 import { type SupportedCurrency, isSupportedCurrency } from "@/lib/currencies";
 import { v4 as uuidv4 } from "uuid";
@@ -10,6 +10,7 @@ import { startOfMonth, endOfDay, format } from "date-fns";
 
 interface BudgetWithSpending {
   id: string;
+  categoryId: number;
   categoryName: string;
   amount: number;
   currency: string;
@@ -19,33 +20,25 @@ interface BudgetWithSpending {
   isOverBudget: boolean;
 }
 
-// Calculate spending for a category in a date range
 const calculateCategorySpending = async (
   db: ReturnType<typeof getDb>,
-  categoryName: string,
+  categoryId: number,
   startDate: Date,
   endDate: Date,
   targetCurrency: SupportedCurrency,
   fxSnapshot: Awaited<ReturnType<typeof getFxSnapshot>>
 ): Promise<number> => {
-  // Exclude Transfer category
-  if (categoryName === "Transfer") {
-    return 0;
-  }
-
-  // Get all debit transactions for this category in date range
   const transactions = db
     .select({
       amount: schema.transactions.amount,
       accountId: schema.transactions.accountId,
-      accountType: schema.accounts.type,
     })
     .from(schema.transactions)
     .innerJoin(schema.accounts, eq(schema.transactions.accountId, schema.accounts.id))
     .where(
       and(
         eq(schema.transactions.type, "debit"),
-        eq(schema.transactions.category, categoryName),
+        eq(schema.transactions.categoryId, categoryId),
         gte(schema.transactions.date, startDate),
         lte(schema.transactions.date, endDate),
         ne(schema.accounts.type, "investment")
@@ -53,11 +46,9 @@ const calculateCategorySpending = async (
     )
     .all();
 
-  // Get account currencies for conversion
   const accounts = db.select().from(schema.accounts).all();
   const accountCurrencyMap = new Map(accounts.map((acc) => [acc.id, acc.currency]));
 
-  // Sum and convert amounts
   let totalSpent = 0;
   transactions.forEach((transaction) => {
     const accountCurrency = accountCurrencyMap.get(transaction.accountId);
@@ -66,19 +57,32 @@ const calculateCategorySpending = async (
     }
 
     try {
-      const convertedAmount = convertAmount(
-        transaction.amount,
-        accountCurrency,
-        targetCurrency,
-        fxSnapshot.rates
-      );
-      totalSpent += convertedAmount;
+      totalSpent += convertAmount(transaction.amount, accountCurrency, targetCurrency, fxSnapshot.rates);
     } catch (error) {
-      console.error(`Error converting amount for transaction:`, error);
+      console.error("Error converting amount for transaction:", error);
     }
   });
 
   return totalSpent;
+};
+
+const listDebitBudgets = (db: ReturnType<typeof getDb>) => {
+  return db
+    .select({
+      id: schema.budgets.id,
+      categoryId: schema.budgets.categoryId,
+      categoryName: schema.transactionCategories.name,
+      transactionType: schema.transactionCategories.transactionType,
+      amount: schema.budgets.amount,
+      currency: schema.budgets.currency,
+    })
+    .from(schema.budgets)
+    .innerJoin(
+      schema.transactionCategories,
+      eq(schema.budgets.categoryId, schema.transactionCategories.id)
+    )
+    .all()
+    .filter((budget) => budget.transactionType === "debit" && budget.categoryId != null);
 };
 
 // GET all budgets with current month spending
@@ -91,7 +95,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
   try {
     const { searchParams } = new URL(request.url);
     const currency = (searchParams.get("currency") || "USD") as SupportedCurrency;
-    const monthParam = searchParams.get("month"); // Optional: YYYY-MM format
+    const monthParam = searchParams.get("month");
 
     if (!isSupportedCurrency(currency)) {
       return NextResponse.json({ error: "Unsupported currency" }, { status: 400 });
@@ -100,7 +104,6 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     const db = getDb(key);
     const fxSnapshot = await getFxSnapshot(db);
 
-    // Determine date range (current month or specified month)
     let startDate: Date;
     let endDate: Date;
     let month: string;
@@ -117,13 +120,19 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       month = format(now, "yyyy-MM");
     }
 
-    // Get all budgets (migration should have created the table by now)
-    let budgets: Budget[];
+    let budgets: ReturnType<typeof listDebitBudgets>;
     try {
-      budgets = db.select().from(schema.budgets).all();
+      budgets = listDebitBudgets(db);
     } catch (error: unknown) {
-      // If table doesn't exist yet, return empty budgets (migration should create it on next request)
-      if (error && typeof error === "object" && "code" in error && "message" in error && error.code === "SQLITE_ERROR" && typeof error.message === "string" && error.message.includes("no such table")) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        "message" in error &&
+        error.code === "SQLITE_ERROR" &&
+        typeof error.message === "string" &&
+        error.message.includes("no such table")
+      ) {
         console.warn("[Budgets API] Budgets table not found, returning empty list");
         budgets = [];
       } else {
@@ -131,48 +140,43 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       }
     }
 
-    // Calculate spending for each budget category
     const budgetsWithSpending: BudgetWithSpending[] = await Promise.all(
       budgets.map(async (budget) => {
         const spent = await calculateCategorySpending(
           db,
-          budget.categoryName,
+          budget.categoryId as number,
           startDate,
           endDate,
           currency,
           fxSnapshot
         );
 
-        // Convert budget amount to target currency
         let budgetAmount = budget.amount;
         if (budget.currency !== currency && isSupportedCurrency(budget.currency)) {
           try {
             budgetAmount = convertAmount(budget.amount, budget.currency, currency, fxSnapshot.rates);
           } catch (error) {
-            console.error(`Error converting budget amount:`, error);
+            console.error("Error converting budget amount:", error);
           }
         }
 
         const percentageUsed = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
-        const remaining = Math.max(0, budgetAmount - spent);
-        const isOverBudget = spent > budgetAmount;
-
         return {
           id: budget.id,
+          categoryId: budget.categoryId as number,
           categoryName: budget.categoryName,
           amount: budgetAmount,
           currency,
           spent,
-          remaining,
+          remaining: Math.max(0, budgetAmount - spent),
           percentageUsed,
-          isOverBudget,
+          isOverBudget: spent > budgetAmount,
         };
       })
     );
 
-    // Calculate overall totals
-    const overallBudget = budgetsWithSpending.reduce((sum, b) => sum + b.amount, 0);
-    const overallSpent = budgetsWithSpending.reduce((sum, b) => sum + b.spent, 0);
+    const overallBudget = budgetsWithSpending.reduce((sum, budget) => sum + budget.amount, 0);
+    const overallSpent = budgetsWithSpending.reduce((sum, budget) => sum + budget.spent, 0);
     const overallRemaining = Math.max(0, overallBudget - overallSpent);
     const overallPercentageUsed = overallBudget > 0 ? (overallSpent / overallBudget) * 100 : 0;
 
@@ -191,7 +195,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
   }
 };
 
-// POST create or update budget
+// POST create or update budget. One row per category id until monthly budgets land.
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
   if (!key) {
@@ -200,10 +204,11 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { categoryName, amount, currency } = body;
+    const { categoryId: categoryIdValue, amount, currency } = body;
+    const categoryId = parseCategoryId(categoryIdValue);
 
-    if (!categoryName || typeof categoryName !== "string") {
-      return NextResponse.json({ error: "categoryName is required" }, { status: 400 });
+    if (categoryId === null) {
+      return NextResponse.json({ error: "categoryId is required" }, { status: 400 });
     }
 
     if (typeof amount !== "number" || amount < 0) {
@@ -215,19 +220,16 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     }
 
     const db = getDb(key);
-
-    // Verify category exists and is a debit category (budgets only track expenses)
     const category = db
       .select()
       .from(schema.transactionCategories)
-      .where(eq(schema.transactionCategories.name, categoryName))
+      .where(eq(schema.transactionCategories.id, categoryId))
       .get();
 
     if (!category) {
       return NextResponse.json({ error: "Category not found" }, { status: 404 });
     }
 
-    // Only allow debit categories for budgets
     if (category.transactionType !== "debit") {
       return NextResponse.json(
         { error: "Budgets can only be created for debit (expense) categories" },
@@ -235,17 +237,15 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       );
     }
 
-    // Check if budget already exists for this category
     const existingBudget = db
       .select()
       .from(schema.budgets)
-      .where(eq(schema.budgets.categoryName, categoryName))
+      .where(eq(schema.budgets.categoryId, categoryId))
       .get();
 
     const now = new Date();
 
     if (existingBudget) {
-      // Update existing budget
       const updated = db
         .update(schema.budgets)
         .set({
@@ -257,21 +257,35 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
         .returning()
         .get();
 
-      return NextResponse.json(updated);
-    } else {
-      // Create new budget
-      const newBudget = {
+      return NextResponse.json({
+        ...updated,
+        categoryId,
+        categoryName: category.name,
+      });
+    }
+
+    const result = db
+      .insert(schema.budgets)
+      .values({
         id: uuidv4(),
-        categoryName,
+        categoryName: category.name,
+        categoryId,
         amount,
         currency,
         createdAt: now,
         updatedAt: now,
-      };
+      })
+      .returning()
+      .get();
 
-      const result = db.insert(schema.budgets).values(newBudget).returning().get();
-      return NextResponse.json(result, { status: 201 });
-    }
+    return NextResponse.json(
+      {
+        ...result,
+        categoryId,
+        categoryName: category.name,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("Error creating/updating budget:", error);
     return NextResponse.json({ error: "Failed to create/update budget" }, { status: 500 });

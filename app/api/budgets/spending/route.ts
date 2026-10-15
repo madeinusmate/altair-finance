@@ -35,40 +35,52 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     const db = getDb(key);
     const fxSnapshot = await getFxSnapshot(db);
 
-    // Get all budgets to know which categories to calculate
-    const budgets = db.select().from(schema.budgets).all();
-    const budgetCategories = new Set(budgets.map((b) => b.categoryName));
+    const budgets = db
+      .select({
+        categoryId: schema.budgets.categoryId,
+        transactionType: schema.transactionCategories.transactionType,
+      })
+      .from(schema.budgets)
+      .innerJoin(
+        schema.transactionCategories,
+        eq(schema.budgets.categoryId, schema.transactionCategories.id)
+      )
+      .all();
+    const budgetCategories = new Set(
+      budgets
+        .filter((budget) => budget.transactionType === "debit" && budget.categoryId != null)
+        .map((budget) => budget.categoryId as number)
+    );
 
-    // Get all debit transactions in date range (excluding transfers and investments)
     const transactions = db
       .select({
-        category: schema.transactions.category,
+        categoryId: schema.transactions.categoryId,
+        categoryName: schema.transactionCategories.name,
         amount: schema.transactions.amount,
         accountId: schema.transactions.accountId,
       })
       .from(schema.transactions)
       .innerJoin(schema.accounts, eq(schema.transactions.accountId, schema.accounts.id))
+      .innerJoin(
+        schema.transactionCategories,
+        eq(schema.transactions.categoryId, schema.transactionCategories.id)
+      )
       .where(
         and(
           eq(schema.transactions.type, "debit"),
           gte(schema.transactions.date, startDate),
           lte(schema.transactions.date, endDate),
-          ne(schema.accounts.type, "investment"),
-          ne(schema.transactions.category, "Transfer")
+          ne(schema.accounts.type, "investment")
         )
       )
       .all();
 
-    // Get account currencies for conversion
     const accounts = db.select().from(schema.accounts).all();
     const accountCurrencyMap = new Map(accounts.map((acc) => [acc.id, acc.currency]));
-
-    // Aggregate spending by category
-    const spendingMap = new Map<string, number>();
+    const spendingMap = new Map<number, { categoryName: string; spent: number }>();
 
     transactions.forEach((transaction) => {
-      // Only include categories that have budgets
-      if (!budgetCategories.has(transaction.category)) {
+      if (transaction.categoryId == null || !budgetCategories.has(transaction.categoryId)) {
         return;
       }
 
@@ -78,28 +90,25 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       }
 
       try {
-        const convertedAmount = convertAmount(
-          transaction.amount,
-          accountCurrency,
-          currency,
-          fxSnapshot.rates
-        );
-
-        const current = spendingMap.get(transaction.category) || 0;
-        spendingMap.set(transaction.category, current + convertedAmount);
+        const convertedAmount = convertAmount(transaction.amount, accountCurrency, currency, fxSnapshot.rates);
+        const current = spendingMap.get(transaction.categoryId);
+        spendingMap.set(transaction.categoryId, {
+          categoryName: transaction.categoryName,
+          spent: (current?.spent ?? 0) + convertedAmount,
+        });
       } catch (error) {
-        console.error(`Error converting amount:`, error);
+        console.error("Error converting amount:", error);
       }
     });
 
-    // Convert to array format
-    const spending = Array.from(spendingMap.entries()).map(([categoryName, spent]) => ({
-      categoryName,
-      spent,
+    const spending = Array.from(spendingMap.entries()).map(([categoryId, value]) => ({
+      categoryId,
+      categoryName: value.categoryName,
+      spent: value.spent,
       currency,
     }));
 
-    const totalSpent = Array.from(spendingMap.values()).reduce((sum, amount) => sum + amount, 0);
+    const totalSpent = spending.reduce((sum, item) => sum + item.spent, 0);
 
     return NextResponse.json({
       spending,

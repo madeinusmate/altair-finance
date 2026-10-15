@@ -26,6 +26,7 @@ const applyCipherPragmas = (sqlite: DatabaseInstance, encryptionKey: string): vo
   sqlite.pragma("cipher = 'sqlcipher'");
   sqlite.pragma("legacy = 4");
   sqlite.pragma(`key = '${escapeSqlString(encryptionKey)}'`);
+  sqlite.pragma("foreign_keys = ON");
   sqlite.pragma("journal_mode = WAL");
 };
 

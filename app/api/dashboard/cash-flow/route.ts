@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { gte, lte, and } from "drizzle-orm";
+import { gte, lte, and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { convertAmount, getFxSnapshot } from "@/lib/fx";
 import { type SupportedCurrency } from "@/lib/currencies";
 
+interface CashFlowSlice {
+  categoryId: number;
+  category: string;
+  amount: number;
+}
+
 interface CashFlowData {
-  income: Array<{ category: string; amount: number }>;
-  expenses: Array<{ category: string; amount: number }>;
+  income: CashFlowSlice[];
+  expenses: CashFlowSlice[];
 }
 
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
@@ -38,8 +44,18 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
 
     // Get all transactions in date range
     const transactions = db
-      .select()
+      .select({
+        categoryId: schema.transactions.categoryId,
+        category: schema.transactionCategories.name,
+        amount: schema.transactions.amount,
+        accountId: schema.transactions.accountId,
+        type: schema.transactions.type,
+      })
       .from(schema.transactions)
+      .innerJoin(
+        schema.transactionCategories,
+        eq(schema.transactions.categoryId, schema.transactionCategories.id)
+      )
       .where(
         and(
           gte(schema.transactions.date, startDate),
@@ -52,11 +68,14 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     const accounts = db.select().from(schema.accounts).all();
     const accountCurrencyMap = new Map(accounts.map((acc) => [acc.id, acc.currency]));
 
-    // Aggregate income (credits) and expenses (debits)
-    const incomeMap = new Map<string, number>();
-    const expenseMap = new Map<string, number>();
+    // Aggregate income (credits) and expenses (debits) by category id.
+    const incomeMap = new Map<number, CashFlowSlice>();
+    const expenseMap = new Map<number, CashFlowSlice>();
 
     transactions.forEach((transaction) => {
+      if (transaction.categoryId == null) {
+        return;
+      }
       const accountCurrency = accountCurrencyMap.get(transaction.accountId) || "USD";
       const convertedAmount = convertAmount(
         transaction.amount,
@@ -65,23 +84,17 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
         fxSnapshot.rates
       );
 
-      if (transaction.type === "credit") {
-        const current = incomeMap.get(transaction.category) || 0;
-        incomeMap.set(transaction.category, current + convertedAmount);
-      } else {
-        const current = expenseMap.get(transaction.category) || 0;
-        expenseMap.set(transaction.category, current + convertedAmount);
-      }
+      const target = transaction.type === "credit" ? incomeMap : expenseMap;
+      const current = target.get(transaction.categoryId);
+      target.set(transaction.categoryId, {
+        categoryId: transaction.categoryId,
+        category: transaction.category,
+        amount: (current?.amount ?? 0) + convertedAmount,
+      });
     });
 
-    // Convert maps to arrays and sort by amount descending
-    const income: Array<{ category: string; amount: number }> = Array.from(incomeMap.entries())
-      .map(([category, amount]) => ({ category, amount }))
-      .sort((a, b) => b.amount - a.amount);
-
-    const expenses: Array<{ category: string; amount: number }> = Array.from(expenseMap.entries())
-      .map(([category, amount]) => ({ category, amount }))
-      .sort((a, b) => b.amount - a.amount);
+    const income = Array.from(incomeMap.values()).sort((a, b) => b.amount - a.amount);
+    const expenses = Array.from(expenseMap.values()).sort((a, b) => b.amount - a.amount);
 
     return NextResponse.json({
       income,

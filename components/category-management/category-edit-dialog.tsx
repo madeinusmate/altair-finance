@@ -232,6 +232,7 @@ export const CategoryEditDialog = ({
 }: CategoryEditDialogProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [transferCount, setTransferCount] = useState(0);
   const [name, setName] = useState("");
   const [transactionType, setTransactionType] = useState<"debit" | "credit" | "transfer" | "">("");
   const [color, setColor] = useState("");
@@ -255,7 +256,30 @@ export const CategoryEditDialog = ({
       setIcon("");
     }
     setError(null);
+    setTransferCount(0);
   }, [category, open, type]);
+
+  useEffect(() => {
+    if (!open || type !== "transaction" || !category?.id) {
+      return;
+    }
+    let cancelled = false;
+    apiClient
+      .get<{ transfers: number }>(`/api/transaction-categories?usageId=${category.id}`)
+      .then((usage) => {
+        if (!cancelled) {
+          setTransferCount(usage.transfers);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTransferCount(0);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, type, category?.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -360,6 +384,15 @@ export const CategoryEditDialog = ({
               <p className="text-xs text-muted-foreground">
                 Debit categories are for expenses, credit categories are for income. Transfer is a special category that bypasses type constraints.
               </p>
+              {category && transferCount > 0 && transactionType !== "transfer" && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    {transferCount} transfer{transferCount === 1 ? "" : "s"} still use this category. Changing its type
+                    does not move them, but the transfer form will stop offering this category.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           )}
 

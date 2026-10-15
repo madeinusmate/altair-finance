@@ -4,6 +4,7 @@ import { BudgetGaugeChart } from "./budget-gauge-chart";
 
 interface BudgetWithSpending {
   id: string;
+  categoryId: number;
   categoryName: string;
   amount: number;
   currency: string;

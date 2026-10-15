@@ -988,7 +988,9 @@ export const useImportWizard = () => {
       setIsImporting(false);
       return true;
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Import failed");
+      const message = error instanceof Error ? error.message : "Import failed";
+      setImportError(message);
+      toast.error(message);
       setIsImporting(false);
       return false;
     }
