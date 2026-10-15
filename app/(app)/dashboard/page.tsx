@@ -16,11 +16,13 @@ import { CashFlowSankeyChart } from "@/components/dashboard/cash-flow-sankey-cha
 import { SpendingChart } from "@/components/dashboard/spending-chart";
 import { InvestmentPerformanceChart } from "@/components/dashboard/investment-performance-chart";
 import { NetCashChart } from "@/components/dashboard/net-cash-chart";
+import { NetWorthHistoryChart } from "@/components/dashboard/net-worth-history-chart";
 import { BudgetTile } from "@/components/dashboard/budget-tile";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { NetWorthCard } from "@/components/dashboard/net-worth-card";
 import { AccountCreateDialog } from "@/components/account-create-dialog";
 import type { Transaction, Transfer } from "@/lib/db/schema";
+import type { NetWorthHistory } from "@/lib/insights/net-worth-series";
 
 interface AccountBalance {
   id: string;
@@ -153,6 +155,7 @@ const DashboardPage = () => {
   const [spendingData, setSpendingData] = useState<SpendingData | null>(null);
   const [investmentData, setInvestmentData] = useState<InvestmentPerformanceData | null>(null);
   const [monthlyIncomeExpenses, setMonthlyIncomeExpenses] = useState<MonthlyIncomeExpenses[] | null>(null);
+  const [netWorthHistory, setNetWorthHistory] = useState<NetWorthHistory | null>(null);
   const [investmentAccounts, setInvestmentAccounts] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedInvestmentAccount, setSelectedInvestmentAccount] = useState<string | undefined>(undefined);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
@@ -201,20 +204,24 @@ const DashboardPage = () => {
         const endDateStr = format(dateRange.endDate, "yyyy-MM-dd");
 
         // Fetch all dashboard data in parallel
-        const [cashFlowSankeyRes, spendingRes, investmentRes, monthlyIncomeExpensesRes] = await Promise.all([
-          apiClient.get<CashFlowSankeyData>(
-            `/api/dashboard/cash-flow-sankey?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}`
-          ).catch(() => null),
-          apiClient.get<SpendingData>(
-            `/api/dashboard/spending?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}`
-          ).catch(() => null),
-          apiClient.get<InvestmentPerformanceData>(
-            `/api/dashboard/investment-performance?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}${selectedInvestmentAccount ? `&accountId=${selectedInvestmentAccount}` : ""}`
-          ).catch(() => null) as Promise<InvestmentPerformanceData | null>,
-          apiClient.get<MonthlyIncomeExpenses[]>(
-            `/api/dashboard/monthly-income-expenses?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}`
-          ).catch(() => null),
-        ]);
+        const [cashFlowSankeyRes, spendingRes, investmentRes, monthlyIncomeExpensesRes, netWorthHistoryRes] =
+          await Promise.all([
+            apiClient.get<CashFlowSankeyData>(
+              `/api/dashboard/cash-flow-sankey?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}`
+            ).catch(() => null),
+            apiClient.get<SpendingData>(
+              `/api/dashboard/spending?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}`
+            ).catch(() => null),
+            apiClient.get<InvestmentPerformanceData>(
+              `/api/dashboard/investment-performance?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}${selectedInvestmentAccount ? `&accountId=${selectedInvestmentAccount}` : ""}`
+            ).catch(() => null) as Promise<InvestmentPerformanceData | null>,
+            apiClient.get<MonthlyIncomeExpenses[]>(
+              `/api/dashboard/monthly-income-expenses?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}`
+            ).catch(() => null),
+            apiClient.get<NetWorthHistory>(
+              `/api/dashboard/net-worth-history?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}`
+            ).catch(() => null),
+          ]);
 
         if (cashFlowSankeyRes) {
           setCashFlowSankeyData(cashFlowSankeyRes);
@@ -230,6 +237,10 @@ const DashboardPage = () => {
 
         if (monthlyIncomeExpensesRes) {
           setMonthlyIncomeExpenses(monthlyIncomeExpensesRes);
+        }
+
+        if (netWorthHistoryRes) {
+          setNetWorthHistory(netWorthHistoryRes);
         }
 
         // Get investment accounts
@@ -419,6 +430,11 @@ const DashboardPage = () => {
           </section>
           <section className="space-y-4">
             <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-foreground">Over time</h2>
+            <NetWorthHistoryChart
+              currency={selectedCurrency}
+              isLoading={isLoadingDashboard}
+              data={netWorthHistory}
+            />
             <div className="grid gap-4 md:grid-cols-2">
               <MonthlyIncomeExpensesChart
                 dateRange={dateRange}
