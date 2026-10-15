@@ -176,7 +176,7 @@ describe("duplicate import routes", { concurrency: false }, () => {
     }
   });
 
-  it("keeps the first identical row in a file and skips the later copy", async () => {
+  it("holds both identical rows in a file until they are confirmed", async () => {
     const { db } = openLedger();
     try {
       insertAccount(db, { id: "checking", name: "Checking", type: "transaction" });
@@ -185,9 +185,77 @@ describe("duplicate import routes", { concurrency: false }, () => {
       if (!("transactions" in result.payload)) {
         assert.fail(JSON.stringify(result.payload));
       }
+      assert.equal(result.payload.transactions, 0);
+      assert.equal(result.payload.skippedDuplicates, 2);
+      assert.deepEqual(result.payload.skippedIndexes, [0, 1]);
+      assert.deepEqual(
+        result.payload.flaggedDuplicates.map((row) => ({ index: row.index, reason: row.reason, imported: row.imported })),
+        [
+          { index: 0, reason: "in-file", imported: false },
+          { index: 1, reason: "in-file", imported: false },
+        ]
+      );
+      assert.equal(db.select().from(schema.transactions).all().length, 0);
+    } finally {
+      closeLedger(db);
+    }
+  });
+
+  it("imports both identical rows when importDuplicates is all", async () => {
+    const { db } = openLedger();
+    try {
+      insertAccount(db, { id: "checking", name: "Checking", type: "transaction" });
+      const result = await commitTransactionImport(db, {
+        rows: [coffee, coffee],
+        importDuplicates: "all",
+      });
+      assert.equal(result.status, 200);
+      if (!("transactions" in result.payload)) {
+        assert.fail(JSON.stringify(result.payload));
+      }
+      assert.equal(result.payload.transactions, 2);
+      assert.equal(result.payload.skippedDuplicates, 0);
+      assert.deepEqual(
+        result.payload.flaggedDuplicates.map((row) => row.imported),
+        [true, true]
+      );
+      assert.equal(db.select().from(schema.transactions).all().length, 2);
+    } finally {
+      closeLedger(db);
+    }
+  });
+
+  it("imports only the listed duplicate indexes", async () => {
+    const { db } = openLedger();
+    try {
+      insertAccount(db, { id: "checking", name: "Checking", type: "transaction" });
+      const result = await commitTransactionImport(db, {
+        rows: [coffee, coffee],
+        importDuplicates: [0],
+      });
+      assert.equal(result.status, 200);
+      if (!("transactions" in result.payload)) {
+        assert.fail(JSON.stringify(result.payload));
+      }
       assert.equal(result.payload.transactions, 1);
-      assert.equal(result.payload.skippedDuplicates, 1);
+      assert.deepEqual(result.payload.skippedIndexes, [1]);
       assert.equal(db.select().from(schema.transactions).all().length, 1);
+    } finally {
+      closeLedger(db);
+    }
+  });
+
+  it("rejects an importDuplicates index outside the file", async () => {
+    const { db } = openLedger();
+    try {
+      insertAccount(db, { id: "checking", name: "Checking", type: "transaction" });
+      const result = await commitTransactionImport(db, {
+        rows: [coffee],
+        importDuplicates: [4],
+      });
+      assert.equal(result.status, 400);
+      assert.equal("error" in result.payload, true);
+      assert.equal(db.select().from(schema.transactions).all().length, 0);
     } finally {
       closeLedger(db);
     }
@@ -207,13 +275,26 @@ describe("duplicate import routes", { concurrency: false }, () => {
       }
       assert.equal(second.payload.transactions, 0);
       assert.equal(second.payload.skippedDuplicates, 1);
+      assert.equal(second.payload.flaggedDuplicates[0]?.reason, "existing");
+      assert.equal(second.payload.flaggedDuplicates[0]?.imported, false);
       assert.equal(db.select().from(schema.transactions).all().length, 1);
+      const confirmed = await commitTransactionImport(db, {
+        rows: [coffee],
+        importDuplicates: "all",
+      });
+      if (!("transactions" in confirmed.payload)) {
+        assert.fail(JSON.stringify(confirmed.payload));
+      }
+      assert.equal(confirmed.payload.transactions, 1);
+      assert.equal(confirmed.payload.flaggedDuplicates[0]?.reason, "existing");
+      assert.equal(confirmed.payload.flaggedDuplicates[0]?.imported, true);
+      assert.equal(db.select().from(schema.transactions).all().length, 2);
     } finally {
       closeLedger(db);
     }
   });
 
-  it("inserts both when one of two identical new rows overrides, and skips a third", async () => {
+  it("imports only the identical row that confirms the duplicate", async () => {
     const { db } = openLedger();
     try {
       insertAccount(db, { id: "checking", name: "Checking", type: "transaction" });
@@ -224,9 +305,10 @@ describe("duplicate import routes", { concurrency: false }, () => {
       if (!("transactions" in result.payload)) {
         assert.fail(JSON.stringify(result.payload));
       }
-      assert.equal(result.payload.transactions, 2);
-      assert.equal(result.payload.skippedDuplicates, 1);
-      assert.equal(db.select().from(schema.transactions).all().length, 2);
+      assert.equal(result.payload.transactions, 1);
+      assert.equal(result.payload.skippedDuplicates, 2);
+      assert.deepEqual(result.payload.skippedIndexes, [0, 2]);
+      assert.equal(db.select().from(schema.transactions).all().length, 1);
     } finally {
       closeLedger(db);
     }
@@ -270,9 +352,20 @@ describe("duplicate import routes", { concurrency: false }, () => {
       }
       assert.equal(second.payload.balances, 1);
       assert.equal(second.payload.skippedDuplicates, 1);
+      assert.equal(second.payload.flaggedDuplicates[0]?.reason, "existing");
+      const both = await commitBalanceImport(db, {
+        rows: [
+          { accountId: "savings", balance: 125, date: "2024-03-15" },
+          { accountId: "savings", balance: 125, date: "2024-03-15" },
+        ],
+        importDuplicates: "all",
+      });
+      if (!("balances" in both.payload)) {
+        assert.fail(JSON.stringify(both.payload));
+      }
+      assert.equal(both.payload.balances, 2);
       const stored = db.select().from(schema.balanceHistory).all();
-      assert.equal(stored.length, 2);
-      assert.deepEqual(stored.map((row) => row.balance).sort((a, b) => a - b), [100, 125]);
+      assert.deepEqual(stored.map((row) => row.balance).sort((a, b) => a - b), [100, 125, 125, 125]);
     } finally {
       closeLedger(db);
     }

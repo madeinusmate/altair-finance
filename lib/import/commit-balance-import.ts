@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { balanceFingerprint } from "@/lib/import/fingerprint";
 import { loadBalanceFingerprints } from "@/lib/import/load-fingerprints";
-import { planImportRows } from "@/lib/import/plan-import-rows";
+import { parseImportDuplicates, planImportRows, rowConfirmsDuplicate, type FlaggedDuplicate } from "@/lib/import/plan-import-rows";
 
 type LedgerDb = ReturnType<typeof getDb>;
 
@@ -19,6 +19,8 @@ export type BalanceImportSuccess = {
   balances: number;
   investments: number;
   skippedDuplicates: number;
+  skippedIndexes: number[];
+  flaggedDuplicates: FlaggedDuplicate[];
   importId: string | null;
   isDuplicate: boolean;
 };
@@ -34,7 +36,7 @@ const isImportRowError = (error: unknown): error is Error =>
 
 export const commitBalanceImport = async (
   db: LedgerDb,
-  body: { rows?: ImportBalanceRow[]; filename?: string; fileHash?: string }
+  body: { rows?: ImportBalanceRow[]; filename?: string; fileHash?: string; importDuplicates?: unknown }
 ): Promise<{ status: number; payload: BalanceImportSuccess | { error: string } }> => {
   const rows = Array.isArray(body?.rows) ? body.rows : null;
   const filename = body?.filename;
@@ -44,9 +46,17 @@ export const commitBalanceImport = async (
     return { status: 400, payload: { error: "Rows are required" } };
   }
 
+  let importDuplicates;
+  try {
+    importDuplicates = parseImportDuplicates(body?.importDuplicates, rows.length);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid importDuplicates";
+    return { status: 400, payload: { error: message } };
+  }
+
   try {
     const fingerprinted = await Promise.all(
-      rows.map(async (row) => ({
+      rows.map(async (row, index) => ({
         row,
         fingerprint: row
           ? await balanceFingerprint({
@@ -55,7 +65,7 @@ export const commitBalanceImport = async (
               balance: row.balance,
             })
           : null,
-        overrideDuplicate: row?.overrideDuplicate === true,
+        overrideDuplicate: rowConfirmsDuplicate(index, row?.overrideDuplicate === true, importDuplicates),
       }))
     );
 
@@ -68,7 +78,7 @@ export const commitBalanceImport = async (
         txDb,
         fingerprinted.flatMap((entry) => (entry.row?.accountId ? [entry.row.accountId] : []))
       );
-      const { decisions, skippedDuplicates } = planImportRows(existing, fingerprinted);
+      const { decisions, skippedDuplicates, flaggedDuplicates, skippedIndexes } = planImportRows(existing, fingerprinted);
 
       let balanceCount = 0;
       let investmentCount = 0;
@@ -160,6 +170,8 @@ export const commitBalanceImport = async (
         balances: balanceCount,
         investments: investmentCount,
         skippedDuplicates,
+        skippedIndexes,
+        flaggedDuplicates,
         importId,
         isDuplicate,
       };

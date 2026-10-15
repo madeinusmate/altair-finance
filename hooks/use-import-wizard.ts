@@ -738,6 +738,24 @@ export const useImportWizard = () => {
     rememberBalanceRows(nextRows);
   };
 
+  const decideTransactionDuplicates = (choice: "skip" | "import") => {
+    const excluded = choice === "skip";
+    const nextRows = transactionRowsRef.current.map((row) => {
+      if (!row.duplicate) return row;
+      return { ...row, excluded, overrideDuplicate: !excluded };
+    });
+    rememberTransactionRows(nextRows);
+  };
+
+  const decideBalanceDuplicates = (choice: "skip" | "import") => {
+    const excluded = choice === "skip";
+    const nextRows = balanceRowsRef.current.map((row) => {
+      if (!row.duplicate) return row;
+      return { ...row, excluded, overrideDuplicate: !excluded };
+    });
+    rememberBalanceRows(nextRows);
+  };
+
   const updateAccountRow = (rowId: string, key: keyof AccountRow, value: string) => {
     setAccountRows((currentRows) => {
       const nextRows = currentRows.map((row) => {
@@ -1042,6 +1060,8 @@ export const useImportWizard = () => {
     updateAccountRow,
     toggleTransactionExcluded,
     toggleBalanceExcluded,
+    decideTransactionDuplicates,
+    decideBalanceDuplicates,
     importRows,
   };
 };

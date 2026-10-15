@@ -24,6 +24,7 @@ export const parseArgs = (argv) => {
     id: /** @type {string | undefined} */ (undefined),
     file: /** @type {string | undefined} */ (undefined),
     accountId: /** @type {string | undefined} */ (undefined),
+    includeDuplicates: /** @type {string | undefined} */ (undefined),
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -41,6 +42,7 @@ export const parseArgs = (argv) => {
     else if (arg === "--id") flags.id = take();
     else if (arg === "--file") flags.file = take();
     else if (arg === "--account-id") flags.accountId = take();
+    else if (arg === "--include-duplicates") flags.includeDuplicates = take();
     else if (arg === "--query") flags.query.push(take());
     else if (arg.startsWith("--")) throw new Error(`Unknown flag ${arg}`);
     else positionals.push(arg);
@@ -109,6 +111,41 @@ export const findCommand = (positionals) => {
   return COMMANDS.find((command) => command.words.join(" ") === positionals.join(" ")) ?? null;
 };
 
+// "all" imports every flagged row. "0,2" imports those posted-row indexes.
+export const parseIncludeDuplicates = (value) => {
+  if (value == null || value === "") return undefined;
+  if (value === "all") return "all";
+  const parts = String(value)
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length === 0 || parts.some((part) => !/^\d+$/.test(part))) {
+    throw new Error("--include-duplicates needs all or a list of row indexes");
+  }
+  return parts.map((part) => Number(part));
+};
+
+export const withIncludeDuplicates = (bodyText, includeDuplicates) => {
+  if (includeDuplicates == null) return bodyText;
+  const parsed = JSON.parse(bodyText);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Import JSON must be an object");
+  }
+  return JSON.stringify({ ...parsed, importDuplicates: includeDuplicates });
+};
+
+export const duplicateHoldMessage = (payload) => {
+  const flagged = Array.isArray(payload?.flaggedDuplicates) ? payload.flaggedDuplicates : [];
+  const held = flagged.filter((row) => row && row.imported === false);
+  if (held.length === 0) return "";
+  const indexes = held.map((row) => row.index).join(",");
+  const noun = held.length === 1 ? "row was" : "rows were";
+  return `${held.length} exact duplicate ${noun} not imported. Re-run with --include-duplicates all or --include-duplicates ${indexes}.\n`;
+};
+
+const importCommandAcceptsDuplicates = (command) =>
+  command.words[0] === "import" && (command.words[1] === "transactions" || command.words[1] === "balances");
+
 const fail = (error) => {
   process.stdout.write(`${JSON.stringify({ error })}\n`);
   process.exit(1);
@@ -168,7 +205,9 @@ const main = async () => {
 
   if (parsed.positionals.length === 0 || parsed.positionals[0] === "help") {
     const lines = COMMANDS.map((command) => command.words.join(" "));
-    process.stderr.write(`altair commands:\n${lines.map((line) => `  ${line}`).join("\n")}\n`);
+    process.stderr.write(
+      `altair commands:\n${lines.map((line) => `  ${line}`).join("\n")}\nimport transactions and import balances accept --include-duplicates all or --include-duplicates 0,1\n`
+    );
     process.exit(parsed.positionals[0] === "help" ? 0 : 1);
     return;
   }
@@ -234,7 +273,15 @@ const main = async () => {
     else if (parsed.flags.jsonFile) body = fs.readFileSync(parsed.flags.jsonFile, "utf8");
     else if (parsed.flags.json) body = parsed.flags.json;
     else fail(`${command.words.join(" ")} needs --json or --json-file`);
+    if (parsed.flags.includeDuplicates != null && !importCommandAcceptsDuplicates(command)) {
+      fail("--include-duplicates is only for import transactions and import balances");
+    }
+    if (importCommandAcceptsDuplicates(command)) {
+      body = withIncludeDuplicates(body, parseIncludeDuplicates(parsed.flags.includeDuplicates));
+    }
     headers["content-type"] = "application/json";
+  } else if (parsed.flags.includeDuplicates != null) {
+    fail("--include-duplicates is only for import transactions and import balances");
   }
 
   const response = await fetch(url, {
@@ -258,6 +305,14 @@ const main = async () => {
 
   const text = await response.text();
   process.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
+  if (response.ok && importCommandAcceptsDuplicates(command)) {
+    try {
+      const message = duplicateHoldMessage(JSON.parse(text));
+      if (message) process.stderr.write(message);
+    } catch {
+      // A non-JSON body still stays on stdout.
+    }
+  }
   if (!response.ok) process.exit(1);
 };
 

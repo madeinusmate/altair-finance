@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CsvImportSummary } from "@/components/csv-import/csv-import-summary";
+import { DuplicateDecisionBar } from "@/components/csv-import/duplicate-decision-bar";
 import { CsvReviewTable } from "@/components/csv-import/csv-review-table";
 import { CsvUpload } from "@/components/csv-import/csv-upload";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,8 @@ const ImportWizardPage = () => {
     updateAccountRow,
     toggleTransactionExcluded,
     toggleBalanceExcluded,
+    decideTransactionDuplicates,
+    decideBalanceDuplicates,
     importRows,
   } = useImportWizard();
 
@@ -321,7 +324,7 @@ const ImportWizardPage = () => {
           <CardHeader>
             <CardTitle>Review import</CardTitle>
             <CardDescription>
-              Fix any errors. Duplicate rows are left out unless you include them.
+              Fix any errors. Exact duplicates stay listed so you can skip or import each one.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -350,10 +353,21 @@ const ImportWizardPage = () => {
                   onFilterChange={setReviewFilter}
                 />
 
-                {(importType === "transactions" || importType === "balances") && summary.duplicates > 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    {summary.skipped} duplicate {summary.skipped === 1 ? "row" : "rows"} will be skipped unless included.
-                  </p>
+                {(importType === "transactions" || importType === "balances") && (
+                  <DuplicateDecisionBar
+                    count={summary.duplicates}
+                    held={summary.skipped}
+                    onSkipAll={() =>
+                      importType === "transactions"
+                        ? decideTransactionDuplicates("skip")
+                        : decideBalanceDuplicates("skip")
+                    }
+                    onImportAll={() =>
+                      importType === "transactions"
+                        ? decideTransactionDuplicates("import")
+                        : decideBalanceDuplicates("import")
+                    }
+                  />
                 )}
 
                 {importType === "transactions" && (
@@ -601,7 +615,7 @@ const ImportWizardPage = () => {
               )}
               {!canProceedFromReview && rows.length > 0 && summary.invalid === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Duplicate rows are left out unless you include one.
+                  Choose Import on an exact duplicate, or Import all, before continuing.
                 </p>
               )}
             </div>

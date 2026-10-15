@@ -132,7 +132,7 @@ export const CsvReviewTable = <Row extends RowWithIssues>({
                       variant={row.excluded ? "default" : "outline"}
                       onClick={() => onToggleExclude(row.id)}
                     >
-                      {row.excluded ? "Include" : "Exclude"}
+                      {row.excluded ? "Import" : "Skip"}
                     </Button>
                   )}
                   {row.errors.length > 0 && (

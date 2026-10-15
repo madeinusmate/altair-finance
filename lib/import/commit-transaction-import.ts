@@ -4,7 +4,7 @@ import { getDb, schema } from "@/lib/db";
 import { isValidCategoryIdForType, isValidTransferCategoryId } from "@/lib/db/category-helpers";
 import { transactionFingerprint, transferFingerprint } from "@/lib/import/fingerprint";
 import { loadTransactionFingerprints, loadTransferFingerprints } from "@/lib/import/load-fingerprints";
-import { planImportRows } from "@/lib/import/plan-import-rows";
+import { parseImportDuplicates, planImportRows, rowConfirmsDuplicate, type FlaggedDuplicate } from "@/lib/import/plan-import-rows";
 import { resolvePayeeId } from "@/lib/payees/assign";
 import { identityPayeeName } from "@/lib/payees/draft";
 
@@ -39,6 +39,8 @@ export type TransactionImportSuccess = {
   transactions: number;
   transfers: number;
   skippedDuplicates: number;
+  skippedIndexes: number[];
+  flaggedDuplicates: FlaggedDuplicate[];
   importId: string | null;
   isDuplicate: boolean;
 };
@@ -101,7 +103,7 @@ const requireDate = (value: string, index: number): Date => {
 
 export const commitTransactionImport = async (
   db: LedgerDb,
-  body: { rows?: ImportTransactionRow[]; filename?: string; fileHash?: string }
+  body: { rows?: ImportTransactionRow[]; filename?: string; fileHash?: string; importDuplicates?: unknown }
 ): Promise<{ status: number; payload: TransactionImportSuccess | { error: string } }> => {
   const rows = Array.isArray(body?.rows) ? body.rows : null;
   const filename = body?.filename;
@@ -109,6 +111,14 @@ export const commitTransactionImport = async (
 
   if (!rows || rows.length === 0) {
     return { status: 400, payload: { error: "Rows are required" } };
+  }
+
+  let importDuplicates;
+  try {
+    importDuplicates = parseImportDuplicates(body?.importDuplicates, rows.length);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid importDuplicates";
+    return { status: 400, payload: { error: message } };
   }
 
   try {
@@ -120,10 +130,10 @@ export const commitTransactionImport = async (
       .from(schema.payees)
       .all();
     const fingerprinted = await Promise.all(
-      rows.map(async (row) => ({
+      rows.map(async (row, index) => ({
         row,
         fingerprint: await fingerprintForRow(row, transferCategoryName, knownPayees),
-        overrideDuplicate: row?.overrideDuplicate === true,
+        overrideDuplicate: rowConfirmsDuplicate(index, row?.overrideDuplicate === true, importDuplicates),
       }))
     );
 
@@ -152,7 +162,7 @@ export const commitTransactionImport = async (
         existing.add(hash);
       }
 
-      const { decisions, skippedDuplicates } = planImportRows(existing, fingerprinted);
+      const { decisions, skippedDuplicates, flaggedDuplicates, skippedIndexes } = planImportRows(existing, fingerprinted);
 
       let transactionCount = 0;
       let transferCount = 0;
@@ -302,6 +312,8 @@ export const commitTransactionImport = async (
         transactions: transactionCount,
         transfers: transferCount,
         skippedDuplicates,
+        skippedIndexes,
+        flaggedDuplicates,
         importId,
         isDuplicate,
       };

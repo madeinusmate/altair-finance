@@ -336,7 +336,7 @@ export const PdfReviewTable = ({
                         size="sm"
                         onClick={() => onToggleExclude(row.id)}
                       >
-                        {row.excluded ? "Include" : "Exclude"}
+                        {row.excluded ? "Import" : "Skip"}
                       </Button>
                     )}
                   </div>
@@ -364,7 +364,7 @@ export const PdfReviewTable = ({
                       </div>
                     )}
                     {row.duplicate && !row.excluded && (
-                      <Badge variant="secondary">Possible duplicate</Badge>
+                      <Badge variant="secondary">Exact duplicate</Badge>
                     )}
                     {(row.ruleMatch || row.ruleHint) && (
                       <p className="text-xs text-muted-foreground">{row.ruleMatch || row.ruleHint}</p>

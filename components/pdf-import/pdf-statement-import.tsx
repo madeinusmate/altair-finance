@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { PdfUpload } from "./pdf-upload";
 import { PdfReviewTable, TransactionRow } from "./pdf-review-table";
 import { CsvImportSummary } from "@/components/csv-import/csv-import-summary";
+import { DuplicateDecisionBar } from "@/components/csv-import/duplicate-decision-bar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -465,15 +466,24 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
 
   const handleToggleExclude = (rowId: string) => {
     const nextRows = rowsRef.current.map((row) => {
-      if (row.id !== rowId) {
+      if (row.id !== rowId || !row.duplicate) {
         return row;
       }
       const excluded = !row.excluded;
       return {
         ...row,
         excluded,
-        overrideDuplicate: row.duplicate ? !excluded : false,
+        overrideDuplicate: !excluded,
       };
+    });
+    rememberRows(nextRows);
+  };
+
+  const decideDuplicates = (choice: "skip" | "import") => {
+    const excluded = choice === "skip";
+    const nextRows = rowsRef.current.map((row) => {
+      if (!row.duplicate) return row;
+      return { ...row, excluded, overrideDuplicate: !excluded };
     });
     rememberRows(nextRows);
   };
@@ -518,7 +528,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
           category: row.category,
           amount: row.amount,
           description: row.description || null,
-          payeeName: row.excluded || row.duplicate ? null : row.payeeName || null,
+          payeeName: row.payeeName || null,
           date: row.date,
           ...(row.duplicate ? { overrideDuplicate: true } : {}),
         };
@@ -622,6 +632,13 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
               duplicates={summary.duplicates}
             />
 
+            <DuplicateDecisionBar
+              count={summary.duplicates}
+              held={summary.excluded}
+              onSkipAll={() => decideDuplicates("skip")}
+              onImportAll={() => decideDuplicates("import")}
+            />
+
             <PdfReviewTable
               rows={rows}
               accounts={accounts}
@@ -647,7 +664,12 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
               {summary.invalid > 0 && (
                 <p className="text-xs text-muted-foreground">Fix errors before importing.</p>
               )}
-              {summary.valid === 0 && (
+              {summary.valid === 0 && summary.invalid === 0 && summary.duplicates > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Choose Import on an exact duplicate, or Import all, before continuing.
+                </p>
+              )}
+              {summary.valid === 0 && summary.duplicates === 0 && (
                 <p className="text-xs text-muted-foreground">No valid transactions to import.</p>
               )}
             </div>
@@ -660,9 +682,10 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
               <AlertDialogTitle>Confirm Import</AlertDialogTitle>
               <AlertDialogDescription>
                 Import {summary.valid} transaction{summary.valid !== 1 ? "s" : ""}?
-                {summary.excluded > 0 && (
+                {summary.duplicates > 0 && (
                   <span className="block mt-2">
-                    {summary.excluded} duplicate{summary.excluded !== 1 ? "s" : ""} will be excluded.
+                    {summary.duplicates - summary.excluded} exact duplicate
+                    {summary.duplicates - summary.excluded === 1 ? "" : "s"} will be imported. {summary.excluded} will be skipped.
                   </span>
                 )}
               </AlertDialogDescription>

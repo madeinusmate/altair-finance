@@ -10,7 +10,7 @@ import {
   transferFingerprintPayload,
 } from "../lib/import/fingerprint";
 import { planImportRows } from "../lib/import/plan-import-rows";
-import { applyReviewDuplicates } from "../lib/import/review-duplicates";
+import { applyReviewDuplicates, type DuplicateReviewFields } from "../lib/import/review-duplicates";
 
 const transactionInput = {
   accountId: "acct-1",
@@ -145,43 +145,70 @@ describe("import fingerprints", () => {
     );
   });
 
-  it("skips a later copy unless that row overrides, then skips a third copy", () => {
+  it("holds every copy of an in-file duplicate unless that row is confirmed", () => {
     const fingerprint = "abc";
-    const { decisions, skippedDuplicates } = planImportRows([], [
+    const { decisions, skippedDuplicates, flaggedDuplicates, skippedIndexes } = planImportRows([], [
       { fingerprint, overrideDuplicate: false },
       { fingerprint, overrideDuplicate: true },
       { fingerprint },
     ]);
     assert.deepEqual(
       decisions.map((decision) => decision.insert),
-      [true, true, false]
+      [false, true, false]
     );
-    assert.equal(skippedDuplicates, 1);
+    assert.deepEqual(
+      decisions.map((decision) => decision.reason),
+      ["in-file", "in-file", "in-file"]
+    );
+    assert.equal(skippedDuplicates, 2);
+    assert.deepEqual(skippedIndexes, [0, 2]);
+    assert.deepEqual(
+      flaggedDuplicates.map((row) => row.imported),
+      [false, true, false]
+    );
   });
 
-  it("excludes a duplicate review row until it is included", () => {
-    const rows = applyReviewDuplicates(
+  it("flags a ledger match as existing and keeps a confirmed copy", () => {
+    const { decisions, flaggedDuplicates } = planImportRows(["abc"], [
+      { fingerprint: "abc" },
+      { fingerprint: "abc", overrideDuplicate: true },
+      { fingerprint: "other" },
+    ]);
+    assert.deepEqual(
+      decisions.map((decision) => [decision.insert, decision.reason]),
       [
-        { fingerprint: "new", errors: [], warnings: [], duplicate: false, excluded: false },
-        { fingerprint: "new", errors: [], warnings: [], duplicate: false, excluded: false },
-        {
-          fingerprint: "kept",
-          errors: [],
-          warnings: ["Possible duplicate"],
-          duplicate: true,
-          excluded: false,
-          overrideDuplicate: true,
-        },
-      ],
-      ["kept"]
+        [false, "existing"],
+        [true, "existing"],
+        [true, null],
+      ]
     );
-    assert.equal(rows[0].duplicate, false);
-    assert.equal(rows[0].excluded, false);
+    assert.equal(flaggedDuplicates.length, 2);
+  });
+
+  it("holds both copies of an in-file duplicate and keeps an already included match", () => {
+    const input: DuplicateReviewFields[] = [
+      { fingerprint: "new", errors: [], warnings: [], duplicate: false, excluded: false },
+      { fingerprint: "new", errors: [], warnings: [], duplicate: false, excluded: false },
+      {
+        fingerprint: "kept",
+        errors: [],
+        warnings: ["Exact duplicate"],
+        duplicate: true,
+        excluded: false,
+        overrideDuplicate: true,
+      },
+    ];
+    const rows = applyReviewDuplicates(input, ["kept"]);
+    assert.equal(rows[0].duplicate, true);
+    assert.equal(rows[0].excluded, true);
+    assert.equal(rows[0].overrideDuplicate, false);
+    assert.equal(rows[0].warnings.includes("Exact duplicate"), true);
     assert.equal(rows[1].duplicate, true);
     assert.equal(rows[1].excluded, true);
     assert.equal(rows[1].overrideDuplicate, false);
     assert.equal(rows[2].duplicate, true);
     assert.equal(rows[2].excluded, false);
     assert.equal(rows[2].overrideDuplicate, true);
+    assert.deepEqual(rows[2].warnings, ["Exact duplicate"]);
   });
 });

@@ -386,7 +386,7 @@ export const HelpGuide = () => (
           </li>
         </ul>
         <p>
-          You review every row before it is saved. Invalid rows stay out. A row is a duplicate only when its date is the same day and every other imported field is exactly the same: account, description, payee, amount, category, and type. Transfers also compare both accounts and both amounts. A different description, payee, or category is kept. Importing the same file twice does not double the ledger.
+          You review every row before it is saved. Invalid rows stay out. A row is a duplicate only when its date is the same day and every other imported field is exactly the same: account, description, payee, amount, category, and type. Transfers also compare both accounts and both amounts. Exact duplicates are two identical rows in the same file, or a row that already exists. They stay on the review list. Skip or import each one, or use Skip all and Import all. Two identical ATM withdrawals on the same day can both be saved.
         </p>
         <h3 className="pt-2 text-base font-medium text-foreground">PDF statements</h3>
         <p>
@@ -419,7 +419,7 @@ export const HelpGuide = () => (
           <Link className="underline underline-offset-4" href="/settings#agent">Settings → Agent</Link>, where you create the grant, copy a prompt for an assistant on this Mac, stop the owner, or revoke the grant.
         </p>
         <p>
-          <span className="font-medium">altair help</span> prints the command list: accounts, transactions, transfers, budgets, categories, imports, dashboard figures, balance history, and export. Destructive commands still wait on the macOS dialog.
+          <span className="font-medium">altair help</span> prints the command list: accounts, transactions, transfers, budgets, categories, imports, dashboard figures, balance history, and export. Destructive commands still wait on the macOS dialog. <span className="font-medium">import transactions</span> and <span className="font-medium">import balances</span> hold exact duplicates and list them as flaggedDuplicates. Pass <span className="font-medium">--include-duplicates all</span>, or <span className="font-medium">--include-duplicates</span> with the row indexes, to import the ones you want.
         </p>
       </Section>
 

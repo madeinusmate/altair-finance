@@ -1,4 +1,4 @@
-export const DUPLICATE_WARNING = "Possible duplicate";
+export const DUPLICATE_WARNING = "Exact duplicate";
 
 export type DuplicateReviewFields = {
   fingerprint: string | null;
@@ -9,16 +9,24 @@ export type DuplicateReviewFields = {
   errors: string[];
 };
 
-// Marks duplicates against the ledger and earlier rows in this file.
-// A duplicate is excluded until the person includes it. Including sets overrideDuplicate.
+// Flags every exact duplicate: a row already in the ledger, and every copy when
+// the same fingerprint appears more than once in this file. Held out until included.
 export const applyReviewDuplicates = <Row extends DuplicateReviewFields>(
   rows: Row[],
   existingFingerprints: Iterable<string>
 ): Row[] => {
-  const seen = new Set(existingFingerprints);
+  const existing = new Set(existingFingerprints);
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.fingerprint) continue;
+    counts.set(row.fingerprint, (counts.get(row.fingerprint) ?? 0) + 1);
+  }
 
   return rows.map((row) => {
-    const duplicate = Boolean(row.fingerprint) && seen.has(row.fingerprint as string);
+    const fingerprint = row.fingerprint;
+    const duplicate =
+      Boolean(fingerprint) &&
+      (existing.has(fingerprint as string) || (counts.get(fingerprint as string) ?? 0) > 1);
     const hadDuplicate = row.duplicate === true;
     let excluded = row.excluded === true;
     let overrideDuplicate = row.overrideDuplicate === true;
@@ -34,10 +42,6 @@ export const applyReviewDuplicates = <Row extends DuplicateReviewFields>(
     const warnings = row.warnings.filter((warning) => warning !== DUPLICATE_WARNING);
     if (duplicate) {
       warnings.push(DUPLICATE_WARNING);
-    }
-
-    if (row.fingerprint && row.errors.length === 0 && !excluded) {
-      seen.add(row.fingerprint);
     }
 
     return {
