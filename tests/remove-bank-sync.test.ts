@@ -195,11 +195,12 @@ describe("remove bank sync", { concurrency: 1 }, () => {
       const dbPath = path.join(dir, "netly.db");
       createLegacyDatabase(dbPath, encryptionKey);
 
-      const db = getDb(encryptionKey);
+      getDb(encryptionKey);
+      const sqlite = openEncrypted(dbPath, encryptionKey);
       try {
-        assertBooksUnchanged(db.$client as Sqlite);
+        assertBooksUnchanged(sqlite);
       } finally {
-        (db.$client as Sqlite).close();
+        sqlite.close();
       }
     });
   });
@@ -258,9 +259,9 @@ describe("remove bank sync", { concurrency: 1 }, () => {
     await withTempDataDir(async (dir) => {
       const encryptionKey = "fresh-database-key";
       initializeDb(encryptionKey, "Ada");
-      const db = getDb(encryptionKey);
+      getDb(encryptionKey);
+      const sqlite = openEncrypted(path.join(dir, "netly.db"), encryptionKey);
       try {
-        const sqlite = db.$client as Sqlite;
         assert.deepEqual(tokenTableNames(sqlite), []);
         const install = sqlite
           .prepare("SELECT install_id FROM user_settings WHERE id = 'user'")
@@ -271,7 +272,7 @@ describe("remove bank sync", { concurrency: 1 }, () => {
           .get() as { schemaVersion: number };
         assert.equal(meta.schemaVersion, 1);
       } finally {
-        (db.$client as Sqlite).close();
+        sqlite.close();
       }
       assert.equal(fs.existsSync(path.join(dir, "netly.db")), true);
     });
