@@ -24,9 +24,11 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 import { isSupportedCurrency, SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
+import { budgetMonthLabel } from "@/lib/budget/resolve-month";
 
 interface Budget {
-  id: string;
+  id: string | null;
+  categoryId: number;
   categoryName: string;
   amount: number;
   currency: string;
@@ -36,7 +38,9 @@ interface BudgetEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   budget?: Budget | null;
+  categoryId?: number;
   categoryName?: string;
+  yearMonth: string;
   currencies?: readonly SupportedCurrency[];
   defaultCurrency?: string;
   onSuccess: () => void;
@@ -46,7 +50,9 @@ export const BudgetEditDialog = ({
   open,
   onOpenChange,
   budget,
+  categoryId,
   categoryName,
+  yearMonth,
   currencies = SUPPORTED_CURRENCIES,
   defaultCurrency = "USD",
   onSuccess,
@@ -55,22 +61,23 @@ export const BudgetEditDialog = ({
   const [error, setError] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("USD");
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
-  const [categories, setCategories] = useState<string[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+  const [categories, setCategories] = useState<Array<{ id: number; name: string }>>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const monthName = budgetMonthLabel(yearMonth, "MMMM");
+  const knownCategory = Boolean(budget || categoryId);
 
-  // Fetch debit categories when dialog opens for creating a new budget (budgets only track expenses)
   useEffect(() => {
-    if (open && !budget && !categoryName) {
+    if (open && !knownCategory) {
       setCategoriesLoading(true);
       apiClient
-        .get<{ categories: Array<{ name: string }> }>("/api/transaction-categories?type=debit")
+        .get<{ categories: Array<{ id: number; name: string; transactionType: "debit" | "credit" | null }> }>(
+          "/api/transaction-categories?type=debit"
+        )
         .then((data) => {
-          const categoryNames = data.categories.map((c) => c.name);
-          setCategories(categoryNames);
-          if (categoryNames.length > 0 && !selectedCategory) {
-            setSelectedCategory(categoryNames[0]);
-          }
+          const debitCategories = data.categories.filter((category) => category.transactionType === "debit");
+          setCategories(debitCategories);
+          setSelectedCategoryId((current) => current || (debitCategories[0] ? String(debitCategories[0].id) : ""));
         })
         .catch((err) => {
           console.error("Error fetching categories:", err);
@@ -80,7 +87,7 @@ export const BudgetEditDialog = ({
           setCategoriesLoading(false);
         });
     }
-  }, [open, budget, categoryName]);
+  }, [open, knownCategory]);
 
   const startingCurrency =
     isSupportedCurrency(defaultCurrency) && currencies.includes(defaultCurrency)
@@ -91,18 +98,18 @@ export const BudgetEditDialog = ({
     if (budget) {
       setAmount(budget.amount.toString());
       setCurrency(budget.currency);
-      setSelectedCategory(budget.categoryName);
-    } else if (categoryName) {
+      setSelectedCategoryId(String(budget.categoryId));
+    } else if (categoryId) {
       setAmount("");
       setCurrency(startingCurrency);
-      setSelectedCategory(categoryName);
+      setSelectedCategoryId(String(categoryId));
     } else {
       setAmount("");
       setCurrency(startingCurrency);
-      setSelectedCategory("");
+      setSelectedCategoryId("");
     }
     setError(null);
-  }, [budget, categoryName, open, startingCurrency]);
+  }, [budget, categoryId, open, startingCurrency]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,8 +121,8 @@ export const BudgetEditDialog = ({
       return;
     }
 
-    const targetCategoryName = budget?.categoryName || categoryName || selectedCategory;
-    if (!targetCategoryName) {
+    const targetCategoryId = budget?.categoryId ?? categoryId ?? Number(selectedCategoryId);
+    if (!Number.isInteger(targetCategoryId)) {
       setError("Please select a category");
       return;
     }
@@ -124,16 +131,17 @@ export const BudgetEditDialog = ({
 
     try {
       await apiClient.post("/api/budgets", {
-        categoryName: targetCategoryName,
+        categoryId: targetCategoryId,
+        yearMonth,
         amount: amountNum,
         currency,
       });
 
-      toast.success(budget ? "Budget updated successfully" : "Budget created successfully");
+      toast.success(budget?.id ? "Budget updated successfully" : "Budget saved successfully");
       onSuccess();
       onOpenChange(false);
     } catch (err: unknown) {
-      const errorMessage = err && typeof err === "object" && "response" in err && err.response && typeof err.response === "object" && "data" in err.response && err.response.data && typeof err.response.data === "object" && "error" in err.response.data && typeof err.response.data.error === "string" ? err.response.data.error : "Failed to save budget";
+      const errorMessage = err instanceof Error ? err.message : "Failed to save budget";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -141,17 +149,18 @@ export const BudgetEditDialog = ({
     }
   };
 
+  const displayName = budget?.categoryName || categoryName;
+  const saveLabel = budget?.id ? `Update ${monthName} budget` : `Set ${monthName} budget`;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{budget ? "Edit Budget" : "Create Budget"}</DialogTitle>
+          <DialogTitle>{budget?.id ? "Edit Budget" : "Set Budget"}</DialogTitle>
           <DialogDescription>
-            {budget
-              ? `Update budget for ${budget.categoryName}`
-              : categoryName
-                ? `Set budget for ${categoryName}`
-                : "Set a monthly budget for this category"}
+            {displayName
+              ? `${saveLabel} for ${displayName}`
+              : `Set a ${monthName} budget for a category`}
           </DialogDescription>
         </DialogHeader>
 
@@ -164,23 +173,26 @@ export const BudgetEditDialog = ({
               </Alert>
             )}
 
-            {!budget && !categoryName && (
+            {!knownCategory && (
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
                 <Select
-                  value={selectedCategory}
-                  onValueChange={setSelectedCategory}
+                  value={selectedCategoryId}
+                  onValueChange={setSelectedCategoryId}
                   disabled={isLoading || categoriesLoading}
                 >
                   <SelectTrigger id="category">
                     <SelectValue placeholder="Select a category">
-                      {categoriesLoading ? "Loading..." : selectedCategory || "Select a category"}
+                      {categoriesLoading
+                        ? "Loading..."
+                        : categories.find((category) => String(category.id) === selectedCategoryId)?.name ||
+                          "Select a category"}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat}
+                      <SelectItem key={cat.id} value={String(cat.id)}>
+                        {cat.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -227,9 +239,9 @@ export const BudgetEditDialog = ({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading || categoriesLoading || (!budget && !categoryName && !selectedCategory)}>
+            <Button type="submit" disabled={isLoading || categoriesLoading || (!knownCategory && !selectedCategoryId)}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {budget ? "Update" : "Create"}
+              {saveLabel}
             </Button>
           </DialogFooter>
         </form>

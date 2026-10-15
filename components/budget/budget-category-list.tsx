@@ -28,21 +28,40 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { BudgetBar } from "@/components/budget/budget-bar";
 import { SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
+import { budgetMonthLabel, type BudgetPace } from "@/lib/budget/resolve-month";
 
 interface BudgetWithSpending {
-  id: string;
+  id: string | null;
+  categoryId: number;
   categoryName: string;
   amount: number;
   currency: string;
   spent: number;
   remaining: number;
+  overAmount: number;
   percentageUsed: number;
   isOverBudget: boolean;
+  inherited: boolean;
+  inheritedFrom: string | null;
+  pace: BudgetPace | null;
+}
+
+interface DebitCategory {
+  id: number;
+  name: string;
+}
+
+interface UnbudgetedSpend {
+  categoryId: number;
+  categoryName: string;
+  spent: number;
 }
 
 interface BudgetCategoryListProps {
   budgets: BudgetWithSpending[];
-  allCategories: string[];
+  debitCategories: DebitCategory[];
+  unbudgeted: UnbudgetedSpend[];
+  yearMonth: string;
   currency: string;
   overallBudget: number;
   isLoading?: boolean;
@@ -59,16 +78,13 @@ const formatCurrency = (amount: number, currency: string): string => {
   }).format(amount);
 };
 
-const getStatusColor = (percentage: number): string => {
-  if (percentage > 100) {
-    return "text-foreground";
-  }
-  return "text-muted-foreground";
-};
+const paceLabel = (pace: BudgetPace): string => (pace === "ahead" ? "Ahead" : "On track");
 
 export const BudgetCategoryList = ({
   budgets,
-  allCategories,
+  debitCategories,
+  unbudgeted,
+  yearMonth,
   currency,
   overallBudget,
   isLoading,
@@ -76,11 +92,13 @@ export const BudgetCategoryList = ({
   enabledCurrencies = SUPPORTED_CURRENCIES,
 }: BudgetCategoryListProps) => {
   const [editingBudget, setEditingBudget] = useState<BudgetWithSpending | null>(null);
-  const [creatingCategory, setCreatingCategory] = useState<string | null>(null);
+  const [creatingCategory, setCreatingCategory] = useState<DebitCategory | null>(null);
+  const [pickingCategory, setPickingCategory] = useState(false);
   const [deletingBudget, setDeletingBudget] = useState<BudgetWithSpending | null>(null);
+  const monthName = budgetMonthLabel(yearMonth, "MMMM");
 
   const handleDelete = async () => {
-    if (!deletingBudget) return;
+    if (!deletingBudget?.id) return;
 
     try {
       await apiClient.delete(`/api/budgets/${deletingBudget.id}`);
@@ -88,16 +106,14 @@ export const BudgetCategoryList = ({
       onRefresh();
       setDeletingBudget(null);
     } catch (error: unknown) {
-      const errorMessage = error && typeof error === "object" && "response" in error && error.response && typeof error.response === "object" && "data" in error.response && error.response.data && typeof error.response.data === "object" && "error" in error.response.data && typeof error.response.data.error === "string" ? error.response.data.error : "Failed to delete budget";
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete budget";
       toast.error(errorMessage);
     }
   };
 
-  // Create a map of budgets by category name
-  const budgetMap = new Map(budgets.map((b) => [b.categoryName, b]));
-
-  // Get categories without budgets
-  const categoriesWithoutBudgets = allCategories.filter((cat) => !budgetMap.has(cat));
+  const budgetedIds = new Set(budgets.map((budget) => budget.categoryId));
+  const unbudgetedSpend = new Map(unbudgeted.map((row) => [row.categoryId, row.spent]));
+  const categoriesWithoutBudgets = debitCategories.filter((category) => !budgetedIds.has(category.id));
 
   if (isLoading) {
     return (
@@ -121,24 +137,22 @@ export const BudgetCategoryList = ({
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Category Budgets</CardTitle>    
+            <CardTitle>Category Budgets</CardTitle>
+            {debitCategories.length > 0 ? (
+              <Button variant="outline" size="sm" onClick={() => setPickingCategory(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Set budget
+              </Button>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent>
-          {budgets.length === 0 && categoriesWithoutBudgets.length === 0 ? (
+          {debitCategories.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <p className="text-sm text-muted-foreground mb-4">No categories available</p>
               <p className="text-xs text-muted-foreground text-center">
                 Create transaction categories in Settings to set budgets
               </p>
-            </div>
-          ) : budgets.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <p className="text-sm text-muted-foreground mb-4">No budgets set yet</p>
-              <Button onClick={() => setCreatingCategory("")}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Your First Budget
-              </Button>
             </div>
           ) : (
             <Table>
@@ -155,31 +169,39 @@ export const BudgetCategoryList = ({
               </TableHeader>
               <TableBody>
                 {budgets.map((budget) => {
-                  const statusColor = getStatusColor(budget.percentageUsed);
                   const allocationPercentage = overallBudget > 0 ? (budget.amount / overallBudget) * 100 : 0;
 
                   return (
-                    <TableRow key={budget.id}>
-                      <TableCell className="font-medium">{budget.categoryName}</TableCell>
+                    <TableRow key={budget.categoryId}>
+                      <TableCell className="font-medium">
+                        <div>{budget.categoryName}</div>
+                        {budget.inherited && budget.inheritedFrom ? (
+                          <p className="text-xs font-normal text-muted-foreground">
+                            Carried forward from {budgetMonthLabel(budget.inheritedFrom, "MMM yyyy")}
+                          </p>
+                        ) : null}
+                      </TableCell>
                       <TableCell className="text-right">
                         {formatCurrency(budget.amount, currency)}
                       </TableCell>
                       <TableCell className="text-right text-muted-foreground">
                         {allocationPercentage.toFixed(1)}%
                       </TableCell>
-                      <TableCell className={cn("text-right", statusColor)}>
+                      <TableCell className={cn("text-right", budget.isOverBudget ? "text-foreground" : "text-muted-foreground")}>
                         {formatCurrency(budget.spent, currency)}
                       </TableCell>
-                      <TableCell
-                        className="text-right tabular-nums"
-                      >
-                        {formatCurrency(budget.remaining, currency)}
+                      <TableCell className="text-right tabular-nums">
+                        <div>{formatCurrency(budget.remaining, currency)}</div>
+                        {budget.overAmount > 0 ? (
+                          <p className="text-xs text-muted-foreground">Over {formatCurrency(budget.overAmount, currency)}</p>
+                        ) : null}
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
                           <BudgetBar percentage={budget.percentageUsed} />
-                          <span className={cn("text-xs", statusColor)}>
+                          <span className="text-xs text-muted-foreground">
                             {budget.percentageUsed.toFixed(1)}%
+                            {budget.pace ? ` · ${paceLabel(budget.pace)}` : ""}
                           </span>
                         </div>
                       </TableCell>
@@ -189,41 +211,48 @@ export const BudgetCategoryList = ({
                             variant="ghost"
                             size="icon"
                             onClick={() => setEditingBudget(budget)}
+                            aria-label={`Set ${monthName} budget`}
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeletingBudget(budget)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {budget.id ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDeletingBudget(budget)}
+                              aria-label="Delete budget"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          ) : null}
                         </div>
                       </TableCell>
                     </TableRow>
                   );
                 })}
-                {categoriesWithoutBudgets.map((category) => (
-                  <TableRow key={category} className="opacity-60">
-                    <TableCell className="font-medium">{category}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">Unlimited</TableCell>
-                    <TableCell className="text-right text-muted-foreground">-</TableCell>
-                    <TableCell className="text-right">-</TableCell>
-                    <TableCell className="text-right">-</TableCell>
-                    <TableCell>-</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCreatingCategory(category)}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Set Budget
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {categoriesWithoutBudgets.map((category) => {
+                  const spent = unbudgetedSpend.get(category.id) ?? 0;
+                  return (
+                    <TableRow key={category.id}>
+                      <TableCell className="font-medium">{category.name}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">No budget</TableCell>
+                      <TableCell className="text-right text-muted-foreground">-</TableCell>
+                      <TableCell className="text-right">{formatCurrency(spent, currency)}</TableCell>
+                      <TableCell className="text-right">-</TableCell>
+                      <TableCell>-</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setCreatingCategory(category)}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Set budget
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -231,15 +260,18 @@ export const BudgetCategoryList = ({
       </Card>
 
       <BudgetEditDialog
-        open={editingBudget !== null || creatingCategory !== null}
+        open={editingBudget !== null || creatingCategory !== null || pickingCategory}
         onOpenChange={(open) => {
           if (!open) {
             setEditingBudget(null);
             setCreatingCategory(null);
+            setPickingCategory(false);
           }
         }}
         budget={editingBudget || undefined}
-        categoryName={creatingCategory || undefined}
+        categoryId={creatingCategory?.id}
+        categoryName={creatingCategory?.name}
+        yearMonth={yearMonth}
         currencies={enabledCurrencies}
         defaultCurrency={currency}
         onSuccess={onRefresh}
@@ -250,8 +282,8 @@ export const BudgetCategoryList = ({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Budget</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the budget for {deletingBudget?.categoryName}? This
-              action cannot be undone.
+              Delete the {monthName} budget for {deletingBudget?.categoryName}? This month will show the
+              earlier cap again when one exists. Other months stay as they are.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -2,12 +2,15 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BudgetBar } from "@/components/budget/budget-bar";
+import type { BudgetPace } from "@/lib/budget/resolve-month";
 
 interface BudgetSummaryCardProps {
   overallBudget: number;
   overallSpent: number;
   overallRemaining: number;
   overallPercentageUsed: number;
+  unbudgetedSpent?: number;
+  pace?: BudgetPace | null;
   currency: string;
   isLoading?: boolean;
 }
@@ -21,11 +24,15 @@ const formatCurrency = (amount: number, currency: string): string => {
   }).format(amount);
 };
 
+const paceLabel = (pace: BudgetPace): string => (pace === "ahead" ? "Ahead" : "On track");
+
 export const BudgetSummaryCard = ({
   overallBudget,
   overallSpent,
   overallRemaining,
   overallPercentageUsed,
+  unbudgetedSpent = 0,
+  pace,
   currency,
   isLoading,
 }: BudgetSummaryCardProps) => {
@@ -59,6 +66,7 @@ export const BudgetSummaryCard = ({
         </div>
 
         <BudgetBar percentage={overallPercentageUsed} />
+        {pace ? <p className="text-xs text-muted-foreground">{paceLabel(pace)}</p> : null}
 
         <div className="space-y-2 text-sm">
           <div className="flex justify-between gap-4">
@@ -71,6 +79,12 @@ export const BudgetSummaryCard = ({
             <span className="text-muted-foreground">Budget</span>
             <span className="font-medium tabular-nums">{formatCurrency(overallBudget, currency)}</span>
           </div>
+          {unbudgetedSpent !== 0 ? (
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Unbudgeted</span>
+              <span className="font-medium tabular-nums">{formatCurrency(unbudgetedSpent, currency)}</span>
+            </div>
+          ) : null}
         </div>
       </CardContent>
     </Card>

@@ -5,47 +5,60 @@ import { apiClient } from "@/lib/api-client";
 import { Card, CardContent } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useDisplayCurrencies } from "@/hooks/use-display-currencies";
-import { format, startOfMonth, endOfDay } from "date-fns";
+import { format } from "date-fns";
 import { BudgetSummaryCard } from "@/components/budget/budget-summary-card";
 import { BudgetCategoryList } from "@/components/budget/budget-category-list";
 import { BudgetCharts } from "@/components/budget/budget-charts";
 import { MonthSelector } from "@/components/budget/month-selector";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Wallet } from "lucide-react";
+import type { BudgetPace } from "@/lib/budget/resolve-month";
 
 interface BudgetWithSpending {
-  id: string;
+  id: string | null;
+  categoryId: number;
   categoryName: string;
   amount: number;
   currency: string;
   spent: number;
   remaining: number;
+  overAmount: number;
   percentageUsed: number;
   isOverBudget: boolean;
+  inherited: boolean;
+  inheritedFrom: string | null;
+  pace: BudgetPace | null;
 }
 
 interface BudgetsResponse {
   budgets: BudgetWithSpending[];
+  unbudgeted: Array<{ categoryId: number; categoryName: string; spent: number }>;
+  unbudgetedSpent: number;
   overallBudget: number;
   overallSpent: number;
   overallRemaining: number;
   overallPercentageUsed: number;
   currency: string;
   month: string;
+  pace: BudgetPace | null;
+}
+
+interface DebitCategory {
+  id: number;
+  name: string;
+  transactionType: "debit" | "credit" | null;
 }
 
 const BudgetPage = () => {
   const { enabledCurrencies, selectedCurrency, selectCurrency, isReady } = useDisplayCurrencies();
   const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), "yyyy-MM"));
   const [budgetsData, setBudgetsData] = useState<BudgetsResponse | null>(null);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<DebitCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const isCurrentMonth = selectedMonth === format(new Date(), "yyyy-MM");
-  const isPastMonth = selectedMonth < format(new Date(), "yyyy-MM");
 
-  // Fetch budgets data
   const fetchBudgets = async () => {
     setIsLoading(true);
     setError(null);
@@ -54,14 +67,14 @@ const BudgetPage = () => {
         apiClient.get<BudgetsResponse>(
           `/api/budgets?currency=${selectedCurrency}&month=${selectedMonth}`
         ),
-        apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
+        apiClient.get<{ categories: DebitCategory[] }>("/api/transaction-categories?type=debit"),
       ]);
 
       setBudgetsData(budgetsRes);
-      setCategories(categoriesRes.categories.map((c) => c.name));
+      setCategories(categoriesRes.categories.filter((category) => category.transactionType === "debit"));
     } catch (err: unknown) {
       console.error("Error fetching budgets:", err);
-      const errorMessage = err && typeof err === "object" && "response" in err && err.response && typeof err.response === "object" && "data" in err.response && err.response.data && typeof err.response.data === "object" && "error" in err.response.data && typeof err.response.data.error === "string" ? err.response.data.error : "Failed to load budgets";
+      const errorMessage = err instanceof Error ? err.message : "Failed to load budgets";
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -123,8 +136,6 @@ const BudgetPage = () => {
         </div>
       </div>
 
-
-
       {isLoading ? (
         <div className="space-y-6">
           <Skeleton className="h-48 w-full" />
@@ -138,10 +149,11 @@ const BudgetPage = () => {
               overallSpent={budgetsData.overallSpent}
               overallRemaining={budgetsData.overallRemaining}
               overallPercentageUsed={budgetsData.overallPercentageUsed}
+              unbudgetedSpent={budgetsData.unbudgetedSpent}
+              pace={isCurrentMonth ? budgetsData.pace : null}
               currency={budgetsData.currency}
               isLoading={isLoading}
             />
-
 
             <BudgetCharts
               budgets={budgetsData.budgets}
@@ -152,12 +164,13 @@ const BudgetPage = () => {
               currency={budgetsData.currency}
               isLoading={isLoading}
             />
-
           </div>
 
           <BudgetCategoryList
             budgets={budgetsData.budgets}
-            allCategories={categories}
+            debitCategories={categories}
+            unbudgeted={budgetsData.unbudgeted}
+            yearMonth={selectedMonth}
             currency={budgetsData.currency}
             overallBudget={budgetsData.overallBudget}
             isLoading={isLoading}

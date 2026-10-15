@@ -236,6 +236,32 @@ export const CategoryEditDialog = ({
   const [transactionType, setTransactionType] = useState<"debit" | "credit" | "transfer" | "">("");
   const [color, setColor] = useState("");
   const [icon, setIcon] = useState("");
+  const [transferCount, setTransferCount] = useState(0);
+
+  useEffect(() => {
+    if (!open || type !== "transaction" || !category) {
+      setTransferCount(0);
+      return;
+    }
+
+    let cancelled = false;
+    apiClient
+      .get<{ usage: { transfers: number } }>(`/api/transaction-categories?id=${category.id}`)
+      .then((data) => {
+        if (!cancelled) {
+          setTransferCount(data.usage.transfers);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTransferCount(0);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, type, category]);
 
   useEffect(() => {
     if (category) {
@@ -360,6 +386,11 @@ export const CategoryEditDialog = ({
               <p className="text-xs text-muted-foreground">
                 Debit categories are for expenses, credit categories are for income. Transfer is a special category that bypasses type constraints.
               </p>
+              {transferCount > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {transferCount} transfer{transferCount === 1 ? "" : "s"} use this category. Changing its type removes it from the transfer form. Existing transfers keep it until you edit them.
+                </p>
+              ) : null}
             </div>
           )}
 

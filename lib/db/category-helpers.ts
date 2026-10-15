@@ -1,5 +1,36 @@
-import { eq, or, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb, schema } from "./index";
+
+export const loadTransactionCategoryById = (db: ReturnType<typeof getDb>, categoryId: number) => {
+  return db
+    .select()
+    .from(schema.transactionCategories)
+    .where(eq(schema.transactionCategories.id, categoryId))
+    .get();
+};
+
+export const isValidCategoryIdForType = (
+  db: ReturnType<typeof getDb>,
+  categoryId: number,
+  transactionType: "debit" | "credit"
+): boolean => {
+  const categoryRecord = loadTransactionCategoryById(db, categoryId);
+  if (!categoryRecord) {
+    return false;
+  }
+  if (categoryRecord.transactionType === null) {
+    return true;
+  }
+  return categoryRecord.transactionType === transactionType;
+};
+
+export const isValidTransferCategoryId = (db: ReturnType<typeof getDb>, categoryId: number): boolean => {
+  const categoryRecord = loadTransactionCategoryById(db, categoryId);
+  if (!categoryRecord) {
+    return false;
+  }
+  return categoryRecord.transactionType === null;
+};
 
 /**
  * Check if a transaction category exists in the database

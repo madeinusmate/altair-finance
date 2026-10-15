@@ -1,68 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, and, gte, lte, ne } from "drizzle-orm";
-import { getDb, schema } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
-import { convertAmount, getFxSnapshot } from "@/lib/fx";
+import { getFxSnapshot } from "@/lib/fx";
 import { type SupportedCurrency, isSupportedCurrency } from "@/lib/currencies";
-import { startOfMonth, endOfDay, format } from "date-fns";
-
-// Calculate spending for a category in current month
-const calculateCategorySpending = async (
-  db: ReturnType<typeof getDb>,
-  categoryName: string,
-  startDate: Date,
-  endDate: Date,
-  targetCurrency: SupportedCurrency,
-  fxSnapshot: Awaited<ReturnType<typeof getFxSnapshot>>
-): Promise<number> => {
-  // Exclude Transfer category
-  if (categoryName === "Transfer") {
-    return 0;
-  }
-
-  const transactions = db
-    .select({
-      amount: schema.transactions.amount,
-      accountId: schema.transactions.accountId,
-    })
-    .from(schema.transactions)
-    .innerJoin(schema.accounts, eq(schema.transactions.accountId, schema.accounts.id))
-    .where(
-      and(
-        eq(schema.transactions.type, "debit"),
-        eq(schema.transactions.category, categoryName),
-        gte(schema.transactions.date, startDate),
-        lte(schema.transactions.date, endDate),
-        ne(schema.accounts.type, "investment")
-      )
-    )
-    .all();
-
-  const accounts = db.select().from(schema.accounts).all();
-  const accountCurrencyMap = new Map(accounts.map((acc) => [acc.id, acc.currency]));
-
-  let totalSpent = 0;
-  transactions.forEach((transaction) => {
-    const accountCurrency = accountCurrencyMap.get(transaction.accountId);
-    if (!accountCurrency || !isSupportedCurrency(accountCurrency)) {
-      return;
-    }
-
-    try {
-      const convertedAmount = convertAmount(
-        transaction.amount,
-        accountCurrency,
-        targetCurrency,
-        fxSnapshot.rates
-      );
-      totalSpent += convertedAmount;
-    } catch (error) {
-      console.error(`Error converting amount:`, error);
-    }
-  });
-
-  return totalSpent;
-};
+import { loadMonthBudget } from "@/lib/budget/month-summary";
+import { currentYearMonth } from "@/lib/budget/resolve-month";
 
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
@@ -80,81 +22,28 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
 
     const db = getDb(key);
     const fxSnapshot = await getFxSnapshot(db);
+    const month = currentYearMonth();
+    const summary = loadMonthBudget(db, month, currency, fxSnapshot);
 
-    // Current month date range
-    const now = new Date();
-    const startDate = startOfMonth(now);
-    const endDate = endOfDay(now);
-    const month = format(now, "yyyy-MM");
-
-    // Get all budgets
-    const budgets = db.select().from(schema.budgets).all();
-
-    if (budgets.length === 0) {
-      return NextResponse.json({
-        overallBudget: 0,
-        overallSpent: 0,
-        overallRemaining: 0,
-        overallPercentageUsed: 0,
-        currency,
-        status: "under" as const,
-        month,
-      });
-    }
-
-    // Calculate spending for each budget and convert amounts
-    let overallBudget = 0;
-    let overallSpent = 0;
-
-    await Promise.all(
-      budgets.map(async (budget) => {
-        // Convert budget amount to target currency
-        let budgetAmount = budget.amount;
-        if (budget.currency !== currency && isSupportedCurrency(budget.currency)) {
-          try {
-            budgetAmount = convertAmount(budget.amount, budget.currency, currency, fxSnapshot.rates);
-          } catch (error) {
-            console.error(`Error converting budget amount:`, error);
-          }
-        }
-
-        overallBudget += budgetAmount;
-
-        // Calculate spending
-        const spent = await calculateCategorySpending(
-          db,
-          budget.categoryName,
-          startDate,
-          endDate,
-          currency,
-          fxSnapshot
-        );
-
-        overallSpent += spent;
-      })
-    );
-
-    const overallRemaining = Math.max(0, overallBudget - overallSpent);
-    const overallPercentageUsed = overallBudget > 0 ? (overallSpent / overallBudget) * 100 : 0;
-
-    // Determine status
     let status: "under" | "approaching" | "over";
-    if (overallPercentageUsed > 100) {
+    if (summary.overallPercentageUsed > 100) {
       status = "over";
-    } else if (overallPercentageUsed >= 75) {
+    } else if (summary.overallPercentageUsed >= 75) {
       status = "approaching";
     } else {
       status = "under";
     }
 
     return NextResponse.json({
-      overallBudget,
-      overallSpent,
-      overallRemaining,
-      overallPercentageUsed,
-      currency,
+      overallBudget: summary.overallBudget,
+      overallSpent: summary.overallSpent,
+      overallRemaining: summary.overallRemaining,
+      overallPercentageUsed: summary.overallPercentageUsed,
+      unbudgetedSpent: summary.unbudgetedSpent,
+      currency: summary.currency,
       status,
-      month,
+      month: summary.month,
+      pace: summary.pace,
     });
   } catch (error) {
     console.error("Error fetching budget summary:", error);

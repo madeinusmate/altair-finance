@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, asc, or, isNull } from "drizzle-orm";
+import { eq, asc, or, isNull, sql, and } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
+import { isValidCategoryIdForType, isValidTransferCategoryId, loadTransactionCategoryById } from "@/lib/db/category-helpers";
 import {
   validateCategoryName,
   validateColor,
@@ -19,8 +20,47 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
   try {
     const { searchParams } = new URL(request.url);
     const typeFilter = searchParams.get("type"); // "debit" | "credit" | null
+    const idParam = searchParams.get("id");
 
     const db = getDb(key);
+
+    if (idParam) {
+      const id = Number(idParam);
+      if (!Number.isInteger(id)) {
+        return NextResponse.json({ error: "Invalid category ID" }, { status: 400 });
+      }
+
+      const category = db
+        .select()
+        .from(schema.transactionCategories)
+        .where(eq(schema.transactionCategories.id, id))
+        .get();
+
+      if (!category) {
+        return NextResponse.json({ error: "Category not found" }, { status: 404 });
+      }
+
+      const debitRow = db
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.transactions)
+        .where(and(eq(schema.transactions.categoryId, id), eq(schema.transactions.type, "debit")))
+        .get();
+      const creditRow = db
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.transactions)
+        .where(and(eq(schema.transactions.categoryId, id), eq(schema.transactions.type, "credit")))
+        .get();
+
+      const usage = countReferences(db, id);
+      return NextResponse.json({
+        category,
+        usage: {
+          ...usage,
+          debitTransactions: Number(debitRow?.count ?? 0),
+          creditTransactions: Number(creditRow?.count ?? 0),
+        },
+      });
+    }
     
     // Filter by type if provided
     let categories;
@@ -169,22 +209,6 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Category not found" }, { status: 404 });
     }
 
-    // If trying to change transactionType, check if category is in use
-    if (transactionType !== undefined && transactionType !== existing.transactionType) {
-      const transactionsUsingCategory = db
-        .select()
-        .from(schema.transactions)
-        .where(eq(schema.transactions.category, existing.name))
-        .all();
-
-      if (transactionsUsingCategory.length > 0) {
-        return NextResponse.json(
-          { error: "Cannot change transaction type: category is in use by existing transactions" },
-          { status: 400 }
-        );
-      }
-    }
-
     const updates: Partial<{
       name: string;
       transactionType: "debit" | "credit" | null;
@@ -255,6 +279,37 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       updates.icon = icon?.trim() || null;
     }
 
+    const nextType = updates.transactionType !== undefined ? updates.transactionType : existing.transactionType;
+    if (nextType !== existing.transactionType) {
+      const transactionsUsingCategory = db
+        .select({ id: schema.transactions.id })
+        .from(schema.transactions)
+        .where(eq(schema.transactions.categoryId, id))
+        .all();
+
+      if (transactionsUsingCategory.length > 0) {
+        return NextResponse.json(
+          { error: "Cannot change transaction type: category is in use by existing transactions" },
+          { status: 400 }
+        );
+      }
+
+      if (nextType !== "debit") {
+        const budgetsUsingCategory = db
+          .select({ id: schema.budgets.id })
+          .from(schema.budgets)
+          .where(eq(schema.budgets.categoryId, id))
+          .all();
+
+        if (budgetsUsingCategory.length > 0) {
+          return NextResponse.json(
+            { error: "Cannot change transaction type: category is used by a budget" },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     db.update(schema.transactionCategories)
       .set(updates)
       .where(eq(schema.transactionCategories.id, id))
@@ -274,6 +329,45 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       { status: 500 }
     );
   }
+};
+
+const countMatching = (row: { count: number } | undefined): number => Number(row?.count ?? 0);
+
+const countReferences = (db: ReturnType<typeof getDb>, categoryId: number) => {
+  const transactions = db
+    .select({ count: sql<number>`count(*)` })
+    .from(schema.transactions)
+    .where(eq(schema.transactions.categoryId, categoryId))
+    .get();
+  const transfers = db
+    .select({ count: sql<number>`count(*)` })
+    .from(schema.transfers)
+    .where(eq(schema.transfers.categoryId, categoryId))
+    .get();
+  const budgets = db
+    .select({ count: sql<number>`count(*)` })
+    .from(schema.budgets)
+    .where(eq(schema.budgets.categoryId, categoryId))
+    .get();
+
+  return {
+    transactions: countMatching(transactions),
+    transfers: countMatching(transfers),
+    budgets: countMatching(budgets),
+  };
+};
+
+const readReassignId = (value: unknown): number | null => {
+  if (value == null || value === "") {
+    return null;
+  }
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isInteger(parsed) ? parsed : null;
+};
+
+const isForeignKeyError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : "";
+  return message.toLowerCase().includes("foreign key");
 };
 
 // DELETE transaction category
@@ -296,86 +390,121 @@ export const DELETE = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Invalid category ID" }, { status: 400 });
     }
 
+    let reassignRaw: unknown = searchParams.get("reassignToCategoryId");
+    if (reassignRaw == null) {
+      try {
+        const body = await request.json();
+        reassignRaw = body?.reassignToCategoryId;
+      } catch {
+        reassignRaw = null;
+      }
+    }
+
     const db = getDb(key);
-
-    // Verify category exists
-    const category = db
-      .select()
-      .from(schema.transactionCategories)
-      .where(eq(schema.transactionCategories.id, id))
-      .get();
-
+    const category = loadTransactionCategoryById(db, id);
     if (!category) {
       return NextResponse.json({ error: "Category not found" }, { status: 404 });
     }
 
-    // Check if category is in use
-    const transactionsUsingCategory = db
-      .select()
-      .from(schema.transactions)
-      .where(eq(schema.transactions.category, category.name))
-      .all();
+    const counts = countReferences(db, id);
+    const inUse = counts.transactions > 0 || counts.transfers > 0 || counts.budgets > 0;
+    const reassignToCategoryId = readReassignId(reassignRaw);
 
-    const transfersUsingCategory = db
-      .select()
-      .from(schema.transfers)
-      .where(eq(schema.transfers.category, category.name))
-      .all();
+    if (inUse && reassignToCategoryId == null) {
+      return NextResponse.json(
+        {
+          error: "Category is still in use. Choose a category to move the existing rows to.",
+          ...counts,
+        },
+        { status: 409 }
+      );
+    }
 
-    const isInUse = transactionsUsingCategory.length > 0 || transfersUsingCategory.length > 0;
-
-    if (isInUse) {
-      // Find or create "Other Expenses" category for reassignment
-      let otherExpenses = db
-        .select()
-        .from(schema.transactionCategories)
-        .where(eq(schema.transactionCategories.name, "Other Expenses"))
-        .get();
-
-      if (!otherExpenses) {
-        // Create "Other Expenses" if it doesn't exist
-        const now = new Date();
-        const newOtherExpenses = {
-          name: "Other Expenses",
-          color: null,
-          icon: null,
-          createdAt: now,
-          updatedAt: now,
-        };
-        otherExpenses = db
-          .insert(schema.transactionCategories)
-          .values(newOtherExpenses)
-          .returning()
-          .get();
+    if (reassignToCategoryId != null) {
+      if (reassignToCategoryId === id) {
+        return NextResponse.json({ error: "Choose a different category" }, { status: 409 });
       }
 
-      // Reassign transactions
-      if (transactionsUsingCategory.length > 0) {
-        db.update(schema.transactions)
-          .set({ category: "Other Expenses" })
-          .where(eq(schema.transactions.category, category.name))
-          .run();
+      const destination = loadTransactionCategoryById(db, reassignToCategoryId);
+      if (!destination) {
+        return NextResponse.json({ error: "Destination category not found" }, { status: 404 });
       }
 
-      // Reassign transfers
-      if (transfersUsingCategory.length > 0) {
-        db.update(schema.transfers)
-          .set({ category: "Other Expenses" })
-          .where(eq(schema.transfers.category, category.name))
-          .run();
+      const referencedTransactions = db
+        .select({ type: schema.transactions.type })
+        .from(schema.transactions)
+        .where(eq(schema.transactions.categoryId, id))
+        .all();
+
+      for (const transaction of referencedTransactions) {
+        if (!isValidCategoryIdForType(db, reassignToCategoryId, transaction.type)) {
+          return NextResponse.json(
+            { error: "Destination category cannot accept every referenced transaction", ...counts },
+            { status: 409 }
+          );
+        }
+      }
+
+      if (counts.transfers > 0 && !isValidTransferCategoryId(db, reassignToCategoryId)) {
+        return NextResponse.json(
+          { error: "Transfers can only move to a category with no transaction type", ...counts },
+          { status: 409 }
+        );
+      }
+
+      if (counts.budgets > 0) {
+        if (destination.transactionType !== "debit") {
+          return NextResponse.json(
+            { error: "Budgets can only move to a debit category", ...counts },
+            { status: 409 }
+          );
+        }
+
+        const destinationBudgets = db
+          .select({ id: schema.budgets.id })
+          .from(schema.budgets)
+          .where(eq(schema.budgets.categoryId, reassignToCategoryId))
+          .all();
+
+        if (destinationBudgets.length > 0) {
+          return NextResponse.json(
+            { error: "Destination category already has a budget", ...counts },
+            { status: 409 }
+          );
+        }
       }
     }
 
-    // Delete the category
-    db.delete(schema.transactionCategories)
-      .where(eq(schema.transactionCategories.id, id))
-      .run();
+    try {
+      db.transaction((tx) => {
+        if (reassignToCategoryId != null) {
+          tx.update(schema.transactions)
+            .set({ categoryId: reassignToCategoryId })
+            .where(eq(schema.transactions.categoryId, id))
+            .run();
+          tx.update(schema.transfers)
+            .set({ categoryId: reassignToCategoryId })
+            .where(eq(schema.transfers.categoryId, id))
+            .run();
+          tx.update(schema.budgets)
+            .set({ categoryId: reassignToCategoryId })
+            .where(eq(schema.budgets.categoryId, id))
+            .run();
+        }
 
-    return NextResponse.json({
-      success: true,
-      reassigned: isInUse,
-      reassignedTo: isInUse ? "Other Expenses" : undefined,
-    });
+        tx.delete(schema.transactionCategories).where(eq(schema.transactionCategories.id, id)).run();
+      });
+    } catch (error) {
+      if (isForeignKeyError(error)) {
+        return NextResponse.json(
+          { error: "Category is still referenced", ...counts },
+          { status: 409 }
+        );
+      }
+      throw error;
+    }
+
+    return NextResponse.json({ success: true, reassigned: reassignToCategoryId != null });
   } catch (error) {
     console.error("Error deleting transaction category:", error);
     return NextResponse.json(

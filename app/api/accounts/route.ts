@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { confirmIntent } from "@/lib/intent-confirm";
@@ -314,7 +314,15 @@ export const DELETE = async (request: NextRequest): Promise<NextResponse> => {
 
     const db = getDb(key);
 
-    db.delete(schema.accounts).where(eq(schema.accounts.id, id)).run();
+    db.transaction((tx) => {
+      tx.delete(schema.transactions).where(eq(schema.transactions.accountId, id)).run();
+      tx.delete(schema.transfers)
+        .where(or(eq(schema.transfers.fromAccountId, id), eq(schema.transfers.toAccountId, id)))
+        .run();
+      tx.delete(schema.balanceHistory).where(eq(schema.balanceHistory.accountId, id)).run();
+      tx.delete(schema.investmentHistory).where(eq(schema.investmentHistory.accountId, id)).run();
+      tx.delete(schema.accounts).where(eq(schema.accounts.id, id)).run();
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

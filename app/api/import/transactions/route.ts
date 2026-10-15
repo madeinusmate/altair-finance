@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
-import { isValidTransactionCategory, isValidTransactionCategoryForType } from "@/lib/db/category-helpers";
+import { isValidCategoryIdForType, isValidTransactionCategory } from "@/lib/db/category-helpers";
 
 type ImportTransactionRow =
   | {
@@ -128,20 +128,30 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
           }
         }
 
-        // Calculate exchange rate
         const exchangeRate = fromAccount.currency !== toAccount.currency 
           ? row.toAmount / row.fromAmount 
           : null;
+
+        const transferCategory = db
+          .select()
+          .from(schema.transactionCategories)
+          .where(eq(schema.transactionCategories.name, "Transfer"))
+          .get();
+        if (!transferCategory) {
+          throw new Error(`Row ${index + 1}: Transfer category is missing`);
+        }
 
         db.insert(schema.transfers)
           .values({
             id: uuidv4(),
             fromAccountId: fromAccount.id,
             toAccountId: toAccount.id,
-            amount: Number(row.fromAmount), // Keep for backward compatibility
+            amount: Number(row.fromAmount),
             fromAmount: Number(row.fromAmount),
             toAmount: Number(row.toAmount),
             exchangeRate: exchangeRate,
+            category: transferCategory.name,
+            categoryId: transferCategory.id,
             description: row.description || null,
             date: parsedDate,
             createdAt: now,
@@ -165,10 +175,13 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
           const categoryNames = validCategories.map((c) => c.name).join(", ");
           throw new Error(`Row ${index + 1}: Invalid category. Valid categories: ${categoryNames}`);
         }
-        // Validate category matches transaction type (flag for review, don't reject)
-        if (!isValidTransactionCategoryForType(db, row.category, row.type as "debit" | "credit")) {
-          // This is a warning, not an error - we'll still import but flag it
-          console.warn(`Row ${index + 1}: Category "${row.category}" does not match transaction type "${row.type}"`);
+        const categoryRecord = db
+          .select()
+          .from(schema.transactionCategories)
+          .where(eq(schema.transactionCategories.name, row.category))
+          .get();
+        if (!categoryRecord || !isValidCategoryIdForType(db, categoryRecord.id, row.type as "debit" | "credit")) {
+          throw new Error(`Row ${index + 1}: Category "${row.category}" does not match transaction type "${row.type}"`);
         }
 
         db.insert(schema.transactions)
@@ -176,7 +189,8 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
             id: uuidv4(),
             accountId: account.id,
             type: row.type,
-            category: row.category,
+            category: categoryRecord.name,
+            categoryId: categoryRecord.id,
             amount: Number(row.amount),
             description: row.description || null,
             date: parsedDate,

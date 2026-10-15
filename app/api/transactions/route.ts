@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { eq, desc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
-import { isValidTransactionCategory, isValidTransactionCategoryForType } from "@/lib/db/category-helpers";
+import { isValidCategoryIdForType, loadTransactionCategoryById } from "@/lib/db/category-helpers";
+import { getTransactionById, listTransactions } from "@/lib/db/ledger-rows";
 
-// GET all transactions or by account
+const readCategoryId = (value: unknown): number | null => {
+  const categoryId = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isInteger(categoryId)) {
+    return null;
+  }
+  return categoryId;
+};
+
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
   if (!key) {
@@ -15,33 +23,14 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
   try {
     const { searchParams } = new URL(request.url);
     const accountId = searchParams.get("accountId");
-
     const db = getDb(key);
-
-    let transactions;
-    if (accountId) {
-      transactions = db
-        .select()
-        .from(schema.transactions)
-        .where(eq(schema.transactions.accountId, accountId))
-        .orderBy(desc(schema.transactions.date))
-        .all();
-    } else {
-      transactions = db
-        .select()
-        .from(schema.transactions)
-        .orderBy(desc(schema.transactions.date))
-        .all();
-    }
-
-    return NextResponse.json(transactions);
+    return NextResponse.json(listTransactions(db, accountId));
   } catch (error) {
     console.error("Error fetching transactions:", error);
     return NextResponse.json({ error: "Failed to fetch transactions" }, { status: 500 });
   }
 };
 
-// POST create new transaction
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
   if (!key) {
@@ -50,11 +39,12 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { accountId, type, category, amount, description, date } = body;
+    const { accountId, type, amount, description, date } = body;
+    const categoryId = readCategoryId(body.categoryId);
 
-    if (!accountId || !type || !category || amount === undefined || !date) {
+    if (!accountId || !type || categoryId == null || amount === undefined || !date) {
       return NextResponse.json(
-        { error: "Missing required fields: accountId, type, category, amount, date" },
+        { error: "Missing required fields: accountId, type, categoryId, amount, date" },
         { status: 400 }
       );
     }
@@ -64,24 +54,14 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     }
 
     const db = getDb(key);
-
-    // Validate category exists and matches transaction type
-    if (!isValidTransactionCategoryForType(db, category, type as "debit" | "credit")) {
-      const validCategories = db
-        .select()
-        .from(schema.transactionCategories)
-        .where(
-          eq(schema.transactionCategories.transactionType, type as "debit" | "credit")
-        )
-        .all();
-      const categoryNames = validCategories.map((c) => c.name).join(", ");
+    const category = loadTransactionCategoryById(db, categoryId);
+    if (!category || !isValidCategoryIdForType(db, categoryId, type as "debit" | "credit")) {
       return NextResponse.json(
-        { error: `Invalid category for ${type} transaction. Valid categories: ${categoryNames || "none"}` },
+        { error: `Invalid category for ${type} transaction` },
         { status: 400 }
       );
     }
 
-    // Verify account exists and is a transaction account
     const account = db.select().from(schema.accounts).where(eq(schema.accounts.id, accountId)).get();
     if (!account) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
@@ -96,27 +76,27 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     const now = new Date();
     const id = uuidv4();
 
-    const newTransaction = {
-      id,
-      accountId,
-      type: type as "debit" | "credit",
-      category,
-      amount: Number(amount),
-      description: description || null,
-      date: new Date(date),
-      createdAt: now,
-    };
+    db.insert(schema.transactions)
+      .values({
+        id,
+        accountId,
+        type: type as "debit" | "credit",
+        category: category.name,
+        categoryId,
+        amount: Number(amount),
+        description: description || null,
+        date: new Date(date),
+        createdAt: now,
+      })
+      .run();
 
-    db.insert(schema.transactions).values(newTransaction).run();
-
-    return NextResponse.json(newTransaction, { status: 201 });
+    return NextResponse.json(getTransactionById(db, id), { status: 201 });
   } catch (error) {
     console.error("Error creating transaction:", error);
     return NextResponse.json({ error: "Failed to create transaction" }, { status: 500 });
   }
 };
 
-// PUT update transaction
 export const PUT = async (request: NextRequest): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
   if (!key) {
@@ -125,15 +105,16 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { id, type, category, amount, description, date } = body;
+    const { id, type, amount, description, date } = body;
+    const categoryId = readCategoryId(body.categoryId);
 
     if (!id) {
       return NextResponse.json({ error: "Transaction ID is required" }, { status: 400 });
     }
 
-    if (!type || !category || amount === undefined || !date) {
+    if (!type || categoryId == null || amount === undefined || !date) {
       return NextResponse.json(
-        { error: "Missing required fields: type, category, amount, date" },
+        { error: "Missing required fields: type, categoryId, amount, date" },
         { status: 400 }
       );
     }
@@ -143,19 +124,10 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
     }
 
     const db = getDb(key);
-
-    // Validate category exists and matches transaction type
-    if (!isValidTransactionCategoryForType(db, category, type as "debit" | "credit")) {
-      const validCategories = db
-        .select()
-        .from(schema.transactionCategories)
-        .where(
-          eq(schema.transactionCategories.transactionType, type as "debit" | "credit")
-        )
-        .all();
-      const categoryNames = validCategories.map((c) => c.name).join(", ");
+    const category = loadTransactionCategoryById(db, categoryId);
+    if (!category || !isValidCategoryIdForType(db, categoryId, type as "debit" | "credit")) {
       return NextResponse.json(
-        { error: `Invalid category for ${type} transaction. Valid categories: ${categoryNames || "none"}` },
+        { error: `Invalid category for ${type} transaction` },
         { status: 400 }
       );
     }
@@ -165,7 +137,6 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Amount must be a positive number" }, { status: 400 });
     }
 
-    // Verify transaction exists
     const existingTransaction = db
       .select()
       .from(schema.transactions)
@@ -176,30 +147,25 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
-    const updates = {
-      type: type as "debit" | "credit",
-      category,
-      amount: amountValue,
-      description: description || null,
-      date: new Date(date),
-    };
-
-    db.update(schema.transactions).set(updates).where(eq(schema.transactions.id, id)).run();
-
-    const updated = db
-      .select()
-      .from(schema.transactions)
+    db.update(schema.transactions)
+      .set({
+        type: type as "debit" | "credit",
+        category: category.name,
+        categoryId,
+        amount: amountValue,
+        description: description || null,
+        date: new Date(date),
+      })
       .where(eq(schema.transactions.id, id))
-      .get();
+      .run();
 
-    return NextResponse.json(updated);
+    return NextResponse.json(getTransactionById(db, id));
   } catch (error) {
     console.error("Error updating transaction:", error);
     return NextResponse.json({ error: "Failed to update transaction" }, { status: 500 });
   }
 };
 
-// DELETE transaction
 export const DELETE = async (request: NextRequest): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
   if (!key) {
@@ -215,9 +181,7 @@ export const DELETE = async (request: NextRequest): Promise<NextResponse> => {
     }
 
     const db = getDb(key);
-
     db.delete(schema.transactions).where(eq(schema.transactions.id, id)).run();
-
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting transaction:", error);

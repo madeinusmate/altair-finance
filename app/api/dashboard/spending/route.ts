@@ -37,10 +37,18 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     const db = getDb(key);
     const fxSnapshot = await getFxSnapshot(db);
 
-    // Get all debit transactions in date range
     const transactions = db
-      .select()
+      .select({
+        categoryId: schema.transactions.categoryId,
+        category: schema.transactionCategories.name,
+        amount: schema.transactions.amount,
+        accountId: schema.transactions.accountId,
+      })
       .from(schema.transactions)
+      .innerJoin(
+        schema.transactionCategories,
+        eq(schema.transactions.categoryId, schema.transactionCategories.id)
+      )
       .where(
         and(
           eq(schema.transactions.type, "debit"),
@@ -50,14 +58,15 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       )
       .all();
 
-    // Get account currencies for conversion
     const accounts = db.select().from(schema.accounts).all();
     const accountCurrencyMap = new Map(accounts.map((acc) => [acc.id, acc.currency]));
 
-    // Aggregate spending by category
-    const categoryMap = new Map<string, number>();
+    const categoryMap = new Map<number, { category: string; amount: number }>();
 
     transactions.forEach((transaction) => {
+      if (transaction.categoryId == null) {
+        return;
+      }
       const accountCurrency = accountCurrencyMap.get(transaction.accountId) || "USD";
       const convertedAmount = convertAmount(
         transaction.amount,
@@ -66,16 +75,23 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
         fxSnapshot.rates
       );
 
-      const current = categoryMap.get(transaction.category) || 0;
-      categoryMap.set(transaction.category, current + convertedAmount);
+      const current = categoryMap.get(transaction.categoryId);
+      if (current) {
+        current.amount += convertedAmount;
+      } else {
+        categoryMap.set(transaction.categoryId, {
+          category: transaction.category,
+          amount: convertedAmount,
+        });
+      }
     });
 
     // Calculate total for percentage calculation
-    const total = Array.from(categoryMap.values()).reduce((sum, amount) => sum + amount, 0);
+    const total = Array.from(categoryMap.values()).reduce((sum, row) => sum + row.amount, 0);
 
     // Convert to array, calculate percentages, and sort by amount descending
-    const categories: SpendingCategory[] = Array.from(categoryMap.entries())
-      .map(([category, amount]) => ({
+    const categories: SpendingCategory[] = Array.from(categoryMap.values())
+      .map(({ category, amount }) => ({
         category,
         amount,
         percentage: total > 0 ? (amount / total) * 100 : 0,

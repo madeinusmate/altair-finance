@@ -1,5 +1,7 @@
 import Database from "better-sqlite3-multiple-ciphers";
 import { drizzle, BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { ensureBudgetMonths } from "./ensure-budget-months";
+import { ensureCategoryIds } from "./ensure-category-ids";
 import * as schema from "./schema";
 import * as crypto from "crypto";
 import path from "path";
@@ -31,6 +33,7 @@ const applyCipherPragmas = (sqlite: DatabaseInstance, encryptionKey: string): vo
   sqlite.pragma("legacy = 4");
   sqlite.pragma(`key = '${escapeSqlString(encryptionKey)}'`);
   sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma("foreign_keys = ON");
 };
 
 const openSqlite = (encryptionKey: string): DatabaseInstance => {
@@ -73,7 +76,7 @@ const ensureUserSettingsColumns = (sqlite: DatabaseInstance): void => {
   }
 };
 
-export const runMigrations = (sqlite: DatabaseInstance): void => {
+const runLegacyMigrations = (sqlite: DatabaseInstance): void => {
   try {
     ensureUserSettingsColumns(sqlite);
 
@@ -227,6 +230,8 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
           CREATE TABLE budgets (
             id TEXT PRIMARY KEY,
             category_name TEXT NOT NULL,
+            category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
+            year_month TEXT,
             amount REAL NOT NULL,
             currency TEXT NOT NULL,
             created_at INTEGER NOT NULL,
@@ -299,6 +304,17 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
     // Ignore migration errors - they might occur if table structure is unexpected
     console.warn("[DB Migration] Could not run migrations:", error);
   }
+};
+
+export const runMigrations = (sqlite: DatabaseInstance): void => {
+  try {
+    runLegacyMigrations(sqlite);
+  } catch (error) {
+    console.warn("[DB Migration] Could not run migrations:", error);
+  }
+
+  ensureCategoryIds(sqlite);
+  ensureBudgetMonths(sqlite);
 };
 
 export const getDb = (encryptionKey: string): BetterSQLite3Database<typeof schema> => {
@@ -377,6 +393,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
       type TEXT NOT NULL CHECK (type IN ('debit', 'credit')),
       category TEXT NOT NULL,
+      category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
       amount REAL NOT NULL,
       description TEXT,
       date INTEGER NOT NULL,
@@ -393,6 +410,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       to_amount REAL,
       exchange_rate REAL,
       category TEXT NOT NULL DEFAULT 'Transfer',
+      category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
       description TEXT,
       date INTEGER NOT NULL,
       created_at INTEGER NOT NULL
@@ -466,6 +484,8 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     CREATE TABLE IF NOT EXISTS budgets (
       id TEXT PRIMARY KEY,
       category_name TEXT NOT NULL,
+      category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
+      year_month TEXT,
       amount REAL NOT NULL,
       currency TEXT NOT NULL,
       created_at INTEGER NOT NULL,
@@ -563,6 +583,8 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
           CREATE TABLE budgets (
             id TEXT PRIMARY KEY,
             category_name TEXT NOT NULL,
+            category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
+            year_month TEXT,
             amount REAL NOT NULL,
             currency TEXT NOT NULL,
             created_at INTEGER NOT NULL,
@@ -733,7 +755,12 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     console.warn("[DB Init] Could not store username:", error);
   }
 
-  sqlite.close();
+  try {
+    ensureCategoryIds(sqlite);
+    ensureBudgetMonths(sqlite);
+  } finally {
+    sqlite.close();
+  }
 };
 
 const seedDefaultCategories = (sqlite: DatabaseInstance): void => {
