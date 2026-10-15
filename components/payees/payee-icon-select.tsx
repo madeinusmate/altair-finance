@@ -8,6 +8,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getIconComponent, POPULAR_ICONS } from "@/components/category-management/category-edit-dialog";
+import { PayeeLogo } from "@/components/payees/payee-logo";
+import { PAYEE_LOGOS } from "@/lib/payees/logos";
+import { payeeLogoSlug } from "@/lib/payees/catalog";
 
 type PayeeIconSelectProps = {
   id: string;
@@ -19,6 +22,9 @@ type PayeeIconSelectProps = {
 const iconLabel = (iconName: string) => iconName.replace(/([A-Z])/g, " $1").trim();
 
 export const PayeeIconSelect = ({ id, value, onChange, disabled }: PayeeIconSelectProps) => {
+  const logoSlug = payeeLogoSlug(value);
+  const logo = logoSlug ? PAYEE_LOGOS[logoSlug] : null;
+
   return (
     <Select
       value={value || "__none__"}
@@ -26,7 +32,12 @@ export const PayeeIconSelect = ({ id, value, onChange, disabled }: PayeeIconSele
       disabled={disabled}
     >
       <SelectTrigger id={id} className="w-full">
-        {value && getIconComponent(value) ? (
+        {logo && logoSlug ? (
+          <div className="flex items-center gap-2">
+            <PayeeLogo slug={logoSlug} className="h-4 w-4" />
+            <SelectValue>{logo.title}</SelectValue>
+          </div>
+        ) : value && getIconComponent(value) ? (
           <div className="flex items-center gap-2">
             {getIconComponent(value)}
             <SelectValue>{iconLabel(value)}</SelectValue>
@@ -39,6 +50,14 @@ export const PayeeIconSelect = ({ id, value, onChange, disabled }: PayeeIconSele
         <SelectItem value="__none__">
           <span className="text-muted-foreground">None</span>
         </SelectItem>
+        {logo && logoSlug ? (
+          <SelectItem value={value}>
+            <div className="flex items-center gap-2">
+              <PayeeLogo slug={logoSlug} className="h-4 w-4" />
+              <span>{logo.title}</span>
+            </div>
+          </SelectItem>
+        ) : null}
         {POPULAR_ICONS.map((iconName) => (
           <SelectItem key={iconName} value={iconName}>
             <div className="flex items-center gap-2">

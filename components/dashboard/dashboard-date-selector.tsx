@@ -120,9 +120,9 @@ export const DashboardDateSelector = ({ value, onChange, className, oldestDate }
     <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className={className}>
-          <CalendarIcon className="mr-2 h-4 w-4" />
+          <CalendarIcon />
           {getDisplayText()}
-          <ChevronDownIcon className="ml-2 h-4 w-4" />
+          <ChevronDownIcon />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-4" align="end">

@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { chartCobalt } from "@/components/charts/palette";
 
 interface BudgetGaugeChartProps {
   overallPercentageUsed: number;
@@ -36,16 +35,14 @@ const formatCurrency = (amount: number, currency: string): string => {
   }).format(amount);
 };
 
-const getSpentColor = (): string => chartCobalt;
-
 const chartConfig = {
   spent: {
     label: "Spent",
-    color: chartCobalt,
+    color: "var(--chart-1)",
   },
   remaining: {
     label: "Remaining",
-    color: "hsl(var(--muted))",
+    color: "var(--muted)",
   },
 } satisfies ChartConfig;
 
@@ -73,7 +70,6 @@ export const BudgetGaugeChart = ({
   // Calculate values for the radial chart
   const displayPercentage = Math.min(overallPercentageUsed, 100);
   const remainingPercentage = Math.max(0, 100 - displayPercentage);
-  const spentColor = getSpentColor();
 
   const chartData = [
     {
@@ -146,7 +142,7 @@ export const BudgetGaugeChart = ({
             
             <RadialBar
               dataKey="remaining"
-              fill="var(--muted)"
+              fill="var(--color-remaining)"
               stackId="a"
               cornerRadius={5}
               className="stroke-transparent stroke-2"
@@ -155,7 +151,7 @@ export const BudgetGaugeChart = ({
               dataKey="spent"
               stackId="a"
               cornerRadius={5}
-              fill={spentColor}
+              fill="var(--color-spent)"
               className="stroke-transparent stroke-2"
             />
           </RadialBarChart>

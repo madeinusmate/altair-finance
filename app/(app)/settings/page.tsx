@@ -83,18 +83,6 @@ const SettingsPage = () => {
         </CardContent>
       </Card>
 
-      <Card id="agent">
-        <CardHeader>
-          <CardTitle>Agent</CardTitle>
-          <CardDescription>
-            Let a local command use your books while Netly is installed.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AgentGrantCard />
-        </CardContent>
-      </Card>
-
       <Card>
         <CardHeader>
           <CardTitle>Currencies</CardTitle>
@@ -128,6 +116,18 @@ const SettingsPage = () => {
         <CardContent>
           <Button asChild>
             <Link href="/settings/categories">Manage Categories</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Payees</CardTitle>
+          <CardDescription>Rename payees, set icons, or merge duplicates.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild>
+            <Link href="/settings/payees">Manage Payees</Link>
           </Button>
         </CardContent>
       </Card>
@@ -170,9 +170,21 @@ const SettingsPage = () => {
       </Card>
       <DatabaseImportWizard open={showImportWizard} onOpenChange={setShowImportWizard} />
 
-      <Card>
+      <Card id="agent">
         <CardHeader>
-          <CardTitle className="text-destructive">Danger Zone</CardTitle>
+          <CardTitle>Agent</CardTitle>
+          <CardDescription>
+            Let a local command use your books while Netly is installed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AgentGrantCard />
+        </CardContent>
+      </Card>
+
+      <Card className="border-disconnected dark:border-disconnected">
+        <CardHeader>
+          <CardTitle className="text-disconnected">Danger Zone</CardTitle>
           <CardDescription>
             Delete your local database and start over with a new encryption key.
           </CardDescription>

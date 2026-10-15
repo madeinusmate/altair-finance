@@ -1,13 +1,19 @@
 "use client";
 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Tooltip, Cell } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Filter } from "lucide-react";
 import { type DashboardDateRange } from "./dashboard-date-selector";
-import { chartCobalt, chartInk, axisTick, chartGrid } from "@/components/charts/palette";
 
 interface CashFlowSlice {
   categoryId: number;
@@ -30,11 +36,11 @@ interface CashFlowChartProps {
 const chartConfig = {
   income: {
     label: "Income",
-    color: chartCobalt,
+    color: "var(--chart-1)",
   },
   expenses: {
     label: "Expenses",
-    color: chartInk,
+    color: "var(--chart-4)",
   },
 } satisfies ChartConfig;
 
@@ -49,7 +55,6 @@ const formatCurrency = (amount: number, currency: string): string => {
 };
 
 export const CashFlowChart = ({
-  dateRange,
   isLoading,
   data,
 }: CashFlowChartProps) => {
@@ -93,22 +98,6 @@ export const CashFlowChart = ({
   const topIncome = data.income.slice(0, 5);
   const topExpenses = data.expenses.slice(0, 5);
 
-  // Create a combined view showing income sources on left, expenses on right
-  const maxLength = Math.max(topIncome.length, topExpenses.length);
-  const chartData = Array.from({ length: maxLength }, (_, i) => {
-    const incomeItem = topIncome[i];
-    const expenseItem = topExpenses[i];
-    return {
-      name: `Item ${i + 1}`,
-      incomeCategoryId: incomeItem?.categoryId,
-      incomeSource: incomeItem?.category || "",
-      incomeAmount: incomeItem?.amount || 0,
-      expenseCategoryId: expenseItem?.categoryId,
-      expenseCategory: expenseItem?.category || "",
-      expenseAmount: expenseItem?.amount || 0,
-    };
-  });
-
   const sideBySideData = [
     ...topIncome.map((item) => ({
       categoryId: item.categoryId,
@@ -137,63 +126,53 @@ export const CashFlowChart = ({
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {/* Legend */}
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-1.5">
-              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: chartCobalt }} />
-              <span className="text-muted-foreground">Income</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: chartInk }} />
-              <span className="text-muted-foreground">Expenses</span>
-            </div>
-          </div>
-
-          {/* Chart */}
-          <ChartContainer config={chartConfig} className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={sideBySideData} layout="vertical" margin={{ left: 20, right: 20 }}>
-                <CartesianGrid vertical={false} stroke={chartGrid} />
-                <XAxis
-                  type="number"
-                  tick={axisTick}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(value) => formatCurrency(Math.abs(value), data.currency)}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="category"
-                  tick={axisTick}
-                  tickLine={false}
-                  axisLine={false}
-                  width={120}
-                />
-                <Tooltip
-                  content={
-                    <ChartTooltipContent
-                      formatter={(value, name, item) => {
-                        const numericValue = typeof value === "number" ? value : Number(value);
-                        const payload = item?.payload as { type?: string };
-                        return formatCurrency(Math.abs(numericValue), data.currency);
-                      }}
-                      labelFormatter={(label) => label}
-                    />
-                  }
-                />
-                <Bar
-                  dataKey="amount"
-                  radius={[0, 4, 4, 0]}
-                >
-                  {sideBySideData.map((entry) => (
-                    <Cell
-                      key={`cell-${entry.type}-${entry.categoryId}`}
-                      fill={entry.type === "Income" ? chartCobalt : chartInk}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <ChartContainer config={chartConfig} className="aspect-auto h-[300px] w-full">
+            <BarChart accessibilityLayer data={sideBySideData} layout="vertical" margin={{ top: 8, right: 12, left: 12, bottom: 0 }}>
+              <CartesianGrid horizontal={false} />
+              <XAxis
+                type="number"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tickFormatter={(value) => formatCurrency(Math.abs(value), data.currency)}
+              />
+              <YAxis
+                type="category"
+                dataKey="category"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                width={120}
+              />
+              <ChartTooltip
+                cursor={false}
+                content={
+                  <ChartTooltipContent
+                    indicator="dashed"
+                    formatter={(value) => {
+                      const numericValue = typeof value === "number" ? value : Number(value);
+                      return formatCurrency(Math.abs(numericValue), data.currency);
+                    }}
+                    labelFormatter={(label) => label}
+                  />
+                }
+              />
+              <ChartLegend
+                content={<ChartLegendContent />}
+                payload={[
+                  { value: "income", type: "square", color: "var(--color-income)", dataKey: "income" },
+                  { value: "expenses", type: "square", color: "var(--color-expenses)", dataKey: "expenses" },
+                ]}
+              />
+              <Bar dataKey="amount" radius={4}>
+                {sideBySideData.map((entry) => (
+                  <Cell
+                    key={`cell-${entry.type}-${entry.categoryId}`}
+                    fill={entry.type === "Income" ? "var(--color-income)" : "var(--color-expenses)"}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
           </ChartContainer>
 
           {/* Summary */}

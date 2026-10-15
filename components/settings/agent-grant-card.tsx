@@ -144,9 +144,11 @@ export const AgentGrantCard = () => {
           <pre className="whitespace-pre-wrap rounded-2xl border border-border bg-muted/40 p-3 text-xs leading-relaxed">
             {AGENT_PROMPT}
           </pre>
-          <Button variant="outline" onClick={() => void copyPrompt()}>
-            Copy prompt
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => void copyPrompt()}>
+              Copy prompt
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -166,7 +168,9 @@ export const AgentGrantCard = () => {
             Any program you run can use that command. Deleting the books, deleting an account, and
             exporting the books wait for you to answer a dialog on this Mac.
           </p>
-          <Button onClick={() => setStep("confirm")}>Continue</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => setStep("confirm")}>Continue</Button>
+          </div>
         </>
       )}
 
@@ -176,7 +180,7 @@ export const AgentGrantCard = () => {
             Netly will keep your passphrase in the macOS keychain for the books owner. The command
             never receives it. The books stay open for this login session.
           </p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={() => void createGrant()}>Create agent grant</Button>
             <Button variant="outline" onClick={() => setStep("explain")}>Back</Button>
           </div>
@@ -190,7 +194,7 @@ export const AgentGrantCard = () => {
       {step === "install-error" && (
         <>
           <p className="text-sm text-destructive">{installError}</p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={() => void createGrant()}>Try install again</Button>
             <Button variant="outline" onClick={() => void activate()}>Continue without the command</Button>
           </div>

@@ -1,10 +1,16 @@
 "use client";
 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { MonthlyInflowOutflow, formatCurrencySmart } from "@/lib/chart-data-aggregation";
 import { Card, CardContent } from "@/components/ui/card";
-import { axisTick, chartCobalt, chartGrid, chartInk } from "@/components/charts/palette";
 
 interface InflowOutflowChartProps {
   data: MonthlyInflowOutflow[];
@@ -14,13 +20,13 @@ interface InflowOutflowChartProps {
 const chartConfig = {
   inflow: {
     label: "Inflow",
-    color: chartCobalt,
+    color: "var(--chart-1)",
   },
   outflow: {
     label: "Outflow",
-    color: chartInk,
+    color: "var(--chart-4)",
   },
-};
+} satisfies ChartConfig;
 
 export const InflowOutflowChart = ({ data, currency }: InflowOutflowChartProps) => {
   if (data.length === 0) {
@@ -36,26 +42,22 @@ export const InflowOutflowChart = ({ data, currency }: InflowOutflowChartProps) 
   return (
     <Card>
       <CardContent className="pt-6">
-        <ChartContainer config={chartConfig} className="h-[300px] w-full">
-          <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} width={undefined} height={undefined}>
-            <CartesianGrid vertical={false} stroke={chartGrid} />
-            <XAxis
-              dataKey="monthLabel"
-              tick={axisTick}
-              tickLine={false}
-              axisLine={false}
-            />
+        <ChartContainer config={chartConfig} className="aspect-auto h-[300px] w-full">
+          <BarChart accessibilityLayer data={data} margin={{ top: 8, right: 12, left: 12, bottom: 0 }}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="monthLabel" tickLine={false} axisLine={false} tickMargin={8} />
             <YAxis
-              tick={axisTick}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(value) => {
-                return formatCurrencySmart(value, currency);
-              }}
+              tickMargin={8}
+              width={72}
+              tickFormatter={(value) => formatCurrencySmart(value, currency)}
             />
             <ChartTooltip
+              cursor={false}
               content={
                 <ChartTooltipContent
+                  indicator="dashed"
                   labelFormatter={(_, payload) =>
                     payload?.[0]?.payload?.monthLabel ? payload[0].payload.monthLabel : ""
                   }
@@ -66,23 +68,18 @@ export const InflowOutflowChart = ({ data, currency }: InflowOutflowChartProps) 
                     return (
                       <div className="flex w-full items-center justify-between gap-4">
                         <span className="text-muted-foreground">{label}</span>
-                        <span className="font-mono text-foreground">{label === "Outflow" ? "-" + displayValue : displayValue}</span>
+                        <span className="font-mono font-medium tabular-nums text-foreground">
+                          {label === "Outflow" ? "-" + displayValue : displayValue}
+                        </span>
                       </div>
                     );
                   }}
                 />
               }
             />
-            <Bar
-              dataKey="inflow"
-              fill={chartCobalt}
-              radius={[4, 4, 0, 0]}
-            />
-            <Bar
-              dataKey="outflow"
-              fill={chartInk}
-              radius={[4, 4, 0, 0]}
-            />
+            <Bar dataKey="inflow" fill="var(--color-inflow)" radius={4} />
+            <Bar dataKey="outflow" fill="var(--color-outflow)" radius={4} />
+            <ChartLegend content={<ChartLegendContent />} />
           </BarChart>
         </ChartContainer>
       </CardContent>

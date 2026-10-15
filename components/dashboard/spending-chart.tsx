@@ -1,12 +1,12 @@
 "use client";
 
 import { format } from "date-fns";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type DashboardDateRange } from "./dashboard-date-selector";
-import { axisTick, chartCobalt, chartGrid, chartInk, chartSlate, spendingFills } from "@/components/charts/palette";
+import { chartInk, chartSlate, spendingFills } from "@/components/charts/palette";
 import type { SpendingComparison, SpendingDirection } from "@/lib/insights/spending";
 
 const formatCurrency = (amount: number, currency: string): string => {
@@ -54,7 +54,7 @@ interface SpendingChartProps {
 const chartConfig = {
   spending: {
     label: "Spending",
-    color: chartCobalt,
+    color: "var(--chart-1)",
   },
 } satisfies ChartConfig;
 
@@ -152,35 +152,37 @@ export const SpendingChart = ({
       </CardHeader>
       <CardContent>
         {chartData.length > 0 ? (
-          <ChartContainer config={chartConfig} className="h-[280px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <ChartContainer config={chartConfig} className="aspect-auto h-[280px] w-full">
               <BarChart
+                accessibilityLayer
                 data={chartData}
                 layout="vertical"
-                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                margin={{ top: 8, right: 12, left: 12, bottom: 0 }}
                 barCategoryGap="20%"
               >
-                <CartesianGrid horizontal={false} stroke={chartGrid} />
+                <CartesianGrid horizontal={false} />
                 <XAxis
                   type="number"
-                  tick={axisTick}
                   tickLine={false}
                   axisLine={false}
+                  tickMargin={8}
                   tickFormatter={(value) => formatCurrency(value, currency)}
                   domain={[0, "dataMax"]}
                 />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  tick={axisTick}
                   tickLine={false}
                   axisLine={false}
+                  tickMargin={8}
                   width={yAxisWidth}
                   interval={0}
                 />
                 <ChartTooltip
+                  cursor={false}
                   content={
                     <ChartTooltipContent
+                      indicator="dashed"
                       labelFormatter={(label) => label}
                       formatter={(value, _, item) => {
                         const numericValue = typeof value === "number" ? value : Number(value);
@@ -205,13 +207,12 @@ export const SpendingChart = ({
                     />
                   }
                 />
-                <Bar dataKey="spending" radius={[0, 8, 8, 0]} minPointSize={2}>
+                <Bar dataKey="spending" radius={4} minPointSize={2}>
                   {chartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
                 </Bar>
               </BarChart>
-            </ResponsiveContainer>
           </ChartContainer>
         ) : null}
         {newNames.length > 0 || goneNames.length > 0 ? (

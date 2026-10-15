@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiClient } from "@/lib/api-client";
 
@@ -59,13 +59,11 @@ export const BudgetTile = ({ currency }: BudgetTileProps) => {
 
   if (isLoading) {
     return (
-      <Card className="h-full">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Budget</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-8 w-32 mb-2" />
+      <Card className="h-full border-transparent py-0 shadow-none">
+        <CardContent className="flex h-full flex-col px-4 py-4">
           <Skeleton className="h-4 w-24" />
+          <Skeleton className="mt-2 h-8 w-32" />
+          <Skeleton className="mt-2 h-4 w-20" />
         </CardContent>
       </Card>
     );
@@ -73,23 +71,33 @@ export const BudgetTile = ({ currency }: BudgetTileProps) => {
 
   if (!data || data.overallBudget === 0) {
     return (
-      <Card className="h-full cursor-pointer transition-colors hover:bg-muted" onClick={() => router.push("/budget")}>
-        <CardContent className="py-5">
+      <Card
+        className="h-full cursor-pointer border-transparent py-0 shadow-none transition-colors hover:bg-muted"
+        onClick={() => router.push("/budget")}
+      >
+        <CardContent className="flex h-full flex-col px-4 py-4">
           <p className="text-[13px] text-muted-foreground">Left to spend</p>
-          <p className="mt-1 text-[28px] font-semibold leading-none tracking-[-0.03em] text-muted-foreground">Set a budget</p>
+          <p className="mt-1 text-[28px] font-semibold leading-none tracking-[-0.03em] text-muted-foreground">
+            Set a budget
+          </p>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="h-full cursor-pointer transition-colors hover:bg-muted" onClick={() => router.push("/budget")}>
-      <CardContent className="py-5">
+    <Card
+      className="h-full cursor-pointer border-transparent py-0 shadow-none transition-colors hover:bg-muted"
+      onClick={() => router.push("/budget")}
+    >
+      <CardContent className="flex h-full flex-col px-4 py-4">
         <p className="text-[13px] text-muted-foreground">Left to spend</p>
         <p className="mt-1 text-[28px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
           {formatCurrency(data.overallRemaining, data.currency)}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">{getStatusHint(data.status, data.overallPercentageUsed)}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {getStatusHint(data.status, data.overallPercentageUsed)}
+        </p>
         {data.unbudgetedSpent ? (
           <p className="mt-1 text-xs text-muted-foreground">
             Unbudgeted {formatCurrency(data.unbudgetedSpent, data.currency)}

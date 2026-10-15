@@ -4,6 +4,7 @@ import * as schema from "./schema";
 import { ensureBudgetMonths } from "./ensure-budget-months";
 import { ensureCategoryIds } from "./category-ids";
 import { ensurePayeesSchema } from "@/lib/payees/backfill";
+import { seedDefaultPayees } from "@/lib/payees/seed";
 import * as crypto from "crypto";
 import path from "path";
 import fs from "fs";
@@ -16,6 +17,12 @@ import {
 type DatabaseInstance = InstanceType<typeof Database>;
 
 const getDbPath = (): string => {
+  // NETLY_DATA_DIR is for a throwaway first-run database. It must not set
+  // ELECTRON_USER_DATA, which turns on the local API token check.
+  const dataDir = process.env.NETLY_DATA_DIR;
+  if (dataDir) {
+    return path.join(dataDir, "netly.db");
+  }
   // ELECTRON_USER_DATA is set by the Electron main process when spawning Next.js.
   const electronUserData = process.env.ELECTRON_USER_DATA;
   if (electronUserData) {
@@ -919,6 +926,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
 
   // Seed default categories if tables are empty
   seedDefaultCategories(sqlite);
+  seedDefaultPayees(sqlite);
 
   // Store username in user_settings
   const now = Math.floor(Date.now() / 1000);

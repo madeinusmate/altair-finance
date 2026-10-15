@@ -1,11 +1,17 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { useId, type ReactNode } from "react";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
-import { axisTick, chartCobalt, chartCobaltSoft, chartGrid, chartInk } from "@/components/charts/palette";
 import type { NetWorthHistory } from "@/lib/insights/net-worth-series";
 
 interface NetWorthHistoryChartProps {
@@ -36,23 +42,19 @@ const formatAxis = (amount: number, currency: string): string => {
 const chartConfig = {
   assets: {
     label: "Assets",
-    color: chartCobaltSoft,
+    color: "var(--chart-2)",
   },
   liabilities: {
     label: "Liabilities",
-    color: chartInk,
+    color: "var(--chart-4)",
   },
   netWorth: {
     label: "Net worth",
-    color: chartCobalt,
+    color: "var(--chart-1)",
   },
 } satisfies ChartConfig;
 
-const legend = [
-  { key: "assets", label: "Assets", color: chartCobaltSoft },
-  { key: "liabilities", label: "Liabilities", color: chartInk },
-  { key: "netWorth", label: "Net worth", color: chartCobalt },
-] as const;
+const series = ["liabilities", "assets", "netWorth"] as const;
 
 const ChartShell = ({ children }: { children: ReactNode }) => (
   <Card>
@@ -73,6 +75,8 @@ const emptyMessage = (message: string) => (
 );
 
 export const NetWorthHistoryChart = ({ currency, isLoading, data }: NetWorthHistoryChartProps) => {
+  const gradientId = useId().replace(/:/g, "");
+
   if (isLoading) {
     return (
       <Card>
@@ -97,73 +101,60 @@ export const NetWorthHistoryChart = ({ currency, isLoading, data }: NetWorthHist
 
   return (
     <ChartShell>
-      <ChartContainer config={chartConfig} className="h-[320px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data.points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid vertical={false} stroke={chartGrid} />
-            <XAxis dataKey="monthLabel" tick={axisTick} tickLine={false} axisLine={false} />
-            <YAxis
-              tick={axisTick}
-              tickLine={false}
-              axisLine={false}
-              width={72}
-              tickFormatter={(value) => formatAxis(typeof value === "number" ? value : Number(value), currency)}
-            />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  formatter={(value, name) => {
-                    const numericValue = typeof value === "number" ? value : Number(value);
-                    return (
-                      <div className="flex w-full items-center justify-between gap-4">
-                        <span className="text-muted-foreground">{name}</span>
-                        <span className="font-mono tabular-nums text-foreground">
-                          {formatNetWorth(numericValue, currency)}
-                        </span>
-                      </div>
-                    );
-                  }}
-                />
-              }
-            />
-            <Line
-              type="linear"
-              dataKey="assets"
-              name="Assets"
-              stroke={chartCobaltSoft}
+      <ChartContainer config={chartConfig} className="aspect-auto h-[320px] w-full">
+        <AreaChart accessibilityLayer data={data.points} margin={{ top: 8, right: 12, left: 12, bottom: 0 }}>
+          <CartesianGrid vertical={false} />
+          <XAxis dataKey="monthLabel" tickLine={false} axisLine={false} tickMargin={8} />
+          <YAxis
+            tickLine={false}
+            axisLine={false}
+            tickMargin={8}
+            width={72}
+            tickFormatter={(value) => formatAxis(typeof value === "number" ? value : Number(value), currency)}
+          />
+          <ChartTooltip
+            cursor={false}
+            content={
+              <ChartTooltipContent
+                indicator="line"
+                formatter={(value, name) => {
+                  const numericValue = typeof value === "number" ? value : Number(value);
+                  return (
+                    <div className="flex w-full items-center justify-between gap-4">
+                      <span className="text-muted-foreground">{name}</span>
+                      <span className="font-mono font-medium tabular-nums text-foreground">
+                        {formatNetWorth(numericValue, currency)}
+                      </span>
+                    </div>
+                  );
+                }}
+              />
+            }
+          />
+          <defs>
+            {series.map((key) => (
+              <linearGradient key={key} id={`${gradientId}-${key}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={`var(--color-${key})`} stopOpacity={0.8} />
+                <stop offset="95%" stopColor={`var(--color-${key})`} stopOpacity={0.1} />
+              </linearGradient>
+            ))}
+          </defs>
+          {series.map((key) => (
+            <Area
+              key={key}
+              type="monotone"
+              dataKey={key}
+              name={chartConfig[key].label}
+              stroke={`var(--color-${key})`}
               strokeWidth={2}
-              dot={{ r: 2.5, strokeWidth: 0, fill: chartCobaltSoft }}
-              activeDot={{ r: 4 }}
+              fill={`url(#${gradientId}-${key})`}
+              fillOpacity={key === "netWorth" ? 0.4 : 0.2}
+              dot={false}
             />
-            <Line
-              type="linear"
-              dataKey="liabilities"
-              name="Liabilities"
-              stroke={chartInk}
-              strokeWidth={2}
-              dot={{ r: 2.5, strokeWidth: 0, fill: chartInk }}
-              activeDot={{ r: 4 }}
-            />
-            <Line
-              type="linear"
-              dataKey="netWorth"
-              name="Net worth"
-              stroke={chartCobalt}
-              strokeWidth={2.5}
-              dot={{ r: 2.5, strokeWidth: 0, fill: chartCobalt }}
-              activeDot={{ r: 4 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+          ))}
+          <ChartLegend content={<ChartLegendContent />} />
+        </AreaChart>
       </ChartContainer>
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-border pt-4">
-        {legend.map((item) => (
-          <div key={item.key} className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
-            <span className="text-sm text-muted-foreground">{item.label}</span>
-          </div>
-        ))}
-      </div>
     </ChartShell>
   );
 };

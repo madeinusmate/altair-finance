@@ -1,10 +1,10 @@
 "use client";
 
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { useId } from "react";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
-import { axisTick, chartCobalt, chartGrid } from "@/components/charts/palette";
 
 interface MonthlyPoint {
   monthLabel: string;
@@ -30,11 +30,13 @@ const formatCurrency = (amount: number, currency: string): string => {
 const chartConfig = {
   net: {
     label: "Net cash",
-    color: chartCobalt,
+    color: "var(--chart-1)",
   },
 } satisfies ChartConfig;
 
 export const NetCashChart = ({ currency, isLoading, data }: NetCashChartProps) => {
+  const fillId = useId().replace(/:/g, "");
+
   if (isLoading) {
     return (
       <Card>
@@ -74,41 +76,42 @@ export const NetCashChart = ({ currency, isLoading, data }: NetCashChartProps) =
         <CardTitle>Net cash</CardTitle>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[280px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="netCashFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={chartCobalt} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={chartCobalt} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid vertical={false} stroke={chartGrid} />
-              <XAxis dataKey="monthLabel" tick={axisTick} tickLine={false} axisLine={false} />
-              <YAxis
-                tick={axisTick}
-                tickLine={false}
-                axisLine={false}
-                width={72}
-                tickFormatter={(value) => formatCurrency(value, currency)}
-              />
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    formatter={(value) => formatCurrency(typeof value === "number" ? value : Number(value), currency)}
-                  />
-                }
-              />
-              <Area
-                type="monotone"
-                dataKey="net"
-                stroke={chartCobalt}
-                strokeWidth={2}
-                fill="url(#netCashFill)"
-                dot={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+        <ChartContainer config={chartConfig} className="aspect-auto h-[280px] w-full">
+          <AreaChart accessibilityLayer data={points} margin={{ top: 8, right: 12, left: 12, bottom: 0 }}>
+            <defs>
+              <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="var(--color-net)" stopOpacity={0.8} />
+                <stop offset="95%" stopColor="var(--color-net)" stopOpacity={0.1} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="monthLabel" tickLine={false} axisLine={false} tickMargin={8} />
+            <YAxis
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              width={72}
+              tickFormatter={(value) => formatCurrency(value, currency)}
+            />
+            <ChartTooltip
+              cursor={false}
+              content={
+                <ChartTooltipContent
+                  indicator="line"
+                  formatter={(value) => formatCurrency(typeof value === "number" ? value : Number(value), currency)}
+                />
+              }
+            />
+            <Area
+              type="monotone"
+              dataKey="net"
+              stroke="var(--color-net)"
+              strokeWidth={2}
+              fill={`url(#${fillId})`}
+              fillOpacity={0.4}
+              dot={false}
+            />
+          </AreaChart>
         </ChartContainer>
       </CardContent>
     </Card>

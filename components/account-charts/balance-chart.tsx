@@ -1,12 +1,12 @@
 "use client";
 
+import { useId } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ReferenceLine } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { MonthlyBalance, formatCurrencySmart } from "@/lib/chart-data-aggregation";
 import { BalanceHistory } from "@/lib/db/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { format, parseISO } from "date-fns";
-import { axisTick, chartGrid } from "@/components/charts/palette";
 
 interface BalanceChartProps {
   data?: MonthlyBalance[];
@@ -18,11 +18,12 @@ interface BalanceChartProps {
 const chartConfig = {
   balance: {
     label: "Balance",
-    color: "#1227fd",
+    color: "var(--chart-1)",
   },
 } satisfies ChartConfig;
 
-export const BalanceChart = ({ data, balanceHistory, currency, accountId }: BalanceChartProps) => {
+export const BalanceChart = ({ data, balanceHistory, currency }: BalanceChartProps) => {
+  const fillId = useId().replace(/:/g, "");
   // Use monthly data if provided, otherwise use balance history
   let chartData: Array<{ date: string; dateLabel: string; balance: number }> = [];
   
@@ -62,29 +63,34 @@ export const BalanceChart = ({ data, balanceHistory, currency, accountId }: Bala
   return (
     <Card>
       <CardContent className="pt-6">
-        <ChartContainer config={chartConfig} className="h-[300px] w-full">
+        <ChartContainer config={chartConfig} className="aspect-auto h-[300px] w-full">
           <AreaChart
             accessibilityLayer
             data={chartData}
-            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-            width={undefined}
-            height={undefined}
+            margin={{ top: 8, right: 12, left: 12, bottom: 0 }}
           >
-            <CartesianGrid vertical={false} stroke={chartGrid} />
+            <defs>
+              <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="var(--color-balance)" stopOpacity={0.8} />
+                <stop offset="95%" stopColor="var(--color-balance)" stopOpacity={0.1} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} />
             <XAxis
               dataKey="dateLabel"
-              tick={axisTick}
               tickLine={false}
               axisLine={false}
+              tickMargin={8}
             />
             <YAxis
-              tick={axisTick}
               tickFormatter={(value) => formatCurrencySmart(value, currency)}
               tickLine={false}
               axisLine={false}
+              tickMargin={8}
+              width={72}
             />
             {showZeroLine && (
-              <ReferenceLine y={0} stroke={chartGrid} />
+              <ReferenceLine y={0} stroke="var(--border)" />
             )}
             <ChartTooltip
               cursor={false}
@@ -177,14 +183,13 @@ export const BalanceChart = ({ data, balanceHistory, currency, accountId }: Bala
               }
             />
             <Area
-              type="natural"
+              type="monotone"
               dataKey="balance"
-              fill="var(--color-balance)"
+              fill={`url(#${fillId})`}
               fillOpacity={0.4}
               stroke="var(--color-balance)"
               strokeWidth={2}
-              dot={{ fill: "var(--color-balance)", stroke: "var(--color-balance)", strokeWidth: 1, r: 2 }}
-              activeDot={{ r: 4, stroke: "var(--color-balance)", strokeWidth: 1 }}
+              dot={false}
               connectNulls={true}
             />
           </AreaChart>

@@ -272,11 +272,22 @@ const DashboardPage = () => {
 
 
   const hasData = data && data.accounts.length > 0;
+  const netWorthSummary = data?.netWorthByCurrency[selectedCurrency];
+  const zeroTotal = formatNetWorthCurrency(0, selectedCurrency);
+  const cardTotals =
+    hasData && netWorthSummary && !data.hasUnsupportedCurrencies
+      ? {
+          amount: formatNetWorthCurrency(netWorthSummary.netWorth, netWorthSummary.currency),
+          assets: formatNetWorthCurrency(netWorthSummary.totalAssets, netWorthSummary.currency),
+          liabilities: formatNetWorthCurrency(netWorthSummary.totalLiabilities, netWorthSummary.currency),
+        }
+      : !hasData
+        ? { amount: zeroTotal, assets: zeroTotal, liabilities: zeroTotal }
+        : { amount: null, assets: null, liabilities: null };
   const savingsCard = <SavingsRunwayCard data={savingsData} isLoading={isLoadingDashboard} />;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const greetingLine = profileName ? `${greeting}, ${profileName}` : greeting;
-  const netWorthSummary = data?.netWorthByCurrency[selectedCurrency];
   const ratesLabel = data ? formatRateTimestamp(data.lastRatesUpdatedAt) : "";
 
   if (isLoading) {
@@ -324,7 +335,7 @@ const DashboardPage = () => {
         {isReady || hasData ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             {isReady ? (
-              <div className="flex h-8 items-center rounded-full bg-muted p-0.5" role="group" aria-label="Currency">
+              <div className="flex h-10 items-center rounded-full bg-muted p-1" role="group" aria-label="Currency">
                 {enabledCurrencies.map((currency) => (
                   <button
                     key={currency}
@@ -332,8 +343,8 @@ const DashboardPage = () => {
                     onClick={() => selectCurrency(currency)}
                     className={
                       currency === selectedCurrency
-                        ? "h-7 rounded-full bg-background px-3 text-sm font-semibold text-foreground shadow-sm"
-                        : "h-7 rounded-full px-3 text-sm text-muted-foreground"
+                        ? "inline-flex h-8 items-center justify-center rounded-full bg-background px-3.5 text-sm font-semibold leading-none text-foreground shadow-sm"
+                        : "inline-flex h-8 items-center justify-center rounded-full px-3.5 text-sm font-medium leading-none text-muted-foreground"
                     }
                   >
                     {currency}
@@ -342,11 +353,11 @@ const DashboardPage = () => {
               </div>
             ) : null}
             {hasData ? (
-              <div className="ml-auto flex h-8 items-center rounded-full bg-muted p-0.5">
+              <div className="ml-auto flex h-10 items-center rounded-full bg-muted p-1">
                 <DashboardDateSelector
                   value={dateRange}
                   onChange={setDateRange}
-                  className="h-7 rounded-full border-0 bg-background px-3 font-semibold text-foreground shadow-sm hover:bg-background"
+                  className="h-8 gap-2 rounded-full border-0 bg-background px-3.5 font-semibold leading-none text-foreground shadow-sm hover:bg-background has-[>svg]:px-3.5"
                 />
               </div>
             ) : null}
@@ -354,21 +365,9 @@ const DashboardPage = () => {
         ) : null}
       <NetWorthCard
         greeting={greetingLine}
-        amount={
-          hasData && netWorthSummary && !data?.hasUnsupportedCurrencies
-            ? formatNetWorthCurrency(netWorthSummary.netWorth, netWorthSummary.currency)
-            : null
-        }
-        assets={
-          hasData && netWorthSummary && !data?.hasUnsupportedCurrencies
-            ? formatNetWorthCurrency(netWorthSummary.totalAssets, netWorthSummary.currency)
-            : null
-        }
-        liabilities={
-          hasData && netWorthSummary && !data?.hasUnsupportedCurrencies
-            ? formatNetWorthCurrency(netWorthSummary.totalLiabilities, netWorthSummary.currency)
-            : null
-        }
+        amount={cardTotals.amount}
+        assets={cardTotals.assets}
+        liabilities={cardTotals.liabilities}
       />
       </div>
 
@@ -400,7 +399,7 @@ const DashboardPage = () => {
 
           {data?.hasUnsupportedCurrencies || !netWorthSummary ? (
             <div className="space-y-3">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{savingsCard}</div>
+              <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-3">{savingsCard}</div>
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
@@ -411,11 +410,11 @@ const DashboardPage = () => {
             </div>
           ) : (
             <>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-3">
               <BudgetTile currency={selectedCurrency} />
               {savingsCard}
-              <Card className="h-full border-transparent shadow-none">
-                <CardContent className="px-4 py-4">
+              <Card className="h-full border-transparent py-0 shadow-none">
+                <CardContent className="flex h-full flex-col px-4 py-4">
                   <p className="text-[13px] text-muted-foreground">Investment P/L</p>
                   <p className="mt-1 text-[28px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
                     {netWorthSummary.totalProfitLoss >= 0 ? "+" : ""}

@@ -370,7 +370,7 @@ export const TransactionForm = ({
             <span>
               {matchedPayee.iconImage || matchedPayee.icon
                 ? `Using the icon saved for ${matchedPayee.name}`
-                : `${matchedPayee.name} has no icon yet. Set one in settings.`}
+                : `${matchedPayee.name} has no icon yet. Set one under Settings → Payees.`}
             </span>
           </p>
         ) : cleanPayee(payeeName) ? (

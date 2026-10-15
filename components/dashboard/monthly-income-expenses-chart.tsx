@@ -1,11 +1,17 @@
 "use client";
 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type DashboardDateRange } from "./dashboard-date-selector";
-import { axisTick, chartCobalt, chartGrid, chartInk } from "@/components/charts/palette";
 
 // Format currency helper
 const formatCurrency = (amount: number, currency: string): string => {
@@ -35,16 +41,15 @@ interface MonthlyIncomeExpensesChartProps {
 const chartConfig = {
   income: {
     label: "Income",
-    color: chartCobalt,
+    color: "var(--chart-1)",
   },
   expenses: {
     label: "Expenses",
-    color: chartInk,
+    color: "var(--chart-4)",
   },
 } satisfies ChartConfig;
 
 export const MonthlyIncomeExpensesChart = ({
-  dateRange,
   currency,
   isLoading,
   data,
@@ -84,72 +89,45 @@ export const MonthlyIncomeExpensesChart = ({
         <CardTitle>Monthly Income & Expenses</CardTitle>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[280px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid vertical={false} stroke={chartGrid} />
-              <XAxis
-                dataKey="monthLabel"
-                tick={axisTick}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                tick={axisTick}
-                tickLine={false}
-                axisLine={false}
-                width={72}
-                tickFormatter={(value) => formatCurrency(value, currency)}
-              />
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    labelFormatter={(_, payload) =>
-                      payload?.[0]?.payload?.monthLabel ? payload[0].payload.monthLabel : ""
-                    }
-                    formatter={(value, name) => {
-                      const numericValue = typeof value === "number" ? value : Number(value);
-                      const displayValue = formatCurrency(numericValue, currency);
-                      // Check case-insensitively for expenses (name could be "expenses", "Expenses", or dataKey)
-                      const isExpenses = typeof name === "string" && name.toLowerCase() === "expenses";
-                      const label = isExpenses ? "Expenses" : "Income";
-                      return (
-                        <div className="flex w-full items-center justify-between gap-4">
-                          <span className="text-muted-foreground">{label}</span>
-                          <span className="font-mono text-foreground">{displayValue}</span>
-                        </div>
-                      );
-                    }}
-                  />
-                }
-              />
-
-              <Bar
-                dataKey="income"
-                fill={chartCobalt}
-                radius={[8, 8, 0, 0]}
-                name="Income"
-              />
-              <Bar
-                dataKey="expenses"
-                fill={chartInk}
-                radius={[8, 8, 0, 0]}
-                name="Expenses"
-              />
-            </BarChart>
-          </ResponsiveContainer>
+        <ChartContainer config={chartConfig} className="aspect-auto h-[280px] w-full">
+          <BarChart accessibilityLayer data={data} margin={{ top: 8, right: 12, left: 12, bottom: 0 }}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="monthLabel" tickLine={false} axisLine={false} tickMargin={8} />
+            <YAxis
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              width={72}
+              tickFormatter={(value) => formatCurrency(value, currency)}
+            />
+            <ChartTooltip
+              cursor={false}
+              content={
+                <ChartTooltipContent
+                  indicator="dashed"
+                  labelFormatter={(_, payload) =>
+                    payload?.[0]?.payload?.monthLabel ? payload[0].payload.monthLabel : ""
+                  }
+                  formatter={(value, name) => {
+                    const numericValue = typeof value === "number" ? value : Number(value);
+                    const displayValue = formatCurrency(numericValue, currency);
+                    const isExpenses = typeof name === "string" && name.toLowerCase() === "expenses";
+                    const label = isExpenses ? "Expenses" : "Income";
+                    return (
+                      <div className="flex w-full items-center justify-between gap-4">
+                        <span className="text-muted-foreground">{label}</span>
+                        <span className="font-mono font-medium tabular-nums text-foreground">{displayValue}</span>
+                      </div>
+                    );
+                  }}
+                />
+              }
+            />
+            <Bar dataKey="income" fill="var(--color-income)" radius={4} />
+            <Bar dataKey="expenses" fill="var(--color-expenses)" radius={4} />
+            <ChartLegend content={<ChartLegendContent />} />
+          </BarChart>
         </ChartContainer>
-        {/* Custom Legend */}
-        <div className="mt-4 flex items-center justify-center gap-6 border-t border-border pt-4">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full" style={{ backgroundColor: chartCobalt }} />
-            <span className="text-sm text-muted-foreground">Income</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full" style={{ backgroundColor: chartInk }} />
-            <span className="text-sm text-muted-foreground">Expenses</span>
-          </div>
-        </div>
       </CardContent>
     </Card>
   );

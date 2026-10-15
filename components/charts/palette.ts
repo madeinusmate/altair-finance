@@ -1,16 +1,12 @@
 export const chartInk = "var(--foreground)";
 export const chartSlate = "var(--muted-foreground)";
-export const chartGrid = "var(--border)";
-export const chartCobalt = "#1227fd";
-export const chartCobaltSoft = "#6fa0ff";
+export const chartCobalt = "var(--chart-1)";
+export const chartCobaltSoft = "var(--chart-2)";
 
 export const spendingFills = [
-  chartCobalt,
-  "#3d5ef5",
-  chartCobaltSoft,
-  chartInk,
-  "#4c4c4c",
-  "#a1a1aa",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-5)",
+  "var(--chart-4)",
+  "var(--chart-3)",
 ];
-
-export const axisTick = { fill: chartSlate, fontSize: 12 };

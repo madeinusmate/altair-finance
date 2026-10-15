@@ -65,8 +65,8 @@ const rangeLabel = (data: SavingsRunwayData): string => {
 export const SavingsRunwayCard = ({ data, isLoading }: SavingsRunwayCardProps) => {
   if (isLoading) {
     return (
-      <Card className="h-full border-transparent shadow-none">
-        <CardContent className="px-4 py-4">
+      <Card className="h-full border-transparent py-0 shadow-none">
+        <CardContent className="flex h-full flex-col px-4 py-4">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="mt-2 h-8 w-28" />
           <Skeleton className="mt-3 h-4 w-full" />
@@ -77,8 +77,8 @@ export const SavingsRunwayCard = ({ data, isLoading }: SavingsRunwayCardProps) =
 
   if (!data) {
     return (
-      <Card className="h-full border-transparent shadow-none">
-        <CardContent className="px-4 py-4">
+      <Card className="h-full border-transparent py-0 shadow-none">
+        <CardContent className="flex h-full flex-col px-4 py-4">
           <p className="text-[13px] text-muted-foreground">Savings rate</p>
           <p className="mt-1 text-sm text-muted-foreground">Savings rate unavailable</p>
         </CardContent>
@@ -90,8 +90,8 @@ export const SavingsRunwayCard = ({ data, isLoading }: SavingsRunwayCardProps) =
   const periodLabel = rangeLabel(data);
 
   return (
-    <Card className="h-full border-transparent shadow-none">
-      <CardContent className="px-4 py-4">
+    <Card className="h-full border-transparent py-0 shadow-none">
+      <CardContent className="flex h-full flex-col px-4 py-4">
         <p className="text-[13px] text-muted-foreground">Savings rate</p>
         {data.savingsRate === null ? (
           <p className="mt-1 text-[22px] font-semibold leading-tight tracking-[-0.03em]">No income in this period</p>
