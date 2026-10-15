@@ -31,8 +31,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { TransactionForm } from "@/components/transaction-form";
 import { TransferForm } from "@/components/transfer-form";
+import { BulkRecategorizeBar, type BulkCategory } from "@/components/ledger/bulk-recategorize-bar";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { CategoryBadge } from "@/components/category-management/category-badge";
 import { toast } from "sonner";
@@ -42,6 +44,13 @@ import { format } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
 import { LedgerDateFilter } from "@/components/ledger/ledger-date-filter";
 import { isInLedgerDateFilter, type LedgerDateFilter as LedgerDateFilterValue } from "@/lib/ledger/date-filter";
+import {
+  headerCheckboxState,
+  ledgerSelectionKey,
+  toggleFilteredSelection,
+  toLedgerSelection,
+  type LedgerSelectionEntry,
+} from "@/lib/ledger/selection";
 import {
   Pagination,
   PaginationContent,
@@ -72,8 +81,9 @@ const TransactionsPage = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [transactionCategories, setTransactionCategories] = useState<Array<{ id: number; name: string }>>([]);
-  const [categoryMap, setCategoryMap] = useState<Map<number, { color?: string | null; icon?: string | null }>>(new Map());
+  const [transactionCategories, setTransactionCategories] = useState<BulkCategory[]>([]);
+  const [selectedRows, setSelectedRows] = useState<Map<string, LedgerSelectionEntry>>(new Map());
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,8 +103,8 @@ const TransactionsPage = () => {
   const pendingDeletesRef = useRef<Map<string, number>>(new Map());
 
   const replaceUnified = (unifiedData: { transactions: Transaction[]; transfers: Transfer[] }) => {
-    setTransactions(unifiedData.transactions.filter((item) => !pendingDeletesRef.current.has(item.id)));
-    setTransfers(unifiedData.transfers.filter((item) => !pendingDeletesRef.current.has(item.id)));
+    setTransactions(unifiedData.transactions);
+    setTransfers(unifiedData.transfers);
   };
 
   useEffect(() => {
@@ -109,16 +119,11 @@ const TransactionsPage = () => {
         const [unifiedData, accountsData, categoriesData] = await Promise.all([
           apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified"),
           apiClient.get<Account[]>("/api/accounts"),
-          apiClient.get<{ categories: Array<{ id: number; name: string; color?: string | null; icon?: string | null }> }>("/api/transaction-categories"),
+          apiClient.get<{ categories: BulkCategory[] }>("/api/transaction-categories"),
         ]);
         replaceUnified(unifiedData);
         setAccounts(accountsData);
-        setTransactionCategories(categoriesData.categories.map((c) => ({ id: c.id, name: c.name })));
-        const catMap = new Map<number, { color?: string | null; icon?: string | null }>();
-        categoriesData.categories.forEach((cat) => {
-          catMap.set(cat.id, { color: cat.color, icon: cat.icon });
-        });
-        setCategoryMap(catMap);
+        setTransactionCategories(categoriesData.categories);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch transactions");
       } finally {
@@ -159,47 +164,78 @@ const TransactionsPage = () => {
     fetchData();
   };
 
-  const scheduleDelete = (id: string, path: string, restore: () => void, label: string) => {
-    const existing = pendingDeletesRef.current.get(id);
+  const clearPendingDelete = (key: string) => {
+    const pending = pendingDeletesRef.current.get(key);
+    if (pending) {
+      window.clearTimeout(pending);
+      pendingDeletesRef.current.delete(key);
+    }
+    setPendingDeleteIds((current) => {
+      if (!current.has(key)) {
+        return current;
+      }
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
+  };
+
+  const scheduleDelete = (id: string, kind: "transaction" | "transfer", path: string, label: string) => {
+    const key = ledgerSelectionKey(kind, id);
+    const existing = pendingDeletesRef.current.get(key);
     if (existing) {
       window.clearTimeout(existing);
     }
 
+    setPendingDeleteIds((current) => {
+      const next = new Set(current);
+      next.add(key);
+      return next;
+    });
+    setSelectedRows((current) => {
+      if (!current.has(key)) {
+        return current;
+      }
+      const next = new Map(current);
+      next.delete(key);
+      return next;
+    });
+
     const timeout = window.setTimeout(() => {
-      pendingDeletesRef.current.delete(id);
-      void apiClient.delete(path).catch(() => {
-        restore();
+      pendingDeletesRef.current.delete(key);
+      setPendingDeleteIds((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+      void apiClient.delete(path).then(() => {
+        if (kind === "transaction") {
+          setTransactions((current) => current.filter((item) => item.id !== id));
+        } else {
+          setTransfers((current) => current.filter((item) => item.id !== id));
+        }
+      }).catch(() => {
         toast.error(`Failed to delete ${label.toLowerCase()}`);
       });
     }, DELETE_UNDO_MS);
 
-    pendingDeletesRef.current.set(id, timeout);
+    pendingDeletesRef.current.set(key, timeout);
     toast(`${label} deleted`, {
       duration: DELETE_UNDO_MS,
       action: {
         label: "Undo",
         onClick: () => {
-          const pending = pendingDeletesRef.current.get(id);
-          if (pending) {
-            window.clearTimeout(pending);
-            pendingDeletesRef.current.delete(id);
-          }
-          restore();
+          clearPendingDelete(key);
         },
       },
     });
   };
 
   const handleDeleteTransaction = (transaction: Transaction) => {
-    setTransactions((current) => current.filter((item) => item.id !== transaction.id));
     scheduleDelete(
       transaction.id,
+      "transaction",
       `/api/transactions?id=${transaction.id}`,
-      () => {
-        setTransactions((current) =>
-          current.some((item) => item.id === transaction.id) ? current : [transaction, ...current]
-        );
-      },
       "Transaction"
     );
   };
@@ -254,15 +290,10 @@ const TransactionsPage = () => {
   };
 
   const handleDeleteTransfer = (transfer: Transfer) => {
-    setTransfers((current) => current.filter((item) => item.id !== transfer.id));
     scheduleDelete(
       transfer.id,
+      "transfer",
       `/api/transfers?id=${transfer.id}`,
-      () => {
-        setTransfers((current) =>
-          current.some((item) => item.id === transfer.id) ? current : [transfer, ...current]
-        );
-      },
       "Transfer"
     );
   };
@@ -290,7 +321,7 @@ const TransactionsPage = () => {
         if (searchQuery) {
           const query = searchQuery.toLowerCase();
           const matchesDescription = t.description?.toLowerCase().includes(query);
-          const matchesCategory = t.category.toLowerCase().includes(query);
+          const matchesCategory = (t.category ?? "").toLowerCase().includes(query);
           const matchesAccount = account?.name.toLowerCase().includes(query);
           if (!matchesDescription && !matchesCategory && !matchesAccount) {
             return false;
@@ -323,7 +354,7 @@ const TransactionsPage = () => {
         if (searchQuery) {
           const query = searchQuery.toLowerCase();
           const matchesDescription = t.description?.toLowerCase().includes(query);
-          const matchesCategory = t.category?.toLowerCase().includes(query);
+          const matchesCategory = (t.category ?? "").toLowerCase().includes(query);
           const matchesFromAccount = fromAccount?.name.toLowerCase().includes(query);
           const matchesToAccount = toAccount?.name.toLowerCase().includes(query);
           if (!matchesDescription && !matchesCategory && !matchesFromAccount && !matchesToAccount) {
@@ -360,10 +391,52 @@ const TransactionsPage = () => {
   const endIndex = startIndex + itemsPerPage;
   const paginatedItems = filteredItems.slice(startIndex, endIndex);
 
+  const categoryById = useMemo(
+    () => new Map(transactionCategories.map((category) => [category.id, category])),
+    [transactionCategories]
+  );
+
+  const selectableEntries = useMemo(
+    () => filteredItems.map(toLedgerSelection).filter((entry) => !pendingDeleteIds.has(entry.key)),
+    [filteredItems, pendingDeleteIds]
+  );
+
+  const headerChecked = headerCheckboxState(
+    selectableEntries.map((entry) => entry.key),
+    new Set(selectedRows.keys())
+  );
+
+  const toggleRow = (entry: LedgerSelectionEntry, checked: boolean) => {
+    setSelectedRows((current) => {
+      const next = new Map(current);
+      if (checked) {
+        next.set(entry.key, entry);
+      } else {
+        next.delete(entry.key);
+      }
+      return next;
+    });
+  };
+
+  const handleRecategorized = async () => {
+    try {
+      const unifiedData = await apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified");
+      replaceUnified(unifiedData);
+    } catch {
+      toast.error("Failed to refresh transactions");
+    }
+    setSelectedRows(new Map());
+  };
+
   // Reset to page 1 when filters or items per page change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, categoryFilter, typeFilter, accountFilter, itemsPerPage, ledgerDateFilter]);
+
+  // Date filters are not on this branch. Reset on the filters that exist today.
+  useEffect(() => {
+    setSelectedRows(new Map());
+  }, [searchQuery, categoryFilter, typeFilter, accountFilter, itemsPerPage]);
 
   if (isLoading) {
     return (
@@ -568,6 +641,12 @@ const TransactionsPage = () => {
               />
             </div>
 
+            <BulkRecategorizeBar
+              selectedRows={[...selectedRows.values()]}
+              categories={transactionCategories}
+              onCompleted={handleRecategorized}
+            />
+
             {totalItems === 0 ? (
               <p className="text-muted-foreground text-center py-8">
                 No transactions match your filters
@@ -577,6 +656,18 @@ const TransactionsPage = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={headerChecked}
+                          onCheckedChange={(value) => {
+                            setSelectedRows((current) =>
+                              toggleFilteredSelection(current, selectableEntries, value === true)
+                            );
+                          }}
+                          aria-label={`Select ${selectableEntries.length} matching`}
+                          disabled={selectableEntries.length === 0}
+                        />
+                      </TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Account</TableHead>
@@ -599,12 +690,22 @@ const TransactionsPage = () => {
                             <Fragment key={`transaction-${transaction.id}`}>
                               {showDay && (
                                 <TableRow>
-                                  <TableCell colSpan={5} className="bg-muted/40 text-xs font-medium text-muted-foreground">
+                                  <TableCell colSpan={6} className="bg-muted/40 text-xs font-medium text-muted-foreground">
                                     {format(new Date(transaction.date), "EEEE, MMM d")}
                                   </TableCell>
                                 </TableRow>
                               )}
                               <TableRow>
+                                <TableCell>
+                                  <Checkbox
+                                    checked={selectedRows.has(ledgerSelectionKey("transaction", transaction.id))}
+                                    disabled={pendingDeleteIds.has(ledgerSelectionKey("transaction", transaction.id))}
+                                    onCheckedChange={(value) =>
+                                      toggleRow(toLedgerSelection(item), value === true)
+                                    }
+                                    aria-label={`Select transaction ${transaction.description?.trim() || transaction.category}`}
+                                  />
+                                </TableCell>
                                 <TableCell className="max-w-[240px] font-medium">
                                   <div className="flex items-center gap-3">
                                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm">
@@ -615,9 +716,9 @@ const TransactionsPage = () => {
                                 </TableCell>
                                 <TableCell>
                                   <CategoryBadge
-                                    name={transaction.category}
-                                    color={transaction.categoryId != null ? categoryMap.get(transaction.categoryId)?.color : undefined}
-                                    icon={transaction.categoryId != null ? categoryMap.get(transaction.categoryId)?.icon : undefined}
+                                    name={categoryById.get(transaction.categoryId ?? -1)?.name || transaction.category}
+                                    color={categoryById.get(transaction.categoryId ?? -1)?.color}
+                                    icon={categoryById.get(transaction.categoryId ?? -1)?.icon}
                                   />
                                 </TableCell>
                                 <TableCell>
@@ -665,12 +766,22 @@ const TransactionsPage = () => {
                           <Fragment key={`transfer-${transfer.id}`}>
                             {showDay && (
                               <TableRow>
-                                <TableCell colSpan={5} className="bg-muted/40 text-xs font-medium text-muted-foreground">
+                                <TableCell colSpan={6} className="bg-muted/40 text-xs font-medium text-muted-foreground">
                                   {format(new Date(transfer.date), "EEEE, MMM d")}
                                 </TableCell>
                               </TableRow>
                             )}
                             <TableRow>
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedRows.has(ledgerSelectionKey("transfer", transfer.id))}
+                                  disabled={pendingDeleteIds.has(ledgerSelectionKey("transfer", transfer.id))}
+                                  onCheckedChange={(value) =>
+                                    toggleRow(toLedgerSelection(item), value === true)
+                                  }
+                                  aria-label={`Select transfer ${transfer.description?.trim() || "Transfer"}`}
+                                />
+                              </TableCell>
                               <TableCell className="max-w-[240px] font-medium">
                                 <div className="flex items-center gap-3">
                                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
@@ -688,9 +799,9 @@ const TransactionsPage = () => {
                               </TableCell>
                               <TableCell>
                                 <CategoryBadge
-                                  name={transfer.category || "Transfer"}
-                                  color={transfer.categoryId != null ? categoryMap.get(transfer.categoryId)?.color : undefined}
-                                  icon={transfer.categoryId != null ? categoryMap.get(transfer.categoryId)?.icon : undefined}
+                                  name={categoryById.get(transfer.categoryId ?? -1)?.name || transfer.category || "Transfer"}
+                                  color={categoryById.get(transfer.categoryId ?? -1)?.color}
+                                  icon={categoryById.get(transfer.categoryId ?? -1)?.icon}
                                 />
                               </TableCell>
                               <TableCell>
