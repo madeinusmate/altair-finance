@@ -25,7 +25,7 @@ import { Separator } from "@/components/ui/separator";
 
 const NewAccountPage = () => {
   const router = useRouter();
-  const { getKey } = useAuth();
+  const { getKey, usesBooksOwner } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Array<{ identifier: string; name: string }>>([]);
@@ -42,7 +42,7 @@ const NewAccountPage = () => {
   useEffect(() => {
     const fetchCategories = async () => {
       const key = getKey();
-      if (!key) {
+      if (!key && !usesBooksOwner) {
         setCategoriesLoading(false);
         return;
       }

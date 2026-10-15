@@ -48,7 +48,7 @@ const getSummary = (rows: TransactionRow[]) => {
 };
 
 export const TransactionsCsvImport = () => {
-  const { getKey } = useAuth();
+  const { getKey, usesBooksOwner } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
   const [rows, setRows] = useState<TransactionRow[]>([]);
@@ -123,7 +123,7 @@ export const TransactionsCsvImport = () => {
   useEffect(() => {
     const loadData = async () => {
       const key = getKey();
-      if (!key) return;
+      if (!key && !usesBooksOwner) return;
 
       try {
         const [accountsData, categoriesData] = await Promise.all([

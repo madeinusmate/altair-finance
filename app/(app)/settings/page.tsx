@@ -12,15 +12,17 @@ import { useAuth } from "@/lib/auth-context";
 import { Credits } from "@/components/settings/credits";
 import { EnabledCurrencies } from "@/components/settings/enabled-currencies";
 import { ProfileForm } from "@/components/settings/profile-form";
+import { AgentGrantCard } from "@/components/settings/agent-grant-card";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const SettingsPage = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [showImportWizard, setShowImportWizard] = useState(false);
-  const { getKey, isAuthenticated } = useAuth();
+  const { getKey, isAuthenticated, usesBooksOwner } = useAuth();
 
   const handleExport = async () => {
     const key = getKey();
-    if (!key) {
+    if (!key && !usesBooksOwner) {
       toast.error("Unlock the app before exporting the database.");
       return;
     }
@@ -31,7 +33,7 @@ const SettingsPage = () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Encryption-Key": key,
+          ...(key ? { "X-Encryption-Key": key } : {}),
         },
       });
 
@@ -68,6 +70,28 @@ const SettingsPage = () => {
         </CardHeader>
         <CardContent>
           <ProfileForm />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Appearance</CardTitle>
+          <CardDescription>Choose light, dark, or match your system.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ThemeToggle />
+        </CardContent>
+      </Card>
+
+      <Card id="agent">
+        <CardHeader>
+          <CardTitle>Agent</CardTitle>
+          <CardDescription>
+            Let a local command use your books while Netly is installed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AgentGrantCard />
         </CardContent>
       </Card>
 

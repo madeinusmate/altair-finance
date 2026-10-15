@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
+import { confirmIntent } from "@/lib/intent-confirm";
 import { SUPPORTED_CURRENCIES, isSupportedCurrency, type SupportedCurrency } from "@/lib/currencies";
 import { convertAmount, getFxSnapshot } from "@/lib/fx";
 import { isValidAccountCategoryIdentifier } from "@/lib/db/category-helpers";
@@ -296,6 +297,11 @@ export const DELETE = async (request: NextRequest): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
   if (!key) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const confirmation = await confirmIntent("delete-account");
+  if (!confirmation.ok) {
+    return NextResponse.json({ error: confirmation.error }, { status: confirmation.status });
   }
 
   try {

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Bot,
   LayoutDashboard,
   Wallet,
   ArrowLeftRight,
@@ -27,7 +28,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { cn } from "@/lib/utils";
 
 const navItems = [
   {
@@ -54,10 +55,11 @@ const navItems = [
 
 export const AppSidebar = () => {
   const pathname = usePathname();
-  const { lock, isAuthenticated } = useAuth();
+  const { lock, isAuthenticated, usesBooksOwner } = useAuth();
   const [username, setUsername] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
+  const [agent, setAgent] = useState<{ enabled: boolean; stopped: boolean; running: boolean } | null>(null);
 
   useEffect(() => {
     const applyProfile = (profile: Pick<UserProfile, "name" | "email" | "avatar">) => {
@@ -90,12 +92,34 @@ export const AppSidebar = () => {
     return () => window.removeEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const status = await apiClient.get<{ enabled: boolean; stopped: boolean; running: boolean }>("/api/agent/status");
+        if (!cancelled) setAgent(status);
+      } catch {
+        if (!cancelled) setAgent({ enabled: false, stopped: false, running: false });
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => {
+      void load();
+    }, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isAuthenticated]);
+
   const handleLock = () => {
     lock();
     window.location.href = "/unlock";
   };
 
   const initial = username?.trim().charAt(0).toUpperCase() || "N";
+  const agentConnected = agent?.running === true;
 
   return (
     <Sidebar className="border-r-0">
@@ -139,17 +163,38 @@ export const AppSidebar = () => {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <ThemeToggle />
+        {agent ? (
+          <Button variant="ghost" className="w-full justify-start rounded-full" asChild>
+            <Link
+              href="/settings#agent"
+              aria-label={agentConnected ? "Agent connected. Open settings" : "Agent disconnected. Open settings"}
+            >
+              <Bot className="h-4 w-4" />
+              <span>Agent</span>
+              <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                <span
+                  className={cn(
+                    "size-2 shrink-0 rounded-full",
+                    agentConnected ? "bg-connected" : "bg-disconnected",
+                  )}
+                />
+                {agentConnected ? "Connected" : "Disconnected"}
+              </span>
+            </Link>
+          </Button>
+        ) : null}
         <Button variant="ghost" className="w-full justify-start rounded-full" asChild>
           <Link href="/settings">
             <Settings className="h-4 w-4" />
             <span>Settings</span>
           </Link>
         </Button>
-        <Button variant="ghost" className="w-full justify-start rounded-full" onClick={handleLock}>
-          <LogOut className="h-4 w-4" />
-          <span>Lock</span>
-        </Button>
+        {usesBooksOwner && agent?.running ? null : (
+          <Button variant="ghost" className="w-full justify-start rounded-full" onClick={handleLock}>
+            <LogOut className="h-4 w-4" />
+            <span>Lock</span>
+          </Button>
+        )}
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

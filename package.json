@@ -142,7 +142,11 @@
         "filter": [
           "**/*"
         ]
-      }
+      },
+      { "from": "scripts/books-owner.mjs", "to": "books-owner.mjs" },
+      { "from": "scripts/netly-keychain.swift", "to": "netly-keychain.swift" },
+      { "from": "cli/netly.mjs", "to": "netly.mjs" },
+      { "from": "cli/netly-packaged", "to": "netly" }
     ],
     "publish": null,
     "mac": {

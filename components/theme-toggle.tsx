@@ -1,22 +1,43 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+
+const themes = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
+] as const;
 
 export const ThemeToggle = () => {
-  const { resolvedTheme, setTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
-    <Button
-      variant="ghost"
-      className="w-full justify-start rounded-full"
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      spacing={1}
+      value={mounted && theme ? theme : ""}
+      onValueChange={(next) => {
+        if (next === "light" || next === "dark" || next === "system") {
+          setTheme(next);
+        }
+      }}
+      aria-label="Color theme"
     >
-      {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-      <span>{isDark ? "Light mode" : "Dark mode"}</span>
-    </Button>
+      {themes.map((item) => (
+        <ToggleGroupItem key={item.value} value={item.value} aria-label={`${item.label} mode`} className="rounded-full">
+          <item.icon />
+          {item.label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
   );
 };

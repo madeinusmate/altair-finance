@@ -9,4 +9,8 @@ contextBridge.exposeInMainWorld("electron", {
     readText: () => clipboard.readText(),
   },
   openExternal: (url: string) => ipcRenderer.invoke("netly-open-external", url),
+  activateOwner: () => ipcRenderer.invoke("netly-owner-activate"),
+  stopOwner: () => ipcRenderer.invoke("netly-owner-stop"),
+  revokeOwner: () => ipcRenderer.invoke("netly-owner-revoke"),
+  installCommand: () => ipcRenderer.invoke("netly-install-command"),
 });
