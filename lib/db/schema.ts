@@ -28,6 +28,8 @@ export const accounts = sqliteTable("accounts", {
   category: text("category").notNull(),
   currency: text("currency").notNull(),
   initialBalance: real("initial_balance").notNull().default(0),
+  icon: text("icon"),
+  iconImage: text("icon_image"),
   metadata: text("metadata"), // optional JSON; leftover provider payloads stay as stored
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),

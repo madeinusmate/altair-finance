@@ -11,6 +11,7 @@ import { Plus, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { Account } from "@/lib/db/schema";
 import { formatCategoryDisplay } from "@/lib/account-categories";
 import { AccountCreateDialog } from "@/components/account-create-dialog";
+import { AccountMark } from "@/components/accounts/account-mark";
 
 interface AccountWithBalance {
   id: string;
@@ -19,6 +20,8 @@ interface AccountWithBalance {
   nature: "asset" | "liability";
   category: string;
   currency: string;
+  icon?: string | null;
+  iconImage?: string | null;
   balance: number;
   netContributions?: number;
   profitLoss?: number;
@@ -73,6 +76,8 @@ const withUpdatedAt = (account: Account, balance: number, extra?: Pick<AccountWi
     nature: account.nature,
     category: account.category,
     currency: account.currency,
+    icon: account.icon,
+    iconImage: account.iconImage,
     balance,
     updatedAt: Number.isNaN(updated.getTime()) ? undefined : updated.toISOString(),
     ...extra,
@@ -248,6 +253,7 @@ const AccountsPage = () => {
           className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted"
         >
           <div className="flex min-w-0 items-center gap-3">
+            <AccountMark name={account.name} icon={account.icon} iconImage={account.iconImage} />
             <div className="min-w-0">
             <p className="truncate font-semibold">{account.name}</p>
             <p className="truncate text-xs text-muted-foreground">

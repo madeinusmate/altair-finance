@@ -19,6 +19,7 @@ import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AccountAppearanceFields } from "@/components/accounts/account-appearance-fields";
 
 interface AccountEditFormProps {
   account: Account;
@@ -44,6 +45,8 @@ export const AccountEditForm = ({
   const [category, setCategory] = useState<string>(account.category);
   const [currency, setCurrency] = useState(account.currency);
   const [initialBalance, setInitialBalance] = useState(account.initialBalance.toString());
+  const [icon, setIcon] = useState(account.icon ?? "");
+  const [iconImage, setIconImage] = useState(account.iconImage ?? "");
 
   // Fetch categories from API
   useEffect(() => {
@@ -86,6 +89,8 @@ export const AccountEditForm = ({
         nature,
         category,
         initialBalance: account.type === "investment" ? 0 : parseFloat(initialBalance) || 0,
+        icon: icon || null,
+        iconImage: iconImage || null,
       });
 
       toast.success("Account updated successfully");
@@ -128,6 +133,15 @@ export const AccountEditForm = ({
           required
         />
       </div>
+
+      <AccountAppearanceFields
+        name={name}
+        icon={icon}
+        iconImage={iconImage}
+        onIconChange={setIcon}
+        onIconImageChange={setIconImage}
+        disabled={isLoading}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">

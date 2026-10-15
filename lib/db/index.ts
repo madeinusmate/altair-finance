@@ -130,6 +130,17 @@ const tableColumnNames = (sqlite: DatabaseInstance, tableName: string): Set<stri
   return new Set(columns.map((column) => column.name));
 };
 
+const ensureAccountAppearanceColumns = (sqlite: DatabaseInstance): void => {
+  if (!tableExists(sqlite, "accounts")) return;
+  const names = tableColumnNames(sqlite, "accounts");
+  if (!names.has("icon")) {
+    sqlite.exec("ALTER TABLE accounts ADD COLUMN icon TEXT");
+  }
+  if (!names.has("icon_image")) {
+    sqlite.exec("ALTER TABLE accounts ADD COLUMN icon_image TEXT");
+  }
+};
+
 const hashFingerprintPayload = (payload: string): string =>
   crypto.createHash("sha256").update(payload).digest("hex");
 
@@ -305,6 +316,7 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
     ensureCategorizationRulesTable(sqlite);
     ensureUserSettingsColumns(sqlite);
     ensureLedgerFingerprintColumns(sqlite);
+    ensureAccountAppearanceColumns(sqlite);
 
     // Migration: Create imports table if it doesn't exist
     const importsTableCheck = sqlite.prepare(`
@@ -578,6 +590,8 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       category TEXT NOT NULL,
       currency TEXT NOT NULL,
       initial_balance REAL NOT NULL DEFAULT 0,
+      icon TEXT,
+      icon_image TEXT,
       metadata TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
@@ -916,6 +930,12 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     ensureLedgerFingerprintColumns(sqlite);
   } catch (error) {
     console.warn("[DB Init] Could not add ledger fingerprints:", error);
+  }
+
+  try {
+    ensureAccountAppearanceColumns(sqlite);
+  } catch (error) {
+    console.warn("[DB Init] Could not add account appearance columns:", error);
   }
 
   try {

@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { DEFAULT_ACCOUNT_CURRENCY, SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
 import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AccountAppearanceFields } from "@/components/accounts/account-appearance-fields";
 
 interface AccountCreateDialogProps {
   open: boolean;
@@ -50,6 +51,8 @@ export const AccountCreateDialog = ({
   const [category, setCategory] = useState<string>("");
   const [currency, setCurrency] = useState<SupportedCurrency>(DEFAULT_ACCOUNT_CURRENCY);
   const [initialBalance, setInitialBalance] = useState("0");
+  const [icon, setIcon] = useState("");
+  const [iconImage, setIconImage] = useState("");
 
   // Fetch categories from API
   useEffect(() => {
@@ -87,6 +90,8 @@ export const AccountCreateDialog = ({
       setNature("asset");
       setCurrency(DEFAULT_ACCOUNT_CURRENCY);
       setInitialBalance("0");
+      setIcon("");
+      setIconImage("");
       setError(null);
       // Category will be set when categories load in the fetchCategories effect
     }
@@ -110,6 +115,8 @@ export const AccountCreateDialog = ({
         category,
         currency,
         initialBalance: parseFloat(effectiveInitialBalance) || 0,
+        icon: icon || null,
+        iconImage: iconImage || null,
       });
 
       toast.success("Account created successfully");
@@ -152,6 +159,15 @@ export const AccountCreateDialog = ({
               required
             />
           </div>
+
+          <AccountAppearanceFields
+            name={name}
+            icon={icon}
+            iconImage={iconImage}
+            onIconChange={setIcon}
+            onIconImageChange={setIconImage}
+            disabled={isLoading}
+          />
 
           <div className="grid gap-4">
             <div className="space-y-2">

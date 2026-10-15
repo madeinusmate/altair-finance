@@ -17,6 +17,8 @@ interface AccountBalance {
   nature: "asset" | "liability";
   category: string;
   currency: string;
+  icon: string | null;
+  iconImage: string | null;
   balance: number;
   // Investment-specific fields
   netContributions?: number;
@@ -161,6 +163,8 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
           nature: account.nature as "asset" | "liability",
           category: account.category,
           currency: account.currency,
+          icon: account.icon,
+          iconImage: account.iconImage,
           balance,
           updatedAt: account.updatedAt,
         };

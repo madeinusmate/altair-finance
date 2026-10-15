@@ -7,6 +7,7 @@ import { confirmIntent } from "@/lib/intent-confirm";
 import { SUPPORTED_CURRENCIES, isSupportedCurrency, type SupportedCurrency } from "@/lib/currencies";
 import { convertAmount, getFxSnapshot } from "@/lib/fx";
 import { isValidAccountCategoryIdentifier } from "@/lib/db/category-helpers";
+import { parseAccountIcon, parseAccountIconImage } from "@/lib/accounts/appearance";
 
 // GET all accounts
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
@@ -35,6 +36,14 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
   try {
     const body = await request.json();
     const { name, type, nature, category, currency, initialBalance = 0 } = body;
+    const iconResult = parseAccountIcon(body.icon);
+    if (!iconResult.ok) {
+      return NextResponse.json({ error: iconResult.error }, { status: 400 });
+    }
+    const iconImageResult = parseAccountIconImage(body.iconImage);
+    if (!iconImageResult.ok) {
+      return NextResponse.json({ error: iconImageResult.error }, { status: 400 });
+    }
 
     if (!name || !type || !nature || !category || !currency) {
       return NextResponse.json(
@@ -89,6 +98,8 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       category: category,
       currency,
       initialBalance: effectiveInitialBalance,
+      icon: iconResult.icon,
+      iconImage: iconImageResult.iconImage,
       metadata: null,
       createdAt: now,
       updatedAt: now,
@@ -139,9 +150,34 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
 
-    const updates: Partial<{ name: string; currency: SupportedCurrency; nature: "asset" | "liability"; category: string; initialBalance: number; updatedAt: Date }> = {
+    const updates: Partial<{
+      name: string;
+      currency: SupportedCurrency;
+      nature: "asset" | "liability";
+      category: string;
+      initialBalance: number;
+      icon: string | null;
+      iconImage: string | null;
+      updatedAt: Date;
+    }> = {
       updatedAt: new Date(),
     };
+
+    if (body.icon !== undefined) {
+      const iconResult = parseAccountIcon(body.icon);
+      if (!iconResult.ok) {
+        return NextResponse.json({ error: iconResult.error }, { status: 400 });
+      }
+      updates.icon = iconResult.icon;
+    }
+
+    if (body.iconImage !== undefined) {
+      const iconImageResult = parseAccountIconImage(body.iconImage);
+      if (!iconImageResult.ok) {
+        return NextResponse.json({ error: iconImageResult.error }, { status: 400 });
+      }
+      updates.iconImage = iconImageResult.iconImage;
+    }
 
     if (name !== undefined) {
       if (!name || typeof name !== "string") {

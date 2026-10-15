@@ -69,6 +69,7 @@ import { TransferForm } from "@/components/transfer-form";
 import { BalanceUpdateForm } from "@/components/balance-update-form";
 import { InvestmentBalanceForm } from "@/components/investment-balance-form";
 import { AccountEditForm } from "@/components/account-edit-form";
+import { AccountMark } from "@/components/accounts/account-mark";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -516,6 +517,13 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
           </Button>
           <div>
             <div className="flex items-center gap-3">
+              <AccountMark
+                name={account.name}
+                icon={account.icon}
+                iconImage={account.iconImage}
+                className="size-12 text-lg"
+                iconClassName="h-6 w-6"
+              />
               <h1 className="text-[34px] font-semibold tracking-[-0.03em]">{account.name}</h1>
               {account.type === "transaction" && (
                 <span className="text-[34px] font-semibold tracking-[-0.03em] tabular-nums text-foreground">
@@ -549,12 +557,13 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                 Edit
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Edit {account.name}</DialogTitle>
                 <DialogDescription>Update account details</DialogDescription>
               </DialogHeader>
               <AccountEditForm
+                key={account.id}
                 account={account}
                 transactions={transactions}
                 balanceHistory={balanceHistory}
