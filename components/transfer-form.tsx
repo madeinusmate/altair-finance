@@ -33,8 +33,8 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { getKey, usesBooksOwner } = useAuth();
-  const [categories, setCategories] = useState<string[]>([]);
-  const [categoryMap, setCategoryMap] = useState<Map<string, { color?: string | null; icon?: string | null }>>(new Map());
+  const [categories, setCategories] = useState<Array<{ id: number; name: string }>>([]);
+  const [categoryMap, setCategoryMap] = useState<Map<number, { color?: string | null; icon?: string | null }>>(new Map());
   const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   // Helper function to get icon component
@@ -64,8 +64,8 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
   const [exchangeRate, setExchangeRate] = useState(
     transfer?.exchangeRate ? transfer.exchangeRate.toString() : ""
   );
-  const [category, setCategory] = useState<string>(
-    transfer?.category || ""
+  const [categoryId, setCategoryId] = useState<string>(
+    transfer?.categoryId != null ? String(transfer.categoryId) : ""
   );
 
   // Fetch categories from API - only show Transfer category (transactionType = null)
@@ -78,43 +78,30 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
       }
 
       try {
-        const data = await apiClient.get<{ categories: Array<{ name: string; transactionType: "debit" | "credit" | null; color?: string | null; icon?: string | null }> }>("/api/transaction-categories");
-        // Filter to only show Transfer category (transactionType = null)
-        const transferCategories = data.categories.filter((c) => c.transactionType === null);
-        const categoryNames = transferCategories.map((c) => c.name);
-        
-        // If no Transfer category exists, use "Transfer" as default
-        if (categoryNames.length === 0) {
-          categoryNames.push("Transfer");
-        }
-        
-        setCategories(categoryNames);
-        
-        // Create a map of category name to category metadata
-        const catMap = new Map<string, { color?: string | null; icon?: string | null }>();
+        const data = await apiClient.get<{ categories: Array<{ id: number; name: string; transactionType: "debit" | "credit" | null; color?: string | null; icon?: string | null }> }>("/api/transaction-categories");
+        const transferCategories = data.categories.filter((category) => category.transactionType === null);
+        const options = transferCategories.map((category) => ({ id: category.id, name: category.name }));
+        setCategories(options);
+
+        const catMap = new Map<number, { color?: string | null; icon?: string | null }>();
         transferCategories.forEach((cat) => {
-          catMap.set(cat.name, { color: cat.color, icon: cat.icon });
+          catMap.set(cat.id, { color: cat.color, icon: cat.icon });
         });
-        // Also add "Transfer" if it doesn't exist in the data
-        if (!catMap.has("Transfer")) {
-          catMap.set("Transfer", { color: null, icon: null });
-        }
         setCategoryMap(catMap);
-        
-        // Set default category to Transfer if not set
-        if (!transfer?.category && categoryNames.length > 0) {
-          setCategory(categoryNames[0]);
-        } else if (!transfer?.category) {
-          setCategory("Transfer");
-        }
+
+        setCategoryId((current) => {
+          if (current && options.some((category) => String(category.id) === current)) {
+            return current;
+          }
+          if (transfer?.categoryId != null && options.some((category) => category.id === transfer.categoryId)) {
+            return String(transfer.categoryId);
+          }
+          return options.length > 0 ? String(options[0].id) : "";
+        });
       } catch (error) {
         console.error("Error fetching categories:", error);
         toast.error("Failed to load categories");
-        // Fallback to Transfer category
-        setCategories(["Transfer"]);
-        if (!transfer?.category) {
-          setCategory("Transfer");
-        }
+        setCategories([]);
       } finally {
         setCategoriesLoading(false);
       }
@@ -135,7 +122,7 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
       setFromAmount((transfer.fromAmount ?? transfer.amount).toString());
       setToAmount((transfer.toAmount ?? transfer.amount).toString());
       setExchangeRate(transfer.exchangeRate ? transfer.exchangeRate.toString() : "");
-      setCategory(transfer.category || "");
+      setCategoryId(transfer.categoryId != null ? String(transfer.categoryId) : "");
       setDescription(transfer.description || "");
       setDate(new Date(transfer.date).toISOString().split("T")[0]);
     }
@@ -219,7 +206,7 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
           fromAmount: fromAmountValue,
           toAmount: toAmountValue,
           exchangeRate: exchangeRate ? parseFloat(exchangeRate) : undefined,
-          category,
+          categoryId: Number(categoryId),
           description: description || null,
           date,
         });
@@ -231,7 +218,7 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
           fromAmount: fromAmountValue,
           toAmount: toAmountValue,
           exchangeRate: exchangeRate ? parseFloat(exchangeRate) : undefined,
-          category,
+          categoryId: Number(categoryId),
           description: description || null,
           date,
         });
@@ -353,21 +340,21 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
         {categoriesLoading ? (
           <Skeleton className="h-9 w-full" />
         ) : (
-          <Select value={category} onValueChange={setCategory} disabled={categoriesLoading || categories.length === 0}>
+          <Select value={categoryId} onValueChange={setCategoryId} disabled={categoriesLoading || categories.length === 0}>
             <SelectTrigger id="category">
-              {category && getIconComponent(categoryMap.get(category)?.icon) && (
-                <span className="mr-2">{getIconComponent(categoryMap.get(category)?.icon)}</span>
+              {categoryId && getIconComponent(categoryMap.get(Number(categoryId))?.icon) && (
+                <span className="mr-2">{getIconComponent(categoryMap.get(Number(categoryId))?.icon)}</span>
               )}
               <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select category"} />
             </SelectTrigger>
             <SelectContent>
               {categories.map((cat) => {
-                const catData = categoryMap.get(cat);
+                const catData = categoryMap.get(cat.id);
                 const iconComponent = getIconComponent(catData?.icon);
                 return (
-                  <SelectItem key={cat} value={cat}>
+                  <SelectItem key={cat.id} value={String(cat.id)}>
                     {iconComponent}
-                    <span>{cat}</span>
+                    <span>{cat.name}</span>
                   </SelectItem>
                 );
               })}
@@ -474,7 +461,7 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
         />
       </div>
 
-      <Button type="submit" className="w-full" disabled={isLoading || !currentFromAccountId || !toAccountId || !fromAmount || !toAmount || !category}>
+      <Button type="submit" className="w-full" disabled={isLoading || !currentFromAccountId || !toAccountId || !fromAmount || !toAmount || !categoryId}>
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

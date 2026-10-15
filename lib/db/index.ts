@@ -1,6 +1,7 @@
 import Database from "better-sqlite3-multiple-ciphers";
 import { drizzle, BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
+import { ensureCategoryIds } from "./category-ids";
 import * as crypto from "crypto";
 import path from "path";
 import fs from "fs";
@@ -30,6 +31,7 @@ const applyCipherPragmas = (sqlite: DatabaseInstance, encryptionKey: string): vo
   sqlite.pragma("cipher = 'sqlcipher'");
   sqlite.pragma("legacy = 4");
   sqlite.pragma(`key = '${escapeSqlString(encryptionKey)}'`);
+  sqlite.pragma("foreign_keys = ON");
   sqlite.pragma("journal_mode = WAL");
 };
 
@@ -115,6 +117,9 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
         console.log("[DB Migration] Successfully added transaction_type column");
       }
     }
+
+    // Category ids must run even when later migrations return early because transfers is missing.
+    ensureCategoryIds(sqlite);
 
     // Migration: Add new columns to transfers table if they don't exist
     // First check if transfers table exists
@@ -227,6 +232,7 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
           CREATE TABLE budgets (
             id TEXT PRIMARY KEY,
             category_name TEXT NOT NULL,
+            category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
             amount REAL NOT NULL,
             currency TEXT NOT NULL,
             created_at INTEGER NOT NULL,
@@ -234,6 +240,7 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
           );
           
           CREATE INDEX IF NOT EXISTS idx_budgets_category_name ON budgets(category_name);
+          CREATE INDEX IF NOT EXISTS idx_budgets_category_id ON budgets(category_id);
         `);
         
         // Create index on transactions table if it exists
@@ -295,7 +302,12 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
     } catch (error) {
       console.warn("[DB Migration] Could not create open banking tables:", error);
     }
+
+    ensureCategoryIds(sqlite);
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Category migration")) {
+      throw error;
+    }
     // Ignore migration errors - they might occur if table structure is unexpected
     console.warn("[DB Migration] Could not run migrations:", error);
   }
@@ -377,6 +389,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
       type TEXT NOT NULL CHECK (type IN ('debit', 'credit')),
       category TEXT NOT NULL,
+      category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
       amount REAL NOT NULL,
       description TEXT,
       date INTEGER NOT NULL,
@@ -393,6 +406,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       to_amount REAL,
       exchange_rate REAL,
       category TEXT NOT NULL DEFAULT 'Transfer',
+      category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
       description TEXT,
       date INTEGER NOT NULL,
       created_at INTEGER NOT NULL
@@ -466,6 +480,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     CREATE TABLE IF NOT EXISTS budgets (
       id TEXT PRIMARY KEY,
       category_name TEXT NOT NULL,
+      category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
       amount REAL NOT NULL,
       currency TEXT NOT NULL,
       created_at INTEGER NOT NULL,
@@ -485,6 +500,9 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     );
 
     CREATE INDEX IF NOT EXISTS idx_budgets_category_name ON budgets(category_name);
+    CREATE INDEX IF NOT EXISTS idx_budgets_category_id ON budgets(category_id);
+    CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON transactions(category_id);
+    CREATE INDEX IF NOT EXISTS idx_transfers_category_id ON transfers(category_id);
     CREATE INDEX IF NOT EXISTS idx_transactions_category_date_type ON transactions(category, date, type);
 
     INSERT INTO meta (id, schema_version, created_at)
@@ -563,6 +581,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
           CREATE TABLE budgets (
             id TEXT PRIMARY KEY,
             category_name TEXT NOT NULL,
+            category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
             amount REAL NOT NULL,
             currency TEXT NOT NULL,
             created_at INTEGER NOT NULL,
@@ -570,6 +589,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
           );
           
           CREATE INDEX IF NOT EXISTS idx_budgets_category_name ON budgets(category_name);
+          CREATE INDEX IF NOT EXISTS idx_budgets_category_id ON budgets(category_id);
           CREATE INDEX IF NOT EXISTS idx_transactions_category_date_type ON transactions(category, date, type);
         `);
       }
@@ -732,6 +752,8 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
   } catch (error) {
     console.warn("[DB Init] Could not store username:", error);
   }
+
+  ensureCategoryIds(sqlite);
 
   sqlite.close();
 };

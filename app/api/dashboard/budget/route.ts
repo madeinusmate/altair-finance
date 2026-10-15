@@ -6,20 +6,14 @@ import { convertAmount, getFxSnapshot } from "@/lib/fx";
 import { type SupportedCurrency, isSupportedCurrency } from "@/lib/currencies";
 import { startOfMonth, endOfDay, format } from "date-fns";
 
-// Calculate spending for a category in current month
 const calculateCategorySpending = async (
   db: ReturnType<typeof getDb>,
-  categoryName: string,
+  categoryId: number,
   startDate: Date,
   endDate: Date,
   targetCurrency: SupportedCurrency,
   fxSnapshot: Awaited<ReturnType<typeof getFxSnapshot>>
 ): Promise<number> => {
-  // Exclude Transfer category
-  if (categoryName === "Transfer") {
-    return 0;
-  }
-
   const transactions = db
     .select({
       amount: schema.transactions.amount,
@@ -30,7 +24,7 @@ const calculateCategorySpending = async (
     .where(
       and(
         eq(schema.transactions.type, "debit"),
-        eq(schema.transactions.category, categoryName),
+        eq(schema.transactions.categoryId, categoryId),
         gte(schema.transactions.date, startDate),
         lte(schema.transactions.date, endDate),
         ne(schema.accounts.type, "investment")
@@ -49,15 +43,9 @@ const calculateCategorySpending = async (
     }
 
     try {
-      const convertedAmount = convertAmount(
-        transaction.amount,
-        accountCurrency,
-        targetCurrency,
-        fxSnapshot.rates
-      );
-      totalSpent += convertedAmount;
+      totalSpent += convertAmount(transaction.amount, accountCurrency, targetCurrency, fxSnapshot.rates);
     } catch (error) {
-      console.error(`Error converting amount:`, error);
+      console.error("Error converting amount:", error);
     }
   });
 
@@ -81,14 +69,25 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     const db = getDb(key);
     const fxSnapshot = await getFxSnapshot(db);
 
-    // Current month date range
     const now = new Date();
     const startDate = startOfMonth(now);
     const endDate = endOfDay(now);
     const month = format(now, "yyyy-MM");
 
-    // Get all budgets
-    const budgets = db.select().from(schema.budgets).all();
+    const budgets = db
+      .select({
+        categoryId: schema.budgets.categoryId,
+        amount: schema.budgets.amount,
+        currency: schema.budgets.currency,
+        transactionType: schema.transactionCategories.transactionType,
+      })
+      .from(schema.budgets)
+      .innerJoin(
+        schema.transactionCategories,
+        eq(schema.budgets.categoryId, schema.transactionCategories.id)
+      )
+      .all()
+      .filter((budget) => budget.transactionType === "debit" && budget.categoryId != null);
 
     if (budgets.length === 0) {
       return NextResponse.json({
@@ -102,42 +101,35 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       });
     }
 
-    // Calculate spending for each budget and convert amounts
     let overallBudget = 0;
     let overallSpent = 0;
 
     await Promise.all(
       budgets.map(async (budget) => {
-        // Convert budget amount to target currency
         let budgetAmount = budget.amount;
         if (budget.currency !== currency && isSupportedCurrency(budget.currency)) {
           try {
             budgetAmount = convertAmount(budget.amount, budget.currency, currency, fxSnapshot.rates);
           } catch (error) {
-            console.error(`Error converting budget amount:`, error);
+            console.error("Error converting budget amount:", error);
           }
         }
 
         overallBudget += budgetAmount;
-
-        // Calculate spending
-        const spent = await calculateCategorySpending(
+        overallSpent += await calculateCategorySpending(
           db,
-          budget.categoryName,
+          budget.categoryId as number,
           startDate,
           endDate,
           currency,
           fxSnapshot
         );
-
-        overallSpent += spent;
       })
     );
 
     const overallRemaining = Math.max(0, overallBudget - overallSpent);
     const overallPercentageUsed = overallBudget > 0 ? (overallSpent / overallBudget) * 100 : 0;
 
-    // Determine status
     let status: "under" | "approaching" | "over";
     if (overallPercentageUsed > 100) {
       status = "over";

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client";
 import { Account, BalanceHistory, InvestmentHistory, Transaction, Transfer } from "@/lib/db/schema";
 import { useAuth } from "@/lib/auth-context";
@@ -901,7 +902,9 @@ export const useImportWizard = () => {
       setIsImporting(false);
       return true;
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Import failed");
+      const message = error instanceof Error ? error.message : "Import failed";
+      setImportError(message);
+      toast.error(message);
       setIsImporting(false);
       return false;
     }

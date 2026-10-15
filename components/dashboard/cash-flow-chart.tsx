@@ -9,9 +9,15 @@ import { Filter } from "lucide-react";
 import { type DashboardDateRange } from "./dashboard-date-selector";
 import { chartCobalt, chartInk, axisTick, chartGrid } from "@/components/charts/palette";
 
+interface CashFlowSlice {
+  categoryId: number;
+  category: string;
+  amount: number;
+}
+
 interface CashFlowData {
-  income: Array<{ category: string; amount: number }>;
-  expenses: Array<{ category: string; amount: number }>;
+  income: CashFlowSlice[];
+  expenses: CashFlowSlice[];
   currency: string;
 }
 
@@ -94,24 +100,27 @@ export const CashFlowChart = ({
     const expenseItem = topExpenses[i];
     return {
       name: `Item ${i + 1}`,
+      incomeCategoryId: incomeItem?.categoryId,
       incomeSource: incomeItem?.category || "",
       incomeAmount: incomeItem?.amount || 0,
+      expenseCategoryId: expenseItem?.categoryId,
       expenseCategory: expenseItem?.category || "",
       expenseAmount: expenseItem?.amount || 0,
     };
   });
 
-  // Alternative: Show income and expenses side by side
   const sideBySideData = [
     ...topIncome.map((item) => ({
+      categoryId: item.categoryId,
       category: item.category,
       type: "Income",
       amount: item.amount,
     })),
     ...topExpenses.map((item) => ({
+      categoryId: item.categoryId,
       category: item.category,
       type: "Expenses",
-      amount: -item.amount, // Negative for expenses
+      amount: -item.amount,
     })),
   ].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
 
@@ -176,9 +185,9 @@ export const CashFlowChart = ({
                   dataKey="amount"
                   radius={[0, 4, 4, 0]}
                 >
-                  {sideBySideData.map((entry, index) => (
+                  {sideBySideData.map((entry) => (
                     <Cell
-                      key={`cell-${index}`}
+                      key={`cell-${entry.type}-${entry.categoryId}`}
                       fill={entry.type === "Income" ? chartCobalt : chartInk}
                     />
                   ))}

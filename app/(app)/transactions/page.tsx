@@ -70,8 +70,8 @@ const TransactionsPage = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
-  const [categoryMap, setCategoryMap] = useState<Map<string, { color?: string | null; icon?: string | null }>>(new Map());
+  const [transactionCategories, setTransactionCategories] = useState<Array<{ id: number; name: string }>>([]);
+  const [categoryMap, setCategoryMap] = useState<Map<number, { color?: string | null; icon?: string | null }>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -106,15 +106,14 @@ const TransactionsPage = () => {
         const [unifiedData, accountsData, categoriesData] = await Promise.all([
           apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified"),
           apiClient.get<Account[]>("/api/accounts"),
-          apiClient.get<{ categories: Array<{ name: string; color?: string | null; icon?: string | null }> }>("/api/transaction-categories"),
+          apiClient.get<{ categories: Array<{ id: number; name: string; color?: string | null; icon?: string | null }> }>("/api/transaction-categories"),
         ]);
         replaceUnified(unifiedData);
         setAccounts(accountsData);
-        setTransactionCategories(categoriesData.categories.map((c) => c.name));
-        // Create a map of category name to category metadata
-        const catMap = new Map<string, { color?: string | null; icon?: string | null }>();
+        setTransactionCategories(categoriesData.categories.map((c) => ({ id: c.id, name: c.name })));
+        const catMap = new Map<number, { color?: string | null; icon?: string | null }>();
         categoriesData.categories.forEach((cat) => {
-          catMap.set(cat.name, { color: cat.color, icon: cat.icon });
+          catMap.set(cat.id, { color: cat.color, icon: cat.icon });
         });
         setCategoryMap(catMap);
       } catch (err) {
@@ -291,7 +290,7 @@ const TransactionsPage = () => {
           }
         }
 
-        if (categoryFilter !== "all" && t.category !== categoryFilter) {
+        if (categoryFilter !== "all" && String(t.categoryId ?? "") !== categoryFilter) {
           return false;
         }
 
@@ -325,7 +324,7 @@ const TransactionsPage = () => {
           }
         }
 
-        if (categoryFilter !== "all" && t.category !== categoryFilter) {
+        if (categoryFilter !== "all" && String(t.categoryId ?? "") !== categoryFilter) {
           return false;
         }
 
@@ -538,8 +537,8 @@ const TransactionsPage = () => {
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
                   {transactionCategories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
+                    <SelectItem key={cat.id} value={String(cat.id)}>
+                      {cat.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -605,8 +604,8 @@ const TransactionsPage = () => {
                                 <TableCell>
                                   <CategoryBadge
                                     name={transaction.category}
-                                    color={categoryMap.get(transaction.category)?.color}
-                                    icon={categoryMap.get(transaction.category)?.icon}
+                                    color={transaction.categoryId != null ? categoryMap.get(transaction.categoryId)?.color : undefined}
+                                    icon={transaction.categoryId != null ? categoryMap.get(transaction.categoryId)?.icon : undefined}
                                   />
                                 </TableCell>
                                 <TableCell>
@@ -678,8 +677,8 @@ const TransactionsPage = () => {
                               <TableCell>
                                 <CategoryBadge
                                   name={transfer.category || "Transfer"}
-                                  color={categoryMap.get(transfer.category || "Transfer")?.color}
-                                  icon={categoryMap.get(transfer.category || "Transfer")?.icon}
+                                  color={transfer.categoryId != null ? categoryMap.get(transfer.categoryId)?.color : undefined}
+                                  icon={transfer.categoryId != null ? categoryMap.get(transfer.categoryId)?.icon : undefined}
                                 />
                               </TableCell>
                               <TableCell>

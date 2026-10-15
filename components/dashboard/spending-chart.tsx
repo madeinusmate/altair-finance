@@ -18,6 +18,7 @@ const formatCurrency = (amount: number, currency: string): string => {
 };
 
 interface SpendingCategory {
+  categoryId: number;
   category: string;
   amount: number;
   percentage: number;
@@ -76,6 +77,7 @@ export const SpendingChart = ({
   }
 
   const chartData = data.categories.map((cat, index) => ({
+    categoryId: cat.categoryId,
     name: cat.category,
     spending: cat.amount,
     fill: spendingFills[index % spendingFills.length],
@@ -123,8 +125,8 @@ export const SpendingChart = ({
                     labelFormatter={(label) => label}
                     formatter={(value, _, item) => {
                       const numericValue = typeof value === "number" ? value : Number(value);
-                      const payload = item?.payload as { name?: string; fill?: string };
-                      const category = data.categories.find((cat) => cat.category === payload?.name);
+                      const payload = item?.payload as { categoryId?: number; name?: string; fill?: string };
+                      const category = data.categories.find((cat) => cat.categoryId === payload?.categoryId);
                       const percentage = category?.percentage || 0;
                       return (
                         <div className="flex flex-col gap-1">

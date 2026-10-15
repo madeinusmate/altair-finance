@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
-import { isValidTransactionCategory, isValidTransactionCategoryForType } from "@/lib/db/category-helpers";
+import { isValidCategoryIdForType, isValidTransferCategoryId } from "@/lib/db/category-helpers";
 
 type ImportTransactionRow =
   | {
@@ -24,6 +24,27 @@ type ImportTransactionRow =
       date: string;
     };
 
+type ResolvedTransaction = {
+  accountId: string;
+  type: "debit" | "credit";
+  categoryId: number;
+  categoryName: string;
+  amount: number;
+  description: string | null;
+  date: Date;
+};
+
+type ResolvedTransfer = {
+  fromAccountId: string;
+  toAccountId: string;
+  fromAmount: number;
+  toAmount: number;
+  exchangeRate: number | null;
+  categoryId: number;
+  description: string | null;
+  date: Date;
+};
+
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
   if (!key) {
@@ -43,63 +64,14 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     const db = getDb(key);
     const accounts = db.select().from(schema.accounts).all();
     const accountMap = new Map(accounts.map((account) => [account.id, account]));
+    const categories = db.select().from(schema.transactionCategories).all();
+    const categoryByName = new Map(categories.map((category) => [category.name, category]));
+    const transferCategory = categoryByName.get("Transfer");
 
-    const now = new Date();
-    let transactionCount = 0;
-    let transferCount = 0;
-
-    // Create import record if filename and fileHash are provided
-    let importId: string | undefined;
-    let isDuplicate = false;
-    
-    if (filename && fileHash) {
-      try {
-        // Check for duplicate file hash
-        const existingImport = db
-          .select()
-          .from(schema.imports)
-          .where(eq(schema.imports.fileHash, fileHash))
-          .get();
-        
-        if (existingImport) {
-          isDuplicate = true;
-          // Warn but allow import - create new import record
-        }
-
-        importId = uuidv4();
-        const validRows = rows.filter((row) => {
-          // Basic validation - will be validated again below
-          if (row.type === "transfer") {
-            return row.fromAccountId && row.toAccountId && row.fromAmount > 0 && row.toAmount > 0 && row.date;
-          } else {
-            return row.accountId && row.amount > 0 && row.date && row.category;
-          }
-        });
-
-        db.insert(schema.imports)
-          .values({
-            id: importId,
-            type: "transactions",
-            filename: filename,
-            fileHash: fileHash,
-            rowCount: validRows.length,
-            createdAt: now,
-          })
-          .run();
-      } catch (error) {
-        console.warn("Failed to create import record:", error);
-        // Continue without import tracking - import should still proceed
-        importId = undefined;
-      }
-    }
+    const resolvedTransactions: ResolvedTransaction[] = [];
+    const resolvedTransfers: ResolvedTransfer[] = [];
 
     rows.forEach((row, index) => {
-      if (row.type !== "transfer" && (!row.amount || row.amount <= 0)) {
-        throw new Error(`Row ${index + 1}: Amount must be a positive number`);
-      }
-      if (row.type === "transfer" && (!row.fromAmount || row.fromAmount <= 0 || !row.toAmount || row.toAmount <= 0)) {
-        throw new Error(`Row ${index + 1}: Both fromAmount and toAmount must be positive numbers`);
-      }
       if (!row.date) {
         throw new Error(`Row ${index + 1}: Date is required`);
       }
@@ -109,6 +81,9 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       }
 
       if (row.type === "transfer") {
+        if (!row.fromAmount || row.fromAmount <= 0 || !row.toAmount || row.toAmount <= 0) {
+          throw new Error(`Row ${index + 1}: Both fromAmount and toAmount must be positive numbers`);
+        }
         const fromAccount = accountMap.get(row.fromAccountId);
         const toAccount = accountMap.get(row.toAccountId);
         if (!fromAccount || !toAccount) {
@@ -120,80 +95,135 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
         if (fromAccount.type === "balance" || toAccount.type === "balance") {
           throw new Error(`Row ${index + 1}: Transfers cannot use balance accounts`);
         }
-
-        // Validate same-currency transfers: amounts must be equal
-        if (fromAccount.currency === toAccount.currency) {
-          if (row.fromAmount !== row.toAmount) {
-            throw new Error(`Row ${index + 1}: For same-currency transfers, fromAmount and toAmount must be equal`);
-          }
+        if (fromAccount.currency === toAccount.currency && row.fromAmount !== row.toAmount) {
+          throw new Error(`Row ${index + 1}: For same-currency transfers, fromAmount and toAmount must be equal`);
+        }
+        if (!transferCategory || !isValidTransferCategoryId(db, transferCategory.id)) {
+          throw new Error(`Row ${index + 1}: Transfer category is not available`);
         }
 
-        // Calculate exchange rate
-        const exchangeRate = fromAccount.currency !== toAccount.currency 
-          ? row.toAmount / row.fromAmount 
-          : null;
-
-        db.insert(schema.transfers)
-          .values({
-            id: uuidv4(),
-            fromAccountId: fromAccount.id,
-            toAccountId: toAccount.id,
-            amount: Number(row.fromAmount), // Keep for backward compatibility
-            fromAmount: Number(row.fromAmount),
-            toAmount: Number(row.toAmount),
-            exchangeRate: exchangeRate,
-            description: row.description || null,
-            date: parsedDate,
-            createdAt: now,
-            importId: importId || null,
-          })
-          .run();
-        transferCount += 1;
-      } else {
-        const account = accountMap.get(row.accountId);
-        if (!account) {
-          throw new Error(`Row ${index + 1}: Account not found`);
-        }
-        if (account.type !== "transaction") {
-          throw new Error(`Row ${index + 1}: Transactions must use transaction accounts`);
-        }
-        if (!["debit", "credit"].includes(row.type)) {
-          throw new Error(`Row ${index + 1}: Type must be debit or credit`);
-        }
-        if (!row.category || !isValidTransactionCategory(db, row.category)) {
-          const validCategories = db.select().from(schema.transactionCategories).all();
-          const categoryNames = validCategories.map((c) => c.name).join(", ");
-          throw new Error(`Row ${index + 1}: Invalid category. Valid categories: ${categoryNames}`);
-        }
-        // Validate category matches transaction type (flag for review, don't reject)
-        if (!isValidTransactionCategoryForType(db, row.category, row.type as "debit" | "credit")) {
-          // This is a warning, not an error - we'll still import but flag it
-          console.warn(`Row ${index + 1}: Category "${row.category}" does not match transaction type "${row.type}"`);
-        }
-
-        db.insert(schema.transactions)
-          .values({
-            id: uuidv4(),
-            accountId: account.id,
-            type: row.type,
-            category: row.category,
-            amount: Number(row.amount),
-            description: row.description || null,
-            date: parsedDate,
-            createdAt: now,
-            importId: importId || null,
-          })
-          .run();
-        transactionCount += 1;
+        resolvedTransfers.push({
+          fromAccountId: fromAccount.id,
+          toAccountId: toAccount.id,
+          fromAmount: Number(row.fromAmount),
+          toAmount: Number(row.toAmount),
+          exchangeRate: fromAccount.currency !== toAccount.currency ? row.toAmount / row.fromAmount : null,
+          categoryId: transferCategory.id,
+          description: row.description || null,
+          date: parsedDate,
+        });
+        return;
       }
+
+      if (!row.amount || row.amount <= 0) {
+        throw new Error(`Row ${index + 1}: Amount must be a positive number`);
+      }
+      const account = accountMap.get(row.accountId);
+      if (!account) {
+        throw new Error(`Row ${index + 1}: Account not found`);
+      }
+      if (account.type !== "transaction") {
+        throw new Error(`Row ${index + 1}: Transactions must use transaction accounts`);
+      }
+      if (!["debit", "credit"].includes(row.type)) {
+        throw new Error(`Row ${index + 1}: Type must be debit or credit`);
+      }
+      const category = row.category ? categoryByName.get(row.category) : undefined;
+      if (!category) {
+        const categoryNames = categories.map((item) => item.name).join(", ");
+        throw new Error(`Row ${index + 1}: Invalid category. Valid categories: ${categoryNames}`);
+      }
+      if (!isValidCategoryIdForType(db, category.id, row.type)) {
+        throw new Error(
+          `Row ${index + 1}: Category "${row.category}" does not match transaction type "${row.type}"`
+        );
+      }
+
+      resolvedTransactions.push({
+        accountId: account.id,
+        type: row.type,
+        categoryId: category.id,
+        categoryName: category.name,
+        amount: Number(row.amount),
+        description: row.description || null,
+        date: parsedDate,
+      });
     });
+
+    const now = new Date();
+    let importId: string | undefined;
+    let isDuplicate = false;
+
+    if (filename && fileHash) {
+      try {
+        const existingImport = db
+          .select()
+          .from(schema.imports)
+          .where(eq(schema.imports.fileHash, fileHash))
+          .get();
+        if (existingImport) {
+          isDuplicate = true;
+        }
+
+        importId = uuidv4();
+        db.insert(schema.imports)
+          .values({
+            id: importId,
+            type: "transactions",
+            filename,
+            fileHash,
+            rowCount: resolvedTransactions.length + resolvedTransfers.length,
+            createdAt: now,
+          })
+          .run();
+      } catch (error) {
+        console.warn("Failed to create import record:", error);
+        importId = undefined;
+      }
+    }
+
+    for (const row of resolvedTransfers) {
+      db.insert(schema.transfers)
+        .values({
+          id: uuidv4(),
+          fromAccountId: row.fromAccountId,
+          toAccountId: row.toAccountId,
+          amount: row.fromAmount,
+          fromAmount: row.fromAmount,
+          toAmount: row.toAmount,
+          exchangeRate: row.exchangeRate,
+          categoryId: row.categoryId,
+          description: row.description,
+          date: row.date,
+          createdAt: now,
+          importId: importId || null,
+        })
+        .run();
+    }
+
+    for (const row of resolvedTransactions) {
+      db.insert(schema.transactions)
+        .values({
+          id: uuidv4(),
+          accountId: row.accountId,
+          type: row.type,
+          category: row.categoryName,
+          categoryId: row.categoryId,
+          amount: row.amount,
+          description: row.description,
+          date: row.date,
+          createdAt: now,
+          importId: importId || null,
+        })
+        .run();
+    }
 
     return NextResponse.json({
       success: true,
-      transactions: transactionCount,
-      transfers: transferCount,
+      transactions: resolvedTransactions.length,
+      transfers: resolvedTransfers.length,
       importId: importId || null,
-      isDuplicate: isDuplicate,
+      isDuplicate,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to import transactions";
