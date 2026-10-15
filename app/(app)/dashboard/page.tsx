@@ -21,6 +21,7 @@ import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { NetWorthCard } from "@/components/dashboard/net-worth-card";
 import { AccountCreateDialog } from "@/components/account-create-dialog";
 import type { Transaction, Transfer } from "@/lib/db/schema";
+import type { SpendingComparison } from "@/lib/insights/spending";
 
 interface AccountBalance {
   id: string;
@@ -67,11 +68,7 @@ interface CashFlowSankeyData {
   currency: string;
 }
 
-interface SpendingData {
-  categories: Array<{ category: string; amount: number; percentage: number }>;
-  total: number;
-  currency: string;
-}
+type SpendingData = SpendingComparison;
 
 interface InvestmentDataPoint {
   date: string;
