@@ -671,7 +671,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                 <DialogHeader>
                   <DialogTitle>Import PDF Statement</DialogTitle>
                   <DialogDescription>
-                    Upload a PDF bank or credit card statement to import transactions into {account.name}
+                    Statements are read on this computer. The file is not sent anywhere unless you turn on cloud parsing. Import transactions into {account.name}
                   </DialogDescription>
                 </DialogHeader>
               </div>

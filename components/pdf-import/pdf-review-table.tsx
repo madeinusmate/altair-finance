@@ -14,21 +14,15 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Account } from "@/lib/db/schema";
-import { ParsedTransaction } from "@/lib/pdf/openai-client";
+import { ParsedTransaction } from "@/lib/pdf/types";
 import { ArrowLeftRight } from "lucide-react";
 
-export type TransactionRow = {
+export type TransactionRow = ParsedTransaction & {
   id: string;
-  date: string;
-  description: string;
-  amount: number;
-  category: string;
-  type: "debit" | "credit";
   errors: string[];
   warnings: string[];
   duplicate?: boolean;
   excluded?: boolean;
-  // For transfers
   isTransfer?: boolean;
   fromAccountId?: string;
   toAccountId?: string;

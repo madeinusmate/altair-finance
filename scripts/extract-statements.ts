@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+// This script uploads statement files to OpenAI and is not used by the app.
 
 import OpenAI from "openai";
 import * as fs from "fs";

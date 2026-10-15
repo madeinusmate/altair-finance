@@ -3,7 +3,8 @@ import { eq } from "drizzle-orm";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { getDb, schema } from "@/lib/db";
 import { getTransactionCategoryNames } from "@/lib/db/category-helpers";
-import { parsePdfStatement, validatePdfFile } from "@/lib/pdf/openai-client";
+import { runStatementParser } from "@/lib/pdf/parse-dispatch";
+import { validatePdfFile } from "@/lib/pdf/types";
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
@@ -15,6 +16,8 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const accountId = formData.get("accountId") as string | null;
+    const parserValue = formData.get("parser");
+    const parserField = typeof parserValue === "string" ? parserValue : null;
 
     if (!file) {
       return NextResponse.json(
@@ -57,16 +60,9 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       );
     }
 
-    // Convert file to base64
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const pdfBase64 = buffer.toString("base64");
-
-    // Get valid categories
-    const validCategories = getTransactionCategoryNames(db);
-
-    // Parse PDF
-    const result = await parsePdfStatement(pdfBase64, file.name, validCategories);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const validCategories = parserField === "openai" ? getTransactionCategoryNames(db) : [];
+    const result = await runStatementParser(parserField, bytes, file.name, validCategories);
 
     if (!result.success) {
       return NextResponse.json(result, { status: 400 });
@@ -74,7 +70,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Error parsing PDF:", error);
+    console.error("PDF parse failed", error instanceof Error ? error.name : "unknown");
     return NextResponse.json(
       {
         success: false,

@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ParsedTransaction } from "@/lib/pdf/openai-client";
+import { ParsedTransaction } from "@/lib/pdf/types";
 import { calculatePdfHash } from "@/lib/pdf/file-hash";
 import { validateTransactionRows } from "@/lib/csv/import-validators";
 import { buildAccountNameMap } from "@/lib/csv/import-validators";
@@ -77,6 +77,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
   const [existingTransactions, setExistingTransactions] = useState<Transaction[]>([]);
   const [existingTransfers, setExistingTransfers] = useState<Transfer[]>([]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [useCloudParser, setUseCloudParser] = useState(false);
 
   const accountMap = useMemo(() => buildAccountNameMap(accounts), [accounts]);
 
@@ -227,6 +228,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
       const formData = new FormData();
       formData.append("file", selectedFile);
       formData.append("accountId", selectedAccountId);
+      formData.append("parser", useCloudParser ? "openai" : "local");
 
       // Call parse API using fetch (FormData requires multipart/form-data)
       const response = await fetch("/api/import/pdf-statements/parse", {
@@ -271,19 +273,22 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
 
       const validated = validateTransactionRows(rawRows, accounts, transactionCategories);
 
-      const transactionRows: TransactionRow[] = validated.map((row, index) => ({
-        id: `pdf-${index}`,
-        date: row.date,
-        description: row.description,
-        amount: parseFloat(row.amount) || 0,
-        category: row.category,
-        type: row.type as "debit" | "credit",
-        errors: row.errors,
-        warnings: row.warnings,
-        duplicate: false,
-        excluded: false,
-        isTransfer: false,
-      }));
+      const transactionRows: TransactionRow[] = validated.map((row, index) => {
+        const parserWarnings = data.transactions[index]?.warnings ?? [];
+        return {
+          id: `pdf-${index}`,
+          date: row.date,
+          description: row.description,
+          amount: parseFloat(row.amount) || 0,
+          category: row.category,
+          type: row.type as "debit" | "credit",
+          errors: row.errors,
+          warnings: [...row.warnings, ...parserWarnings],
+          duplicate: false,
+          excluded: false,
+          isTransfer: false,
+        };
+      });
 
       setRows(transactionRows);
     } catch (error) {
@@ -404,6 +409,8 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
           fileName={fileName}
           disabled={isProcessing || isImporting}
           onAccountChange={setSelectedAccountId}
+          useCloudParser={useCloudParser}
+          onUseCloudParserChange={setUseCloudParser}
           onFileSelected={handleFileSelected}
           onClear={handleClear}
         />

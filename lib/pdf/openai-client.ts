@@ -1,31 +1,5 @@
 import OpenAI from "openai";
-
-const MAX_FILE_SIZE_MB = 50;
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-
-export interface ParsedTransaction {
-  date: string; // YYYY-MM-DD format
-  description: string;
-  amount: number; // Always positive
-  category: string;
-  type: "debit" | "credit";
-}
-
-export interface ParseResult {
-  success: true;
-  transactions: ParsedTransaction[];
-  metadata: {
-    filename: string;
-    fileSize: number;
-    extractedCount: number;
-  };
-}
-
-export interface ParseError {
-  success: false;
-  error: string;
-  retryable: boolean;
-}
+import type { ParseError, ParseResult, ParsedTransaction } from "./types";
 
 const sleep = (ms: number): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -198,6 +172,7 @@ Return ONLY the JSON object, no markdown, no code blocks, no explanations.`;
           filename,
           fileSize: (pdfBase64.length * 3) / 4,
           extractedCount: validatedTransactions.length,
+          parser: "openai",
         },
       };
     } catch (error: unknown) {
@@ -237,20 +212,3 @@ Return ONLY the JSON object, no markdown, no code blocks, no explanations.`;
   };
 };
 
-/**
- * Validate file size
- */
-export const validatePdfFile = (file: File): { valid: boolean; error?: string } => {
-  if (file.type !== "application/pdf") {
-    return { valid: false, error: "File must be a PDF" };
-  }
-
-  if (file.size > MAX_FILE_SIZE_BYTES) {
-    return {
-      valid: false,
-      error: `File size exceeds ${MAX_FILE_SIZE_MB}MB limit`,
-    };
-  }
-
-  return { valid: true };
-};
