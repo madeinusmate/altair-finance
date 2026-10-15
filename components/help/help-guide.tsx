@@ -43,7 +43,7 @@ const Term = ({ title, children }: { title: string; children: React.ReactNode })
 
 export const HelpGuide = () => (
   <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 lg:flex-row lg:items-start">
-    <nav aria-label="On this page" className="lg:sticky lg:top-0 lg:w-52 lg:shrink-0">
+    <nav aria-label="On this page" className="lg:w-52 lg:shrink-0">
       <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">On this page</p>
       <ol className="mt-3 columns-2 gap-x-4 space-y-1 lg:columns-1">
         {sections.map((section, index) => (
