@@ -57,7 +57,7 @@ const ImportsPage = () => {
           </Link>
         </Button>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Import History</h1>
+          <h1 className="text-[34px] font-semibold tracking-[-0.03em]">Import History</h1>
           <p className="text-muted-foreground">View and manage your CSV imports</p>
         </div>
       </div>

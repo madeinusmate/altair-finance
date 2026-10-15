@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiClient } from "@/lib/api-client";
-import { Target } from "lucide-react";
 
 interface BudgetTileProps {
   currency: string;
@@ -75,11 +74,8 @@ export const BudgetTile = ({ currency }: BudgetTileProps) => {
     return (
       <Card className="h-full cursor-pointer transition-colors hover:bg-muted" onClick={() => router.push("/budget")}>
         <CardContent className="py-5">
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Target className="h-4 w-4" />
-            Left to spend
-          </p>
-          <p className="mt-2 text-2xl font-medium tracking-[-0.02em] text-muted-foreground">Set a budget</p>
+          <p className="text-[13px] text-muted-foreground">Left to spend</p>
+          <p className="mt-1 text-[28px] font-semibold leading-none tracking-[-0.03em] text-muted-foreground">Set a budget</p>
         </CardContent>
       </Card>
     );
@@ -88,11 +84,8 @@ export const BudgetTile = ({ currency }: BudgetTileProps) => {
   return (
     <Card className="h-full cursor-pointer transition-colors hover:bg-muted" onClick={() => router.push("/budget")}>
       <CardContent className="py-5">
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Target className="h-4 w-4" />
-          Left to spend
-        </p>
-        <p className="mt-2 text-2xl font-medium tracking-[-0.02em] tabular-nums">
+        <p className="text-[13px] text-muted-foreground">Left to spend</p>
+        <p className="mt-1 text-[28px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
           {formatCurrency(data.overallRemaining, data.currency)}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">{getStatusHint(data.status, data.overallPercentageUsed)}</p>

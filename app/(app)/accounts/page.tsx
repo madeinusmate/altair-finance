@@ -169,7 +169,7 @@ const AccountsPage = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">Accounts</h1>
+            <h1 className="text-[34px] font-semibold leading-[40px] tracking-[-0.03em]">Accounts</h1>
             <p className="text-muted-foreground">Manage your financial accounts</p>
           </div>
           <Skeleton className="h-10 w-32" />
@@ -192,7 +192,7 @@ const AccountsPage = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">Accounts</h1>
+            <h1 className="text-[34px] font-semibold leading-[40px] tracking-[-0.03em]">Accounts</h1>
             <p className="text-muted-foreground">Manage your financial accounts</p>
           </div>
         </div>
@@ -248,11 +248,8 @@ const AccountsPage = () => {
           className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted"
         >
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium">
-              {account.name.charAt(0).toUpperCase()}
-            </div>
             <div className="min-w-0">
-            <p className="truncate font-medium">{account.name}</p>
+            <p className="truncate font-semibold">{account.name}</p>
             <p className="truncate text-xs text-muted-foreground">
               {formatCategoryDisplay(account.category)} · {typeLabels[account.type]}
               {updatedLabel ? ` · Updated ${updatedLabel}` : ""}
@@ -260,7 +257,7 @@ const AccountsPage = () => {
             </div>
           </div>
           <div className="shrink-0 text-right">
-            <p className="font-medium tabular-nums tracking-[-0.02em]">{balanceLabel}</p>
+            <p className="font-normal tabular-nums tracking-[-0.02em]">{balanceLabel}</p>
             {account.type === "investment" && account.profitLoss !== undefined && (
               <p className="flex items-center justify-end gap-1 text-sm tabular-nums text-muted-foreground">
                 {account.profitLoss >= 0 ? (
@@ -282,7 +279,7 @@ const AccountsPage = () => {
     <div className="w-full space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">Accounts</h1>
+          <h1 className="text-[34px] font-semibold leading-[40px] tracking-[-0.03em]">Accounts</h1>
           <p className="text-muted-foreground">Manage your financial accounts</p>
         </div>
         <div className="flex gap-2">
@@ -320,31 +317,26 @@ const AccountsPage = () => {
             ).length;
 
             return (
-              <section
+              <div
                 key={group}
-                className={`overflow-hidden rounded-[22px] border border-border bg-card ${
-                  filledGroupCount === 1 ? "xl:col-span-2" : ""
-                }`}
+                className={`space-y-3 ${filledGroupCount === 1 ? "xl:col-span-2" : ""}`}
               >
-                <div className="flex items-start justify-between gap-4 border-b px-4 py-3">
-                  <div>
-                    <h2 className="text-base font-semibold tracking-tight">{groupLabels[group]}</h2>
-                    <p className="text-sm text-muted-foreground">
-                      {accountsInGroup.length} {accountsInGroup.length === 1 ? "account" : "accounts"}
-                    </p>
-                  </div>
+                <div className="flex items-end justify-between px-1">
+                  <h2 className="text-[22px] font-semibold tracking-[-0.02em]">{groupLabels[group]}</h2>
                   <div className="text-right">
                     {totals.map(([currency, total]) => (
-                      <p key={currency} className="font-semibold tabular-nums tracking-[-0.02em]">
+                      <p key={currency} className="tabular-nums tracking-[-0.02em]">
                         {formatCurrency(total, currency)}
                       </p>
                     ))}
                   </div>
                 </div>
-                <ul className="divide-y">
-                  {accountsInGroup.map((account) => renderAccountRow(account))}
-                </ul>
-              </section>
+                <div className="overflow-hidden rounded-[20px] bg-card">
+                  <ul className="divide-y divide-border">
+                    {accountsInGroup.map((account) => renderAccountRow(account))}
+                  </ul>
+                </div>
+              </div>
             );
           })}
         </div>

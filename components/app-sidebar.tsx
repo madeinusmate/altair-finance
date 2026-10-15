@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { apiClient } from "@/lib/api-client";
+import { PROFILE_UPDATED_EVENT, type UserProfile } from "@/lib/user-profile";
 import {
   Sidebar,
   SidebarContent,
@@ -55,20 +56,38 @@ export const AppSidebar = () => {
   const pathname = usePathname();
   const { lock, isAuthenticated } = useAuth();
   const [username, setUsername] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
+  const [avatar, setAvatar] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchUsername = async () => {
+    const applyProfile = (profile: Pick<UserProfile, "name" | "email" | "avatar">) => {
+      setUsername(profile.name || null);
+      setEmail(profile.email);
+      setAvatar(profile.avatar);
+    };
+
+    const fetchProfile = async () => {
       if (!isAuthenticated) {
         return;
       }
       try {
-        const data = await apiClient.get<{ username: string | null }>("/api/user/username");
-        setUsername(data.username);
+        const data = await apiClient.get<UserProfile>("/api/user/profile");
+        applyProfile(data);
       } catch (error) {
-        console.error("Failed to fetch username:", error);
+        console.error("Failed to fetch profile:", error);
       }
     };
-    void fetchUsername();
+
+    const handleProfileUpdated = (event: Event) => {
+      const profile = (event as CustomEvent<UserProfile>).detail;
+      if (profile) {
+        applyProfile(profile);
+      }
+    };
+
+    void fetchProfile();
+    window.addEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
   }, [isAuthenticated]);
 
   const handleLock = () => {
@@ -83,13 +102,17 @@ export const AppSidebar = () => {
       <SidebarHeader>
         <div className="flex items-center gap-3 px-2 py-4">
           <div
-            className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium text-white"
-            style={{ background: "linear-gradient(160deg, #1227fd 0%, #6fa0ff 100%)" }}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-medium ${avatar ? "" : "avatar-mark"}`}
           >
-            {initial}
+            {avatar ? (
+              <img src={avatar} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initial
+            )}
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{username || "Netly"}</p>
+            {email ? <p className="truncate text-xs text-muted-foreground">{email}</p> : null}
           </div>
         </div>
       </SidebarHeader>

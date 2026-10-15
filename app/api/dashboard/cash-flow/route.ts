@@ -3,7 +3,7 @@ import { gte, lte, and } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { convertAmount, getFxSnapshot } from "@/lib/fx";
-import { TARGET_NET_WORTH_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
+import { type SupportedCurrency } from "@/lib/currencies";
 
 interface CashFlowData {
   income: Array<{ category: string; amount: number }>;

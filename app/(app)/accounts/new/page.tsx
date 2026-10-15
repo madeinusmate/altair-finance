@@ -101,7 +101,7 @@ const NewAccountPage = () => {
           </Link>
         </Button>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">New Account</h1>
+          <h1 className="text-[34px] font-semibold tracking-[-0.03em]">New Account</h1>
           <p className="text-muted-foreground">Add a new financial account</p>
         </div>
       </div>

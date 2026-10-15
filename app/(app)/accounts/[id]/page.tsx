@@ -410,7 +410,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
             </Link>
           </Button>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Account Not Found</h1>
+            <h1 className="text-[34px] font-semibold tracking-[-0.03em]">Account Not Found</h1>
           </div>
         </div>
         <Card>
@@ -473,17 +473,9 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
           </Button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-tight">{account.name}</h1>
+              <h1 className="text-[34px] font-semibold tracking-[-0.03em]">{account.name}</h1>
               {account.type === "transaction" && (
-                <span
-                  className={`text-3xl font-bold ${
-                    account.nature === "asset" 
-                      ? "text-green-600" 
-                      : currentBalance < 0 
-                        ? "text-green-600" 
-                        : "text-red-600"
-                  }`}
-                >
+                <span className="text-[34px] font-semibold tracking-[-0.03em] tabular-nums text-foreground">
                   {account.nature === "liability" && currentBalance < 0 
                     ? ` • ${formatCurrency(Math.abs(currentBalance), account.currency)} credit`
                     : ` • ${formatCurrency(currentBalance, account.currency)}`}
@@ -491,7 +483,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
               )}
             </div>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
-              <Badge className="capitalize" variant={account.nature === "asset" ? "default" : "destructive"}>
+              <Badge className="capitalize" variant="outline">
                 {account.nature}
               </Badge>              
               <Badge variant="outline" className="capitalize">
@@ -558,15 +550,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
               <CardDescription>Current Value</CardDescription>
             </CardHeader>
             <CardContent>
-              <div
-                className={`text-2xl font-bold ${
-                  account.nature === "asset" 
-                    ? "text-green-600" 
-                    : currentBalance < 0 
-                      ? "text-green-600" 
-                      : "text-red-600"
-                }`}
-              >
+              <div className="text-2xl font-semibold tracking-[-0.03em] tabular-nums text-foreground">
                 {account.nature === "liability" && currentBalance < 0 
                   ? `${formatCurrency(Math.abs(currentBalance), account.currency)} credit`
                   : formatCurrency(currentBalance, account.currency)}
@@ -589,7 +573,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
             </CardHeader>
             <CardContent>
               <div className={`flex items-center gap-2 text-2xl font-bold ${
-                (profitLoss ?? 0) >= 0 ? "text-green-600" : "text-red-600"
+                (profitLoss ?? 0) >= 0 ? "text-foreground" : "text-foreground"
               }`}>
                 {(profitLoss ?? 0) >= 0 ? (
                   <TrendingUp className="h-5 w-5" />
@@ -976,9 +960,9 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                               <TableCell>
                                 <div className="flex items-center gap-2">
                                   {transaction.type === "credit" ? (
-                                    <ArrowUpRight className="h-4 w-4 text-green-500" />
+                                    <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
                                   ) : (
-                                    <ArrowDownRight className="h-4 w-4 text-red-500" />
+                                    <ArrowDownRight className="h-4 w-4 text-muted-foreground" />
                                   )}
                                   <span className="capitalize">{transaction.type}</span>
                                 </div>
@@ -993,7 +977,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                               <TableCell>{transaction.description || "-"}</TableCell>
                               <TableCell
                                 className={`text-right font-medium ${
-                                  transaction.type === "credit" ? "text-green-600" : "text-red-600"
+                                  transaction.type === "credit" ? "text-foreground" : "text-foreground"
                                 }`}
                               >
                                 {transaction.type === "credit" ? "+" : "-"}
@@ -1075,7 +1059,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                               </TableCell>
                               <TableCell
                                 className={`text-right font-medium ${
-                                  isOutgoing ? "text-red-600" : "text-green-600"
+                                  isOutgoing ? "text-foreground" : "text-foreground"
                                 }`}
                               >
                                 {isOutgoing ? "-" : "+"}
@@ -1443,7 +1427,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                               </TableCell>
                               <TableCell
                                 className={`text-right font-medium ${
-                                  isOutgoing ? "text-red-600" : "text-green-600"
+                                  isOutgoing ? "text-foreground" : "text-foreground"
                                 }`}
                               >
                                 {isOutgoing ? "-" : "+"}

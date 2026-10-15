@@ -13,6 +13,34 @@ export type DashboardDateRange = {
   endDate: Date;
 };
 
+export const formatDashboardDateRangeLabel = (
+  value: DashboardDateRange,
+  oldestDate?: Date | null,
+): string => {
+  const now = new Date();
+  const today = format(endOfDay(now), "yyyy-MM-dd");
+  const selectedEnd = format(value.endDate, "yyyy-MM-dd");
+  const selectedStart = format(value.startDate, "yyyy-MM-dd");
+
+  const presetStart = (months: number | null): string => {
+    if (months) {
+      return format(startOfDay(subMonths(startOfMonth(now), months - 1)), "yyyy-MM-dd");
+    }
+    const allTimeStart = oldestDate ? startOfDay(oldestDate) : new Date(2015, 3, 1);
+    return format(allTimeStart, "yyyy-MM-dd");
+  };
+
+  if (selectedEnd === today) {
+    if (selectedStart === presetStart(1)) return "Current Month";
+    if (selectedStart === presetStart(3)) return "Last 3 months";
+    if (selectedStart === presetStart(6)) return "Last 6 months";
+    if (selectedStart === presetStart(12)) return "Last 12 months";
+    if (selectedStart === presetStart(null)) return "All time";
+  }
+
+  return `${format(value.startDate, "MMM d")} - ${format(value.endDate, "MMM d")}`;
+};
+
 interface DashboardDateSelectorProps {
   value: DashboardDateRange;
   onChange: (range: DashboardDateRange) => void;
@@ -86,14 +114,7 @@ export const DashboardDateSelector = ({ value, onChange, className, oldestDate }
     );
   };
 
-  const getDisplayText = () => {
-    if (isPresetActive(1)) return "Current Month";
-    if (isPresetActive(3)) return "Last 3 months";
-    if (isPresetActive(6)) return "Last 6 months";
-    if (isPresetActive(12)) return "Last 12 months";
-    if (isPresetActive(null)) return "All time";
-    return `${format(value.startDate, "MMM d")} - ${format(value.endDate, "MMM d")}`;
-  };
+  const getDisplayText = () => formatDashboardDateRangeLabel(value, oldestDate);
 
   return (
     <Popover open={isOpen} onOpenChange={handleOpenChange}>

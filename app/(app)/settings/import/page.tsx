@@ -187,7 +187,7 @@ const ImportWizardPage = () => {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Import Data</h1>
+          <h1 className="text-[34px] font-semibold tracking-[-0.03em]">Import Data</h1>
           <p className="text-muted-foreground">
             Import transactions, transfers, balances, and investments from CSV files or PDF statements.
           </p>

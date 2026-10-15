@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from "rec
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { PNLDataPoint, formatCurrencySmart } from "@/lib/chart-data-aggregation";
 import { Card, CardContent } from "@/components/ui/card";
+import { axisTick, chartCobalt, chartGrid } from "@/components/charts/palette";
 
 interface PNLChartProps {
   data: PNLDataPoint[];
@@ -13,7 +14,7 @@ interface PNLChartProps {
 const chartConfig = {
   pnl: {
     label: "Profit / Loss",
-    color: "#1227fd",
+    color: chartCobalt,
   },
 };
 
@@ -41,19 +42,18 @@ export const PNLChart = ({ data, currency }: PNLChartProps) => {
       <CardContent className="pt-6">
         <ChartContainer config={chartConfig} className="h-[300px] w-full">
           <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} width={undefined} height={undefined}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <CartesianGrid vertical={false} stroke={chartGrid} />
             <XAxis
               dataKey="date"
-              tick={{ fill: "hsl(var(--muted-foreground))" }}
-              angle={-45}
-              textAnchor="end"
-              height={80}
+              tick={axisTick}
+              tickLine={false}
+              axisLine={false}
             />
             <YAxis
-              tick={{ fill: "hsl(var(--muted-foreground))" }}
+              tick={axisTick}
               tickFormatter={(value) => formatCurrencySmart(value, currency)}
             />
-            <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="2 2" label="Net Contribution" />
+            <ReferenceLine y={0} stroke={chartGrid} />
             <ChartTooltip
               content={
                 <ChartTooltipContent
@@ -98,9 +98,9 @@ export const PNLChart = ({ data, currency }: PNLChartProps) => {
             <Line
               type="monotone"
               dataKey="pnl"
-              stroke="#1227fd"
+              stroke={chartCobalt}
               strokeWidth={2}
-              dot={{ fill: "#1227fd", r: 4 }}
+              dot={{ fill: chartCobalt, r: 3 }}
               activeDot={{ r: 6 }}
             />
           </LineChart>

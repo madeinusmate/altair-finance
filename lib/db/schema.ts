@@ -143,6 +143,10 @@ export const budgets = sqliteTable("budgets", {
 export const userSettings = sqliteTable("user_settings", {
   id: text("id").primaryKey().default("user"),
   username: text("username").notNull(),
+  email: text("email"),
+  avatar: text("avatar"),
+  preferredCurrency: text("preferred_currency"),
+  enabledCurrencies: text("enabled_currencies"),
   installId: text("install_id"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),

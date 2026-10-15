@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Wallet, AlertTriangle, Plus } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { TARGET_NET_WORTH_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
+import { type SupportedCurrency } from "@/lib/currencies";
+import { useDisplayCurrencies } from "@/hooks/use-display-currencies";
 import { startOfMonth, endOfDay, subMonths, startOfDay, format } from "date-fns";
 import { DashboardDateSelector, type DashboardDateRange } from "@/components/dashboard/dashboard-date-selector";
 import { MonthlyIncomeExpensesChart } from "@/components/dashboard/monthly-income-expenses-chart";
@@ -18,6 +18,7 @@ import { InvestmentPerformanceChart } from "@/components/dashboard/investment-pe
 import { NetCashChart } from "@/components/dashboard/net-cash-chart";
 import { BudgetTile } from "@/components/dashboard/budget-tile";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
+import { NetWorthCard } from "@/components/dashboard/net-worth-card";
 import { AccountCreateDialog } from "@/components/account-create-dialog";
 import type { Transaction, Transfer } from "@/lib/db/schema";
 
@@ -128,8 +129,7 @@ const DashboardPage = () => {
   const [data, setData] = useState<NetWorthData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCurrency, setSelectedCurrency] = useState<SupportedCurrency>("USD");
-  const [username, setUsername] = useState<string | null>(null);
+  const { enabledCurrencies, selectedCurrency, selectCurrency, profileName, isReady } = useDisplayCurrencies();
   const [refreshKey, setRefreshKey] = useState(0);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [activity, setActivity] = useState<{ transactions: Transaction[]; transfers: Transfer[] } | null>(null);
@@ -156,18 +156,6 @@ const DashboardPage = () => {
   const [investmentAccounts, setInvestmentAccounts] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedInvestmentAccount, setSelectedInvestmentAccount] = useState<string | undefined>(undefined);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
-
-  useEffect(() => {
-    const fetchUsername = async () => {
-      try {
-        const result = await apiClient.get<{ username: string | null }>("/api/user/username");
-        setUsername(result.username);
-      } catch (error) {
-        console.error("Failed to fetch username:", error);
-      }
-    };
-    void fetchUsername();
-  }, []);
 
   useEffect(() => {
     const fetchActivity = async () => {
@@ -203,7 +191,7 @@ const DashboardPage = () => {
   // Fetch dashboard insights data
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!data) return;
+      if (!data || !isReady) return;
 
       setIsLoadingDashboard(true);
       try {
@@ -257,14 +245,14 @@ const DashboardPage = () => {
     };
 
     fetchDashboardData();
-  }, [data, dateRange, selectedCurrency, selectedInvestmentAccount]);
+  }, [data, dateRange, selectedCurrency, selectedInvestmentAccount, isReady]);
 
 
 
   const hasData = data && data.accounts.length > 0;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const greetingLine = username ? `${greeting}, ${username}` : greeting;
+  const greetingLine = profileName ? `${greeting}, ${profileName}` : greeting;
   const netWorthSummary = data?.netWorthByCurrency[selectedCurrency];
   const ratesLabel = data ? formatRateTimestamp(data.lastRatesUpdatedAt) : "";
 
@@ -309,7 +297,57 @@ const DashboardPage = () => {
 
   return (
     <div className="w-full space-y-8">
-      <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">{greetingLine}</h1>
+      <div className="space-y-2">
+        {isReady || hasData ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {isReady ? (
+              <div className="flex h-8 items-center rounded-full bg-muted p-0.5" role="group" aria-label="Currency">
+                {enabledCurrencies.map((currency) => (
+                  <button
+                    key={currency}
+                    type="button"
+                    onClick={() => selectCurrency(currency)}
+                    className={
+                      currency === selectedCurrency
+                        ? "h-7 rounded-full bg-background px-3 text-sm font-semibold text-foreground shadow-sm"
+                        : "h-7 rounded-full px-3 text-sm text-muted-foreground"
+                    }
+                  >
+                    {currency}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {hasData ? (
+              <div className="ml-auto flex h-8 items-center rounded-full bg-muted p-0.5">
+                <DashboardDateSelector
+                  value={dateRange}
+                  onChange={setDateRange}
+                  className="h-7 rounded-full border-0 bg-background px-3 font-semibold text-foreground shadow-sm hover:bg-background"
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      <NetWorthCard
+        greeting={greetingLine}
+        amount={
+          hasData && netWorthSummary && !data?.hasUnsupportedCurrencies
+            ? formatNetWorthCurrency(netWorthSummary.netWorth, netWorthSummary.currency)
+            : null
+        }
+        assets={
+          hasData && netWorthSummary && !data?.hasUnsupportedCurrencies
+            ? formatNetWorthCurrency(netWorthSummary.totalAssets, netWorthSummary.currency)
+            : null
+        }
+        liabilities={
+          hasData && netWorthSummary && !data?.hasUnsupportedCurrencies
+            ? formatNetWorthCurrency(netWorthSummary.totalLiabilities, netWorthSummary.currency)
+            : null
+        }
+      />
+      </div>
 
       {!hasData ? (
         <Card className="netly-fade-in">
@@ -347,109 +385,31 @@ const DashboardPage = () => {
             </Card>
           ) : (
             <>
-            <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-              <div
-                className="relative overflow-hidden rounded-[22px] px-6 py-7 text-white sm:px-8 sm:py-8"
-                style={{
-                  background:
-                    "linear-gradient(165deg, #1227fd 0%, #3a4dff 46%, #8eb6ff 100%)",
-                }}
-              >
-                <div className="pointer-events-none absolute -right-10 -top-16 h-48 w-48 rounded-full bg-[#6fa0ff] opacity-80 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-16 left-1/4 h-40 w-40 rounded-full bg-[#1227fd] opacity-70 blur-3xl" />
-                <div className="relative space-y-6">
-                  <div className="flex gap-5 text-sm">
-                    {TARGET_NET_WORTH_CURRENCIES.map((currency) => (
-                      <button
-                        key={currency}
-                        type="button"
-                        onClick={() => setSelectedCurrency(currency)}
-                        className={
-                          currency === selectedCurrency
-                            ? "font-medium text-white"
-                            : "text-white/70"
-                        }
-                      >
-                        {currency}
-                      </button>
-                    ))}
-                  </div>
-                  <div>
-                    <p className="text-[40px] font-medium leading-none tracking-[-0.03em] tabular-nums sm:text-[52px] sm:tracking-[-0.02em]">
-                      {formatNetWorthCurrency(netWorthSummary.netWorth, netWorthSummary.currency)}
-                    </p>
-                    <p className="mt-2 text-sm text-white/80">{netWorthSummary.currency} net worth</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="ghost"
-                      className="border border-white/50 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                      onClick={() => setShowCreateDialog(true)}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add account
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="border border-white/50 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                      asChild
-                    >
-                      <Link href="/accounts">Accounts</Link>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="border border-white/50 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                      asChild
-                    >
-                      <Link href="/transactions">Statement</Link>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              <RecentActivity
-                transactions={activity?.transactions ?? []}
-                transfers={activity?.transfers ?? []}
-                accounts={data.accounts}
-                isLoading={activity === null}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-              <Card className="h-full">
-                <CardContent className="py-5">
-                  <p className="text-sm text-muted-foreground">Assets</p>
-                  <p className="mt-2 text-2xl font-medium tracking-[-0.02em] tabular-nums">
-                    {formatNetWorthCurrency(netWorthSummary.totalAssets, netWorthSummary.currency)}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card className="h-full">
-                <CardContent className="py-5">
-                  <p className="text-sm text-muted-foreground">Liabilities</p>
-                  <p className="mt-2 text-2xl font-medium tracking-[-0.02em] tabular-nums">
-                    {formatNetWorthCurrency(netWorthSummary.totalLiabilities, netWorthSummary.currency)}
-                  </p>
-                </CardContent>
-              </Card>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <BudgetTile currency={selectedCurrency} />
-              <Card className="h-full">
-                <CardContent className="py-5">
-                  <p className="text-sm text-muted-foreground">Investment P/L</p>
-                  <p className="mt-2 text-2xl font-medium tracking-[-0.02em] tabular-nums">
+              <Card className="h-full border-transparent shadow-none">
+                <CardContent className="px-4 py-4">
+                  <p className="text-[13px] text-muted-foreground">Investment P/L</p>
+                  <p className="mt-1 text-[28px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
                     {netWorthSummary.totalProfitLoss >= 0 ? "+" : ""}
                     {formatNetWorthCurrency(netWorthSummary.totalProfitLoss, netWorthSummary.currency)}
                   </p>
+                  <p className="mt-2 text-[13px] text-muted-foreground">Across investment accounts</p>
                 </CardContent>
               </Card>
             </div>
+            <RecentActivity
+              transactions={activity?.transactions ?? []}
+              transfers={activity?.transfers ?? []}
+              accounts={data.accounts}
+              isLoading={activity === null}
+            />
             </>
           )}
           <section className="space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2 className="text-2xl font-medium tracking-[-0.02em] text-muted-foreground">Cash flow</h2>
-                <p className="text-sm text-muted-foreground">Where income went in this period</p>
-              </div>
-              <DashboardDateSelector value={dateRange} onChange={setDateRange} />
+            <div>
+              <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-foreground">Cash flow</h2>
+              <p className="text-sm text-muted-foreground">Where income went in this period</p>
             </div>
             <CashFlowSankeyChart
               dateRange={dateRange}
@@ -458,7 +418,7 @@ const DashboardPage = () => {
             />
           </section>
           <section className="space-y-4">
-            <h2 className="text-2xl font-medium tracking-[-0.02em] text-muted-foreground">Over time</h2>
+            <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-foreground">Over time</h2>
             <div className="grid gap-4 md:grid-cols-2">
               <MonthlyIncomeExpensesChart
                 dateRange={dateRange}

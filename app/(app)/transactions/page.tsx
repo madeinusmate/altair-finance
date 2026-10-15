@@ -363,7 +363,7 @@ const TransactionsPage = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">Transactions</h1>
+          <h1 className="text-[34px] font-semibold leading-[40px] tracking-[-0.03em]">Transactions</h1>
           <p className="text-muted-foreground">View all transactions across accounts</p>
         </div>
         <Card>
@@ -383,7 +383,7 @@ const TransactionsPage = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">Transactions</h1>
+          <h1 className="text-[34px] font-semibold leading-[40px] tracking-[-0.03em]">Transactions</h1>
           <p className="text-muted-foreground">View all transactions across accounts</p>
         </div>
         <Card>
@@ -401,7 +401,7 @@ const TransactionsPage = () => {
     <div className="w-full space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-[32px] font-medium leading-[38px] tracking-[-0.02em]">Transactions</h1>
+          <h1 className="text-[34px] font-semibold leading-[40px] tracking-[-0.03em]">Transactions</h1>
           <p className="text-muted-foreground">View all transactions across accounts</p>
         </div>
         <div className="flex items-center gap-2">
