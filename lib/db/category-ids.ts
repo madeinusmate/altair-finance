@@ -148,7 +148,17 @@ export const ensureCategoryIds = (sqlite: CategoryMigrationDb): void => {
     logPreexistingViolations(sqlite);
 
     if (!tableExists(sqlite, "transaction_categories")) {
-      throw new Error("Category migration requires transaction_categories");
+      sqlite.exec(`
+        CREATE TABLE transaction_categories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          transaction_type TEXT,
+          color TEXT,
+          icon TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+      `);
     }
 
     const catalog = sqlite

@@ -664,7 +664,6 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     );
 
     CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
-    CREATE INDEX IF NOT EXISTS idx_transactions_payee_id ON transactions(payee_id);
     CREATE INDEX IF NOT EXISTS idx_transfers_from_account_id ON transfers(from_account_id);
     CREATE INDEX IF NOT EXISTS idx_transfers_to_account_id ON transfers(to_account_id);
     CREATE INDEX IF NOT EXISTS idx_balance_history_account_id ON balance_history(account_id);
@@ -673,14 +672,6 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     CREATE INDEX IF NOT EXISTS idx_imports_type ON imports(type);
     CREATE INDEX IF NOT EXISTS idx_imports_created_at ON imports(created_at);
     CREATE INDEX IF NOT EXISTS idx_imports_file_hash ON imports(file_hash);
-    CREATE INDEX IF NOT EXISTS idx_transactions_fingerprint ON transactions(fingerprint);
-    CREATE INDEX IF NOT EXISTS idx_transactions_source_fingerprint ON transactions(source_fingerprint);
-    CREATE INDEX IF NOT EXISTS idx_transfers_fingerprint ON transfers(fingerprint);
-    CREATE INDEX IF NOT EXISTS idx_transfers_source_fingerprint ON transfers(source_fingerprint);
-    CREATE INDEX IF NOT EXISTS idx_balance_history_fingerprint ON balance_history(fingerprint);
-    CREATE INDEX IF NOT EXISTS idx_balance_history_source_fingerprint ON balance_history(source_fingerprint);
-    CREATE INDEX IF NOT EXISTS idx_investment_history_fingerprint ON investment_history(fingerprint);
-    CREATE INDEX IF NOT EXISTS idx_investment_history_source_fingerprint ON investment_history(source_fingerprint);
 
     CREATE TABLE IF NOT EXISTS budgets (
       id TEXT PRIMARY KEY,
@@ -706,9 +697,6 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     );
 
     CREATE INDEX IF NOT EXISTS idx_budgets_category_name ON budgets(category_name);
-    CREATE INDEX IF NOT EXISTS idx_budgets_category_id ON budgets(category_id);
-    CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON transactions(category_id);
-    CREATE INDEX IF NOT EXISTS idx_transfers_category_id ON transfers(category_id);
     CREATE INDEX IF NOT EXISTS idx_transactions_category_date_type ON transactions(category, date, type);
 
     CREATE TABLE IF NOT EXISTS categorization_rules (
@@ -915,6 +903,12 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     console.log("[DB Init] Migrations completed");
   } else {
     console.log("[DB Init] Fresh database - skipping migrations (schema already correct)");
+  }
+
+  try {
+    ensureLedgerFingerprintColumns(sqlite);
+  } catch (error) {
+    console.warn("[DB Init] Could not add ledger fingerprints:", error);
   }
 
   try {

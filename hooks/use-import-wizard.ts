@@ -839,7 +839,6 @@ export const useImportWizard = () => {
           skippedDuplicates?: number;
           importId?: string | null;
           isDuplicate?: boolean;
-          skippedDuplicates?: number;
           skippedIndexes?: number[];
         }>("/api/import/transactions", { 
           rows: payload,

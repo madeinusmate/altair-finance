@@ -227,11 +227,12 @@ export const TransactionForm = ({
         toast.success("Transaction added");
       }
 
-      if (description.trim() && category && category !== "Transfer") {
+      const categoryName = categories.find((item) => item.id === Number(categoryId))?.name;
+      if (description.trim() && categoryName && categoryName !== "Transfer") {
         try {
           await saveCategorizationRule({
             description,
-            categoryName: category,
+            categoryName,
             transactionType: type,
           });
         } catch {

@@ -16,7 +16,7 @@ export const parseCategoryId = (value: unknown): number | null => {
   return null;
 };
 
-const loadCategoryById = (db: Db, categoryId: number) => {
+export const loadTransactionCategoryById = (db: Db, categoryId: number) => {
   return db
     .select()
     .from(schema.transactionCategories)
@@ -47,7 +47,7 @@ export const isValidCategoryIdForType = (
   categoryId: number,
   transactionType: "debit" | "credit"
 ): boolean => {
-  const categoryRecord = loadCategoryById(db, categoryId);
+  const categoryRecord = loadTransactionCategoryById(db, categoryId);
   if (!categoryRecord) {
     return false;
   }
@@ -62,7 +62,7 @@ export const isValidCategoryIdForType = (
  * Rows already pointing at a typed category stay valid until they are edited.
  */
 export const isValidTransferCategoryId = (db: Db, categoryId: number): boolean => {
-  const categoryRecord = loadCategoryById(db, categoryId);
+  const categoryRecord = loadTransactionCategoryById(db, categoryId);
   if (!categoryRecord) {
     return false;
   }

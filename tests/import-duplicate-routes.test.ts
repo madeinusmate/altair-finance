@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
+import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { commitBalanceImport } from "../app/api/import/balances/route";
 import { commitTransactionImport } from "../app/api/import/transactions/route";
@@ -66,6 +67,18 @@ const coffee = {
   amount: 4.5,
   description: "Coffee",
   date: "2024-03-15",
+};
+
+const categoryIdFor = (db: Ledger, name: string): number => {
+  const row = db
+    .select()
+    .from(schema.transactionCategories)
+    .where(eq(schema.transactionCategories.name, name))
+    .get();
+  if (!row) {
+    throw new Error(`Missing category ${name}`);
+  }
+  return row.id;
 };
 
 const authedRequest = (url: string, method: string, body: unknown) =>
@@ -169,7 +182,10 @@ describe("duplicate import routes", { concurrency: false }, () => {
     try {
       insertAccount(db, { id: "checking", name: "Checking", type: "transaction" });
       const created = await createTransaction(
-        authedRequest("http://127.0.0.1/api/transactions", "POST", coffee)
+        authedRequest("http://127.0.0.1/api/transactions", "POST", {
+          ...coffee,
+          categoryId: categoryIdFor(db, coffee.category),
+        })
       );
       assert.equal(created.status, 201);
       const imported = await commitTransactionImport(db, { rows: [coffee] });
@@ -200,7 +216,7 @@ describe("duplicate import routes", { concurrency: false }, () => {
         authedRequest("http://127.0.0.1/api/transactions", "PUT", {
           id: original.id,
           type: "debit",
-          category: "Food & Drink",
+          categoryId: categoryIdFor(db, "Food & Drink"),
           amount: 4.5,
           description: "Tea",
           date: "2024-03-15",
