@@ -133,7 +133,7 @@ const updateRowsIfChanged = <Row extends { duplicate?: boolean; warnings: string
 };
 
 export const useImportWizard = () => {
-  const { getKey } = useAuth();
+  const { getKey, usesBooksOwner } = useAuth();
   const [step, setStep] = useState<WizardStep>(1);
   const [importType, setImportTypeState] = useState<ImportType>("transactions");
   const [file, setFile] = useState<File | null>(null);
@@ -161,7 +161,7 @@ export const useImportWizard = () => {
   useEffect(() => {
     const loadData = async () => {
       const key = getKey();
-      if (!key) return;
+      if (!key && !usesBooksOwner) return;
 
       try {
         const [accountsData, txCategoriesData, acctCategoriesData] = await Promise.all([

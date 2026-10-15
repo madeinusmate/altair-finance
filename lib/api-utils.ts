@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getOwnerPassphrase } from "./books-owner";
 import { dbFileExists, getDb, validateKey } from "./db";
 import { validateEncryptionKey } from "./encryption";
 
+const keyOpensBooks = (key: string | null): key is string => {
+  return Boolean(key && validateEncryptionKey(key) && dbFileExists() && validateKey(key));
+};
+
 export const getEncryptionKey = (request: NextRequest): string | null => {
+  const ownerKey = getOwnerPassphrase();
+  if (keyOpensBooks(ownerKey)) {
+    return ownerKey;
+  }
+
   const key = request.headers.get("X-Encryption-Key");
-  if (!key || !validateEncryptionKey(key)) {
-    return null;
-  }
-  if (!dbFileExists()) {
-    return null;
-  }
-  if (!validateKey(key)) {
+  if (!keyOpensBooks(key)) {
     return null;
   }
   return key;

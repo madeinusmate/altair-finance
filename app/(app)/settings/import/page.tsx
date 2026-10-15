@@ -50,7 +50,7 @@ const filterRows = <Row extends { errors: string[]; warnings: string[]; duplicat
 };
 
 const ImportWizardPage = () => {
-  const { getKey } = useAuth();
+  const { getKey, usesBooksOwner } = useAuth();
   const {
     step,
     setStep,
@@ -91,7 +91,7 @@ const ImportWizardPage = () => {
   useEffect(() => {
     const loadCategories = async () => {
       const key = getKey();
-      if (!key) return;
+      if (!key && !usesBooksOwner) return;
 
       try {
         const [txData, acctData] = await Promise.all([

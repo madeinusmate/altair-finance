@@ -33,7 +33,7 @@ interface AccountCategory {
 }
 
 const CategoriesPage = () => {
-  const { getKey } = useAuth();
+  const { getKey, usesBooksOwner } = useAuth();
   const [transactionCategories, setTransactionCategories] = useState<TransactionCategory[]>([]);
   const [accountCategories, setAccountCategories] = useState<AccountCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,7 +42,7 @@ const CategoriesPage = () => {
 
   const fetchCategories = async () => {
     const key = getKey();
-    if (!key) {
+    if (!key && !usesBooksOwner) {
       toast.error("Please unlock the app first");
       return;
     }

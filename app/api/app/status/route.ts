@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { beginAuthVerifyAttempt } from "@/lib/auth-verify-rate-limit";
+import { getOwnerPassphrase } from "@/lib/books-owner";
 import { dbFileExists, validateKey } from "@/lib/db";
 import { validateEncryptionKey } from "@/lib/encryption";
 
@@ -9,7 +10,12 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
   try {
     const dbExists = dbFileExists();
     if (!dbExists) {
-      return NextResponse.json({ state: "new", dbExists });
+      return NextResponse.json({ state: "new", dbExists, booksOwner: false });
+    }
+
+    const ownerKey = getOwnerPassphrase();
+    if (ownerKey && validateEncryptionKey(ownerKey) && validateKey(ownerKey)) {
+      return NextResponse.json({ state: "unlocked", dbExists, booksOwner: true });
     }
 
     const key = request.headers.get("X-Encryption-Key");

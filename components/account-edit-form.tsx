@@ -35,7 +35,7 @@ export const AccountEditForm = ({
 }: AccountEditFormProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { getKey } = useAuth();
+  const { getKey, usesBooksOwner } = useAuth();
   const [categories, setCategories] = useState<Array<{ identifier: string; name: string }>>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
 
@@ -49,7 +49,7 @@ export const AccountEditForm = ({
   useEffect(() => {
     const fetchCategories = async () => {
       const key = getKey();
-      if (!key) {
+      if (!key && !usesBooksOwner) {
         setCategoriesLoading(false);
         return;
       }

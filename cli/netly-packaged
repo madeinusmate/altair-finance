@@ -1,0 +1,7 @@
+#!/bin/sh
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+NODE="$ROOT/node/arm64/node"
+if [ ! -x "$NODE" ]; then
+  NODE=$(command -v node)
+fi
+exec "$NODE" "$ROOT/netly.mjs" "$@"

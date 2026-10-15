@@ -1,14 +1,29 @@
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from "electron";
-import { spawn, ChildProcess } from "child_process";
+import { spawn, ChildProcess, execFileSync } from "child_process";
 import { randomBytes } from "crypto";
 import * as path from "path";
 import * as fs from "fs";
 import findFreePort from "find-free-port";
 import waitOn from "wait-on";
 import { createMenu } from "./menu";
+import {
+  TOKEN_SERVICE,
+  currentUid,
+  launchAgentPlistPath,
+  launchdDomain,
+  launchdTarget,
+  pidIsRunning,
+  readGrant,
+  readHome,
+  readPortFile,
+  runKeychain,
+  runLaunchctl,
+  spawnCommand,
+} from "./owner-control";
 
 const LOCAL_HOST = "127.0.0.1";
-const apiToken = randomBytes(32).toString("hex");
+let apiToken = randomBytes(32).toString("hex");
+let serverOwnedByElectron = true;
 
 // The window origin stays on localhost while the socket is the IPv4 loopback
 // address Next binds to.
@@ -39,20 +54,28 @@ ipcMain.handle("netly-open-external", async (_event, value: unknown) => {
   await openGitHubUrl(value);
 });
 
-let apiTokenHeaderPort: number | null = null;
+let apiTokenHeaderInstalled = false;
 
 const installApiTokenHeader = (port: number): void => {
-  if (apiTokenHeaderPort === port) return;
-  apiTokenHeaderPort = port;
+  serverPort = port;
+  if (apiTokenHeaderInstalled) return;
+  apiTokenHeaderInstalled = true;
 
   session.defaultSession.webRequest.onBeforeSendHeaders(
     {
-      urls: [
-        `http://${LOCAL_HOST}:${port}/api/*`,
-        `http://localhost:${port}/api/*`,
-      ],
+      urls: [`http://${LOCAL_HOST}:*/api/*`, "http://localhost:*/api/*"],
     },
     (details, callback) => {
+      let requestPort = "";
+      try {
+        requestPort = new URL(details.url).port;
+      } catch {
+        requestPort = "";
+      }
+      if (requestPort !== String(serverPort)) {
+        callback({ requestHeaders: details.requestHeaders });
+        return;
+      }
       callback({
         requestHeaders: {
           ...details.requestHeaders,
@@ -325,7 +348,7 @@ const startNextServer = async (port: number): Promise<void> => {
     console.log(`[Electron] Using .next from: ${nextBuildPath}`);
 
     const args = ["start", "-H", LOCAL_HOST, "-p", port.toString()];
-    const env = {
+    const env: NodeJS.ProcessEnv = {
       ...process.env,
       PORT: port.toString(),
       NODE_ENV: "production",
@@ -370,7 +393,24 @@ const startNextServer = async (port: number): Promise<void> => {
     console.log(`[Electron] Starting Next.js server with: ${nodeExecutable} ${serverPath} ${args.join(" ")}`);
     console.log(`[Electron] Working directory: ${appRoot}`);
     console.log(`[Electron] ELECTRON_USER_DATA: ${env.ELECTRON_USER_DATA}`);
-    
+
+    const nodePath = nodeExecutable === "node"
+      ? execFileSync("which", ["node"], { encoding: "utf8" }).trim()
+      : nodeExecutable;
+    const repoRoot = app.isPackaged ? appRoot : path.join(__dirname, "..", "..");
+    env.NETLY_NODE_PATH = nodePath;
+    env.NETLY_SERVER_PATH = serverPath;
+    env.NETLY_APP_ROOT = appRoot;
+    env.NETLY_OWNER_SCRIPT = app.isPackaged
+      ? path.join(process.resourcesPath, "books-owner.mjs")
+      : path.join(repoRoot, "scripts", "books-owner.mjs");
+    env.NETLY_KEYCHAIN_SOURCE = app.isPackaged
+      ? path.join(process.resourcesPath, "netly-keychain.swift")
+      : path.join(repoRoot, "scripts", "netly-keychain.swift");
+    env.NETLY_CLI_PATH = app.isPackaged
+      ? path.join(process.resourcesPath, "netly")
+      : path.join(repoRoot, "cli", "netly-bin");
+
     nextServer = spawn(nodeExecutable, [serverPath, ...args], {
       cwd: appRoot,
       env: env as NodeJS.ProcessEnv,
@@ -468,21 +508,178 @@ const showErrorDialog = (message: string, detail?: string): void => {
   dialog.showErrorBox("Netly Error", `${message}${detail ? `\n\n${detail}` : ""}`);
 };
 
+const sleep = (ms: number): Promise<void> => {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+};
+
+const cliInstallPath = (): string => {
+  if (app.isPackaged) return path.join(process.resourcesPath, "netly");
+  return path.join(__dirname, "..", "..", "cli", "netly-bin");
+};
+
+const ownerHealthy = async (port: number, token: string): Promise<boolean> => {
+  try {
+    const response = await fetch(`http://${LOCAL_HOST}:${port}/api/app/status`, {
+      headers: { "x-netly-token": token },
+    });
+    return response.status < 500 && response.status !== 401;
+  } catch {
+    return false;
+  }
+};
+
+const readOwnerToken = async (): Promise<string | null> => {
+  const home = readHome();
+  if (!home?.keychainHelper) return null;
+  try {
+    const token = (await runKeychain(home.keychainHelper, "read", TOKEN_SERVICE)).trim();
+    return token.length > 0 ? token : null;
+  } catch {
+    return null;
+  }
+};
+
+const waitForOwner = async (userData: string, token: string): Promise<number> => {
+  const deadline = Date.now() + 60000;
+  while (Date.now() < deadline) {
+    const record = readPortFile(userData);
+    if (record && (await ownerHealthy(record.port, token))) return record.port;
+    await sleep(200);
+  }
+  throw new Error("Books owner did not start");
+};
+
+const stopOwnedServer = async (): Promise<void> => {
+  const child = nextServer;
+  if (!child) return;
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve();
+    }, 5000);
+    child.once("exit", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    child.kill();
+  });
+  if (nextServer === child) nextServer = null;
+};
+
+const bootoutOwner = async (): Promise<void> => {
+  const uid = currentUid();
+  const userData = app.getPath("userData");
+  await runLaunchctl(["disable", launchdTarget(uid)]).catch(() => undefined);
+  await runLaunchctl(["bootout", launchdTarget(uid)]).catch(() => undefined);
+  const record = readPortFile(userData);
+  if (record && pidIsRunning(record.pid)) {
+    try {
+      process.kill(record.pid, "SIGTERM");
+    } catch {
+      // The owner process has already exited.
+    }
+  }
+};
+
+const bootstrapOwner = async (): Promise<number> => {
+  const uid = currentUid();
+  const userData = app.getPath("userData");
+  const token = await readOwnerToken();
+  if (!token) throw new Error("Agent grant token is missing");
+  apiToken = token;
+  serverOwnedByElectron = false;
+  await runLaunchctl(["enable", launchdTarget(uid)]).catch(() => undefined);
+  await runLaunchctl(["bootstrap", launchdDomain(uid), launchAgentPlistPath()]).catch(() => undefined);
+  return waitForOwner(userData, token);
+};
+
+const attachToOwner = async (): Promise<boolean> => {
+  const userData = app.getPath("userData");
+  const grant = readGrant(userData);
+  if (!grant?.enabled || grant.stopped) return false;
+  const token = await readOwnerToken();
+  if (!token) return false;
+  apiToken = token;
+  serverOwnedByElectron = false;
+  const existing = readPortFile(userData);
+  if (existing && (await ownerHealthy(existing.port, token))) {
+    serverPort = existing.port;
+    return true;
+  }
+  serverPort = await bootstrapOwner();
+  return true;
+};
+
 const cleanup = (): void => {
+  if (!serverOwnedByElectron) return;
   if (nextServer) {
     nextServer.kill();
     nextServer = null;
   }
 };
 
+ipcMain.handle("netly-owner-activate", async () => {
+  await stopOwnedServer();
+  serverPort = await bootstrapOwner();
+  installApiTokenHeader(serverPort);
+  if (mainWindow) {
+    await mainWindow.loadURL(`http://localhost:${serverPort}`);
+  }
+  return { ok: true };
+});
+
+ipcMain.handle("netly-owner-stop", async () => {
+  await bootoutOwner();
+  serverOwnedByElectron = true;
+  apiToken = randomBytes(32).toString("hex");
+  serverPort = await reserveLoopbackPort();
+  await startNextServer(serverPort);
+  installApiTokenHeader(serverPort);
+  if (mainWindow) {
+    await mainWindow.loadURL(`http://localhost:${serverPort}`);
+  }
+  return { ok: true };
+});
+
+ipcMain.handle("netly-owner-revoke", async () => {
+  await bootoutOwner();
+  serverOwnedByElectron = true;
+  apiToken = randomBytes(32).toString("hex");
+  serverPort = await reserveLoopbackPort();
+  await startNextServer(serverPort);
+  installApiTokenHeader(serverPort);
+  if (mainWindow) {
+    await mainWindow.loadURL(`http://localhost:${serverPort}`);
+  }
+  return { ok: true };
+});
+
+ipcMain.handle("netly-install-command", async () => {
+  const source = cliInstallPath();
+  const shellCommand = `mkdir -p /usr/local/bin && ln -sfn ${JSON.stringify(source)} /usr/local/bin/netly && chmod +x ${JSON.stringify(source)}`;
+  const script = `do shell script ${JSON.stringify(shellCommand)} with administrator privileges`;
+  try {
+    const result = await spawnCommand("osascript", ["-e", script]);
+    if (result.code !== 0) {
+      return { ok: false, error: result.stderr.trim() || "Could not install the netly command" };
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Could not install the netly command" };
+  }
+});
+
 app.whenReady().then(async () => {
   try {
     createMenu();
     const splash = createSplashWindow();
 
-    serverPort = await reserveLoopbackPort();
-
-    await startNextServer(serverPort);
+    const attached = await attachToOwner();
+    if (!attached) {
+      serverOwnedByElectron = true;
+      serverPort = await reserveLoopbackPort();
+      await startNextServer(serverPort);
+    }
     installApiTokenHeader(serverPort);
 
     splash.close();
@@ -506,7 +703,9 @@ app.on("activate", () => {
   if (mainWindow === null) {
     app.whenReady().then(async () => {
       try {
-        if (!nextServer) {
+        const attached = await attachToOwner();
+        if (!attached && !nextServer) {
+          serverOwnedByElectron = true;
           serverPort = await reserveLoopbackPort();
           await startNextServer(serverPort);
         }

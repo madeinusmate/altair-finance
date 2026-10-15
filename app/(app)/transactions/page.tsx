@@ -66,7 +66,7 @@ const formatCurrency = (amount: number, currency: string): string => {
 };
 
 const TransactionsPage = () => {
-  const { getKey } = useAuth();
+  const { getKey, usesBooksOwner } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -97,7 +97,7 @@ const TransactionsPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       const key = getKey();
-      if (!key) {
+      if (!key && !usesBooksOwner) {
         setIsLoading(false);
         return;
       }

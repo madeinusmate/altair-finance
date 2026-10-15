@@ -63,7 +63,7 @@ interface PdfStatementImportProps {
 }
 
 export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: PdfStatementImportProps) => {
-  const { getKey } = useAuth();
+  const { getKey, usesBooksOwner } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>(initialAccountId);
@@ -141,7 +141,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
   useEffect(() => {
     const loadData = async () => {
       const key = getKey();
-      if (!key) return;
+      if (!key && !usesBooksOwner) return;
 
       try {
         const [accountsData, categoriesData] = await Promise.all([
@@ -219,7 +219,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
 
     try {
       const key = getKey();
-      if (!key) {
+      if (!key && !usesBooksOwner) {
         throw new Error("Not authenticated");
       }
 
@@ -232,7 +232,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
       const response = await fetch("/api/import/pdf-statements/parse", {
         method: "POST",
         headers: {
-          "X-Encryption-Key": key,
+          ...(key ? { "X-Encryption-Key": key } : {}),
         },
         body: formData,
       });

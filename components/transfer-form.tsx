@@ -32,7 +32,7 @@ interface TransferFormProps {
 export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mode = "create" }: TransferFormProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { getKey } = useAuth();
+  const { getKey, usesBooksOwner } = useAuth();
   const [categories, setCategories] = useState<string[]>([]);
   const [categoryMap, setCategoryMap] = useState<Map<string, { color?: string | null; icon?: string | null }>>(new Map());
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -72,7 +72,7 @@ export const TransferForm = ({ fromAccountId, accounts, onSuccess, transfer, mod
   useEffect(() => {
     const fetchCategories = async () => {
       const key = getKey();
-      if (!key) {
+      if (!key && !usesBooksOwner) {
         setCategoriesLoading(false);
         return;
       }

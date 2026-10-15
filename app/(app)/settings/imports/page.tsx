@@ -21,13 +21,13 @@ type Import = {
 };
 
 const ImportsPage = () => {
-  const { getKey } = useAuth();
+  const { getKey, usesBooksOwner } = useAuth();
   const [imports, setImports] = useState<Import[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchImports = async () => {
     const key = getKey();
-    if (!key) {
+    if (!key && !usesBooksOwner) {
       toast.error("Please unlock the app first");
       return;
     }

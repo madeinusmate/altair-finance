@@ -54,10 +54,11 @@ const navItems = [
 
 export const AppSidebar = () => {
   const pathname = usePathname();
-  const { lock, isAuthenticated } = useAuth();
+  const { lock, isAuthenticated, usesBooksOwner } = useAuth();
   const [username, setUsername] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
+  const [agent, setAgent] = useState<{ enabled: boolean; stopped: boolean; running: boolean } | null>(null);
 
   useEffect(() => {
     const applyProfile = (profile: Pick<UserProfile, "name" | "email" | "avatar">) => {
@@ -90,9 +91,45 @@ export const AppSidebar = () => {
     return () => window.removeEventListener(PROFILE_UPDATED_EVENT, handleProfileUpdated);
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const status = await apiClient.get<{ enabled: boolean; stopped: boolean; running: boolean }>("/api/agent/status");
+        if (!cancelled) setAgent(status);
+      } catch {
+        if (!cancelled) setAgent(null);
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => {
+      void load();
+    }, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isAuthenticated]);
+
   const handleLock = () => {
     lock();
     window.location.href = "/unlock";
+  };
+
+  const stopAgent = async () => {
+    await apiClient.post("/api/agent/stop", {});
+    await window.electron?.stopOwner?.();
+  };
+
+  const enableAgent = async () => {
+    await apiClient.post("/api/agent/enable", {});
+    await window.electron?.activateOwner?.();
+  };
+
+  const revokeAgent = async () => {
+    await apiClient.delete("/api/agent/grant");
+    await window.electron?.revokeOwner?.();
   };
 
   const initial = username?.trim().charAt(0).toUpperCase() || "N";
@@ -140,16 +177,39 @@ export const AppSidebar = () => {
       </SidebarContent>
       <SidebarFooter>
         <ThemeToggle />
+        {agent?.enabled ? (
+          <div className="space-y-1 px-2">
+            <p className="text-xs text-muted-foreground">
+              Agent {agent.running ? "running" : "stopped"}
+            </p>
+            <div className="flex gap-1">
+              {agent.stopped ? (
+                <Button variant="ghost" size="sm" className="rounded-full" onClick={() => void enableAgent()}>
+                  Enable
+                </Button>
+              ) : (
+                <Button variant="ghost" size="sm" className="rounded-full" onClick={() => void stopAgent()}>
+                  Stop
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" className="rounded-full" onClick={() => void revokeAgent()}>
+                Revoke
+              </Button>
+            </div>
+          </div>
+        ) : null}
         <Button variant="ghost" className="w-full justify-start rounded-full" asChild>
           <Link href="/settings">
             <Settings className="h-4 w-4" />
             <span>Settings</span>
           </Link>
         </Button>
-        <Button variant="ghost" className="w-full justify-start rounded-full" onClick={handleLock}>
-          <LogOut className="h-4 w-4" />
-          <span>Lock</span>
-        </Button>
+        {usesBooksOwner && agent?.running ? null : (
+          <Button variant="ghost" className="w-full justify-start rounded-full" onClick={handleLock}>
+            <LogOut className="h-4 w-4" />
+            <span>Lock</span>
+          </Button>
+        )}
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

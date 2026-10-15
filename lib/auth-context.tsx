@@ -8,6 +8,7 @@ interface AuthContextType {
   state: AppState;
   isAuthenticated: boolean;
   isLoading: boolean;
+  usesBooksOwner: boolean;
   unlock: (key: string) => Promise<{ success: boolean; error?: string }>;
   bootstrap: (key: string, username: string) => Promise<{ success: boolean; error?: string }>;
   importDatabase: (file: File, key: string) => Promise<{ success: boolean; error?: string }>;
@@ -22,6 +23,7 @@ const SESSION_KEY = "netly_encryption_key";
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [state, setState] = useState<AppState>("loading");
+  const [usesBooksOwner, setUsesBooksOwner] = useState(false);
 
   const getSessionKey = useCallback((): string | null => {
     return sessionStorage.getItem(SESSION_KEY);
@@ -40,6 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (response.status === 429) {
         sessionStorage.removeItem(SESSION_KEY);
+        setUsesBooksOwner(false);
         setState("locked");
         return "locked";
       }
@@ -47,12 +50,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!response.ok) {
         console.error("Status API returned error:", response.status);
         sessionStorage.removeItem(SESSION_KEY);
+        setUsesBooksOwner(false);
         setState("new");
         return "new";
       }
       
       const data = await response.json();
       const nextState = data.state as AppState;
+      const booksOwner = Boolean(data.booksOwner);
+      setUsesBooksOwner(booksOwner);
+
+      if (booksOwner) {
+        sessionStorage.removeItem(SESSION_KEY);
+      }
 
       if (nextState !== "unlocked") {
         sessionStorage.removeItem(SESSION_KEY);
@@ -64,6 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // On network error or other failure, treat as new install
       console.error("Failed to fetch status:", error);
       sessionStorage.removeItem(SESSION_KEY);
+      setUsesBooksOwner(false);
       setState("new");
       return "new";
     }
@@ -170,6 +181,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         state,
         isAuthenticated: state === "unlocked",
         isLoading: state === "loading",
+        usesBooksOwner,
         unlock,
         bootstrap,
         importDatabase,
