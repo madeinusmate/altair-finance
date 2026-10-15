@@ -51,7 +51,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { accountId, type, category, amount, description, date, payeeName } = body;
+    const { accountId, type, category, amount, description, date, payeeName, payeeIcon } = body;
 
     if (!accountId || !type || !category || amount === undefined || !date) {
       return NextResponse.json(
@@ -104,7 +104,11 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       category,
       amount: Number(amount),
       description: description || null,
-      payeeId: resolvePayeeId(db, typeof payeeName === "string" ? payeeName : null),
+      payeeId: resolvePayeeId(
+        db,
+        typeof payeeName === "string" ? payeeName : null,
+        typeof payeeIcon === "string" ? payeeIcon : null
+      ),
       date: new Date(date),
       createdAt: now,
     };
@@ -127,7 +131,7 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { id, type, category, amount, description, date, payeeName } = body;
+    const { id, type, category, amount, description, date, payeeName, payeeIcon } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Transaction ID is required" }, { status: 400 });
@@ -193,7 +197,7 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       date: new Date(date),
     };
     if (typeof payeeName === "string" || payeeName === null) {
-      updates.payeeId = resolvePayeeId(db, payeeName);
+      updates.payeeId = resolvePayeeId(db, payeeName, typeof payeeIcon === "string" ? payeeIcon : null);
     }
 
     db.update(schema.transactions).set(updates).where(eq(schema.transactions.id, id)).run();

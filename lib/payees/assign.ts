@@ -8,7 +8,8 @@ type BooksDb = BetterSQLite3Database<typeof schema>;
 
 export const resolvePayeeId = (
   db: BooksDb,
-  rawName: string | null | undefined
+  rawName: string | null | undefined,
+  icon?: string | null
 ): string | null => {
   const cleaned = cleanPayee(rawName);
   if (!cleaned) return null;
@@ -22,11 +23,13 @@ export const resolvePayeeId = (
 
   const id = randomUUID();
   const now = new Date();
+  const iconName = typeof icon === "string" && icon.trim() ? icon.trim() : null;
   db.insert(schema.payees)
     .values({
       id,
       name: cleaned.displayName,
       normalizedName: cleaned.normalizedName,
+      icon: iconName,
       createdAt: now,
       updatedAt: now,
     })

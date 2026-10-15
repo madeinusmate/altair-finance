@@ -62,6 +62,7 @@ import {
 } from "@/components/ui/pagination";
 import { Account, Transaction, Transfer, BalanceHistory, InvestmentHistory } from "@/lib/db/schema";
 import { transactionSubtitle, transactionTitle } from "@/lib/payees/display";
+import { getIconComponent } from "@/components/category-management/category-edit-dialog";
 import { TransactionForm } from "@/components/transaction-form";
 import { TransferForm } from "@/components/transfer-form";
 import { BalanceUpdateForm } from "@/components/balance-update-form";
@@ -82,7 +83,7 @@ import { FileText } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { CategoryBadge } from "@/components/category-management/category-badge";
 
-type LedgerTransaction = Transaction & { payeeName?: string | null };
+type LedgerTransaction = Transaction & { payeeName?: string | null; payeeIcon?: string | null };
 
 type UnifiedItem = 
   | { type: "transaction"; data: LedgerTransaction }
@@ -390,7 +391,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   // Reset to page 1 when items per page or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [itemsPerPage, searchQuery, categoryFilter, typeFilter]);
+  }, [itemsPerPage, searchQuery, categoryFilter, typeFilter, payeeFilter]);
 
   if (isLoading) {
     return (
@@ -1004,7 +1005,8 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                                 />
                               </TableCell>
                               <TableCell>
-                                <div className="font-medium">
+                                <div className="flex items-center gap-2 font-medium">
+                                  {getIconComponent(transaction.payeeIcon)}
                                   {transactionTitle(transaction.payeeName, transaction.description, transaction.category)}
                                 </div>
                                 {transactionSubtitle(transaction.payeeName, transaction.description) ? (

@@ -24,6 +24,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
           .select({
             ...getTableColumns(schema.transactions),
             payeeName: schema.payees.name,
+            payeeIcon: schema.payees.icon,
           })
           .from(schema.transactions)
           .leftJoin(schema.payees, eq(schema.transactions.payeeId, schema.payees.id));

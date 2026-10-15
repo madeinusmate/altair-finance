@@ -39,6 +39,7 @@ import { toast } from "sonner";
 import { Search, ArrowLeftRight, Pencil, Trash2, Plus } from "lucide-react";
 import { Transaction, Account, Transfer } from "@/lib/db/schema";
 import { transactionSubtitle, transactionTitle } from "@/lib/payees/display";
+import { getIconComponent } from "@/components/category-management/category-edit-dialog";
 import { format } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -51,7 +52,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 
-type LedgerTransaction = Transaction & { payeeName?: string | null };
+type LedgerTransaction = Transaction & { payeeName?: string | null; payeeIcon?: string | null };
 
 type UnifiedItem = 
   | { type: "transaction"; data: LedgerTransaction }
@@ -638,7 +639,7 @@ const TransactionsPage = () => {
                                 <TableCell className="max-w-[240px] font-medium">
                                   <div className="flex items-center gap-3">
                                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm">
-                                      {title.charAt(0).toUpperCase()}
+                                      {getIconComponent(transaction.payeeIcon, "h-5 w-5") ?? title.charAt(0).toUpperCase()}
                                     </div>
                                     <div className="min-w-0">
                                       <span className="block truncate">{title}</span>

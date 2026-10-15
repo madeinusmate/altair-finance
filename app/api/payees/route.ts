@@ -16,6 +16,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
         id: schema.payees.id,
         name: schema.payees.name,
         normalizedName: schema.payees.normalizedName,
+        icon: schema.payees.icon,
         transactionCount: sql<number>`(
           SELECT COUNT(*) FROM transactions WHERE transactions.payee_id = ${schema.payees.id}
         )`.as("transaction_count"),
@@ -51,8 +52,13 @@ export const PATCH = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Payee not found" }, { status: 404 });
     }
 
+    const icon =
+      body?.icon === null || typeof body?.icon === "string"
+        ? (typeof body.icon === "string" && body.icon.trim() ? body.icon.trim() : null)
+        : existing.icon;
+
     db.update(schema.payees)
-      .set({ name, updatedAt: new Date() })
+      .set({ name, icon, updatedAt: new Date() })
       .where(eq(schema.payees.id, id))
       .run();
 

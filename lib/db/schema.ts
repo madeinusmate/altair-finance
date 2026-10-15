@@ -46,6 +46,7 @@ export const payees = sqliteTable("payees", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   normalizedName: text("normalized_name").notNull().unique(),
+  icon: text("icon"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
