@@ -92,6 +92,107 @@ const authedRequest = (url: string, method: string, body: unknown) =>
   });
 
 describe("duplicate import routes", { concurrency: false }, () => {
+  it("imports a same-day same-amount row when the description differs", async () => {
+    const { db } = openLedger();
+    try {
+      insertAccount(db, { id: "checking", name: "Checking", type: "transaction" });
+      const first = await commitTransactionImport(db, { rows: [coffee] });
+      const second = await commitTransactionImport(db, {
+        rows: [{ ...coffee, description: "Tea" }],
+      });
+      assert.equal(first.status, 200);
+      assert.equal(second.status, 200);
+      if (!("transactions" in second.payload)) {
+        assert.fail(JSON.stringify(second.payload));
+      }
+      assert.equal(second.payload.transactions, 1);
+      assert.equal(second.payload.skippedDuplicates, 0);
+      assert.equal(db.select().from(schema.transactions).all().length, 2);
+    } finally {
+      closeLedger(db);
+    }
+  });
+
+  it("imports a row dated one day later", async () => {
+    const { db } = openLedger();
+    try {
+      insertAccount(db, { id: "checking", name: "Checking", type: "transaction" });
+      const first = await commitTransactionImport(db, { rows: [coffee] });
+      const second = await commitTransactionImport(db, {
+        rows: [{ ...coffee, date: "2024-03-16" }],
+      });
+      assert.equal(first.status, 200);
+      assert.equal(second.status, 200);
+      if (!("transactions" in second.payload)) {
+        assert.fail(JSON.stringify(second.payload));
+      }
+      assert.equal(second.payload.transactions, 1);
+      assert.equal(second.payload.skippedDuplicates, 0);
+      assert.equal(db.select().from(schema.transactions).all().length, 2);
+    } finally {
+      closeLedger(db);
+    }
+  });
+
+  it("imports a same-day row when only the payee differs", async () => {
+    const { db } = openLedger();
+    try {
+      insertAccount(db, { id: "checking", name: "Checking", type: "transaction" });
+      const first = await commitTransactionImport(db, { rows: [{ ...coffee, payeeName: "Cafe" }] });
+      const second = await commitTransactionImport(db, {
+        rows: [{ ...coffee, payeeName: "Tea Shop" }],
+      });
+      assert.equal(first.status, 200);
+      assert.equal(second.status, 200);
+      if (!("transactions" in second.payload)) {
+        assert.fail(JSON.stringify(second.payload));
+      }
+      assert.equal(second.payload.transactions, 1);
+      assert.equal(second.payload.skippedDuplicates, 0);
+      assert.equal(db.select().from(schema.transactions).all().length, 2);
+    } finally {
+      closeLedger(db);
+    }
+  });
+
+  it("imports a same-day row when only the category differs", async () => {
+    const { db } = openLedger();
+    try {
+      insertAccount(db, { id: "checking", name: "Checking", type: "transaction" });
+      const first = await commitTransactionImport(db, { rows: [coffee] });
+      const second = await commitTransactionImport(db, {
+        rows: [{ ...coffee, category: "Shopping" }],
+      });
+      assert.equal(first.status, 200);
+      assert.equal(second.status, 200);
+      if (!("transactions" in second.payload)) {
+        assert.fail(JSON.stringify(second.payload));
+      }
+      assert.equal(second.payload.transactions, 1);
+      assert.equal(second.payload.skippedDuplicates, 0);
+      assert.equal(db.select().from(schema.transactions).all().length, 2);
+    } finally {
+      closeLedger(db);
+    }
+  });
+
+  it("keeps the first identical row in a file and skips the later copy", async () => {
+    const { db } = openLedger();
+    try {
+      insertAccount(db, { id: "checking", name: "Checking", type: "transaction" });
+      const result = await commitTransactionImport(db, { rows: [coffee, coffee] });
+      assert.equal(result.status, 200);
+      if (!("transactions" in result.payload)) {
+        assert.fail(JSON.stringify(result.payload));
+      }
+      assert.equal(result.payload.transactions, 1);
+      assert.equal(result.payload.skippedDuplicates, 1);
+      assert.equal(db.select().from(schema.transactions).all().length, 1);
+    } finally {
+      closeLedger(db);
+    }
+  });
+
   it("inserts nothing on a second post and reports skipped duplicates", async () => {
     const { db } = openLedger();
     try {
@@ -297,6 +398,8 @@ describe("duplicate import routes", { concurrency: false }, () => {
         date: "2024-06-01",
         amount: 10.004,
         description: "  Cafe   Latte ",
+        category: "Food & Drink",
+        payee: "",
         type: "debit",
       });
       assert.equal(row.fingerprint, expected);

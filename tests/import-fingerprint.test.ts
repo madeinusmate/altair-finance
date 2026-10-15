@@ -21,7 +21,7 @@ const transactionInput = {
 };
 
 describe("import fingerprints", () => {
-  it("hashes the same description with different case and extra spaces as equal", async () => {
+  it("keeps a different description, including case and spacing, as a different row", async () => {
     const spaced = await transactionFingerprint({
       ...transactionInput,
       description: "  STARBUCKS   Store ",
@@ -30,8 +30,42 @@ describe("import fingerprints", () => {
       ...transactionInput,
       description: "starbucks store",
     });
-    assert.equal(spaced, plain);
-    assert.ok(spaced);
+    const coffee = await transactionFingerprint(transactionInput);
+    const tea = await transactionFingerprint({ ...transactionInput, description: "Tea" });
+    assert.notEqual(spaced, plain);
+    assert.notEqual(coffee, tea);
+  });
+
+  it("does not treat a date one day away as the same row", async () => {
+    const today = await transactionFingerprint(transactionInput);
+    const tomorrow = await transactionFingerprint({ ...transactionInput, date: "2024-03-16" });
+    assert.notEqual(today, tomorrow);
+  });
+
+  it("does not treat a different category or payee as the same row", async () => {
+    const base = await transactionFingerprint({
+      ...transactionInput,
+      category: "Food & Drink",
+      payee: "Cafe",
+    });
+    const otherCategory = await transactionFingerprint({
+      ...transactionInput,
+      category: "Shopping",
+      payee: "Cafe",
+    });
+    const otherPayee = await transactionFingerprint({
+      ...transactionInput,
+      category: "Food & Drink",
+      payee: "Tea Shop",
+    });
+    const identical = await transactionFingerprint({
+      ...transactionInput,
+      category: "Food & Drink",
+      payee: "Cafe",
+    });
+    assert.notEqual(base, otherCategory);
+    assert.notEqual(base, otherPayee);
+    assert.equal(base, identical);
   });
 
   it("hashes debit and credit differently", async () => {

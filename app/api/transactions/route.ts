@@ -3,10 +3,11 @@ import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
-import { isValidCategoryIdForType, parseCategoryId } from "@/lib/db/category-helpers";
+import { isValidCategoryIdForType, loadTransactionCategoryById, parseCategoryId } from "@/lib/db/category-helpers";
 import { listTransactions, readTransaction } from "@/lib/db/category-rows";
 import { transactionFingerprint } from "@/lib/import/fingerprint";
 import { resolvePayeeId } from "@/lib/payees/assign";
+import { identityPayeeName } from "@/lib/payees/draft";
 import { normalizePayeeIconImage, PayeeIconImageError } from "@/lib/payees/icon-image";
 
 const invalidCategoryResponse = (
@@ -105,17 +106,24 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     const now = new Date();
     const id = uuidv4();
+    const rawPayeeName = typeof payeeName === "string" ? payeeName : null;
     const payeeId = resolvePayeeId(
       db,
-      typeof payeeName === "string" ? payeeName : null,
+      rawPayeeName,
       typeof payeeIcon === "string" ? payeeIcon : null,
       normalizePayeeIconImage(payeeIconImage)
     );
+    const knownPayees = db
+      .select({ name: schema.payees.name, normalizedName: schema.payees.normalizedName })
+      .from(schema.payees)
+      .all();
     const fingerprint = await transactionFingerprint({
       accountId,
       type: type as "debit" | "credit",
       amount: Number(amount),
       description: description || null,
+      payee: identityPayeeName(rawPayeeName, knownPayees),
+      category: category.name,
       date,
     });
 
@@ -205,13 +213,7 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
-    const fingerprint = await transactionFingerprint({
-      accountId: existingTransaction.accountId,
-      type: transactionType,
-      amount: amountValue,
-      description: description || null,
-      date,
-    });
+    const category = loadTransactionCategoryById(db, categoryId);
     const nextPayeeId =
       typeof payeeName === "string" || payeeName === null
         ? resolvePayeeId(
@@ -221,6 +223,20 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
             normalizePayeeIconImage(payeeIconImage)
           )
         : undefined;
+    const payeeIdForIdentity = nextPayeeId !== undefined ? nextPayeeId : existingTransaction.payeeId;
+    const payee = payeeIdForIdentity
+      ? db.select({ name: schema.payees.name }).from(schema.payees).where(eq(schema.payees.id, payeeIdForIdentity)).get()
+          ?.name ?? ""
+      : "";
+    const fingerprint = await transactionFingerprint({
+      accountId: existingTransaction.accountId,
+      type: transactionType,
+      amount: amountValue,
+      description: description || null,
+      payee,
+      category: category?.name ?? "",
+      date,
+    });
 
     db.update(schema.transactions)
       .set({

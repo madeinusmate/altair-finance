@@ -1,8 +1,10 @@
 // SHA-256 of ledger identity fields. Web Crypto in the browser and on the server
 // (Node's global crypto.subtle). Backfill uses the same payload strings with node:crypto.
-
-export const normalizeDescription = (description: string | null | undefined): string =>
-  (description ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+//
+// A row is a duplicate only when the calendar date is the same day and every other
+// imported field is exactly the same. There is no date window and no fuzzy match.
+// Money compares in cents so 10 and 10.004 are the same amount. Text is exact:
+// case and internal spaces stay. Null and "" are the same empty field.
 
 export const amountToCents = (amount: number | string | null | undefined): number | null => {
   if (amount == null || amount === "") {
@@ -15,8 +17,11 @@ export const amountToCents = (amount: number | string | null | undefined): numbe
   return Math.round(value * 100);
 };
 
+export const exactText = (value: string | null | undefined): string => (value == null ? "" : String(value));
+
 // YYYY-MM-DD strings are kept as written. Stored unix seconds and UTC-midnight Dates
 // format in UTC. Do not format a local-midnight Date with the local timezone.
+// A date one day away is a different key. There is no tolerance window.
 export const utcDateKey = (value: Date | number | string | null | undefined): string | null => {
   if (value == null || value === "") {
     return null;
@@ -53,12 +58,27 @@ const sha256Hex = async (value: string): Promise<string> => {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 
+const centsOrNull = (amount: number | string | null | undefined): number | null => {
+  if (amount == null || amount === "") {
+    return null;
+  }
+  return amountToCents(amount);
+};
+
+// Fixed order so a "|" inside a description cannot slide into the next field.
+const identityPayload = (parts: unknown[]): string => JSON.stringify(parts);
+
 export type TransactionFingerprintInput = {
   accountId: string;
   date: Date | number | string | null | undefined;
   amount: number | string | null | undefined;
   description?: string | null;
+  payee?: string | null;
+  category?: string | null;
   type: string;
+  fromAmount?: number | string | null;
+  toAmount?: number | string | null;
+  transferAccountId?: string | null;
 };
 
 export const transactionFingerprintPayload = (input: TransactionFingerprintInput): string | null => {
@@ -70,7 +90,19 @@ export const transactionFingerprintPayload = (input: TransactionFingerprintInput
   if (input.type !== "debit" && input.type !== "credit") {
     return null;
   }
-  return `tx|${input.accountId}|${date}|${cents}|${normalizeDescription(input.description)}|${input.type}`;
+  return identityPayload([
+    "tx",
+    input.accountId,
+    exactText(input.transferAccountId),
+    date,
+    exactText(input.description),
+    exactText(input.payee),
+    cents,
+    centsOrNull(input.fromAmount),
+    centsOrNull(input.toAmount),
+    exactText(input.category),
+    input.type,
+  ]);
 };
 
 export const transactionFingerprint = async (
@@ -89,6 +121,10 @@ export type TransferFingerprintInput = {
   date: Date | number | string | null | undefined;
   fromAmount: number | string | null | undefined;
   toAmount: number | string | null | undefined;
+  amount?: number | string | null | undefined;
+  description?: string | null;
+  payee?: string | null;
+  category?: string | null;
 };
 
 export const transferFingerprintPayload = (input: TransferFingerprintInput): string | null => {
@@ -98,7 +134,23 @@ export const transferFingerprintPayload = (input: TransferFingerprintInput): str
   if (!input.fromAccountId || !input.toAccountId || !date || fromCents === null || toCents === null) {
     return null;
   }
-  return `xfer|${input.fromAccountId}|${input.toAccountId}|${date}|${fromCents}|${toCents}`;
+  const amountCents = input.amount == null || input.amount === "" ? fromCents : amountToCents(input.amount);
+  if (amountCents === null) {
+    return null;
+  }
+  return identityPayload([
+    "xfer",
+    input.fromAccountId,
+    input.toAccountId,
+    date,
+    exactText(input.description),
+    exactText(input.payee),
+    amountCents,
+    fromCents,
+    toCents,
+    exactText(input.category),
+    "transfer",
+  ]);
 };
 
 export const transferFingerprint = async (input: TransferFingerprintInput): Promise<string | null> => {
@@ -121,7 +173,7 @@ export const balanceFingerprintPayload = (input: BalanceFingerprintInput): strin
   if (!input.accountId || !date || cents === null) {
     return null;
   }
-  return `bal|${input.accountId}|${date}|${cents}`;
+  return identityPayload(["bal", input.accountId, date, cents]);
 };
 
 export const balanceFingerprint = async (input: BalanceFingerprintInput): Promise<string | null> => {
