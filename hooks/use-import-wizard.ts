@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client";
 import { Account, BalanceHistory, InvestmentHistory, Transaction, Transfer } from "@/lib/db/schema";
+
+type ExistingTransaction = Transaction & { payeeName?: string | null };
 import { useAuth } from "@/lib/auth-context";
 import {
   buildAccountNameMap,
@@ -79,6 +81,7 @@ const TRANSACTION_IDENTITY_KEYS = new Set<string>([
   "amount",
   "fromAmount",
   "toAmount",
+  "category",
   "type",
   "transferAccount",
 ]);
@@ -154,7 +157,7 @@ export const useImportWizard = () => {
   const [categoryAllowances, setCategoryAllowances] = useState<CategoryAllowance[]>([]);
   const [categorizationRules, setCategorizationRules] = useState<CategorizationRule[]>([]);
   const [accountCategoryIdentifiers, setAccountCategoryIdentifiers] = useState<string[]>([]);
-  const [existingTransactions, setExistingTransactions] = useState<Transaction[]>([]);
+  const [existingTransactions, setExistingTransactions] = useState<ExistingTransaction[]>([]);
   const [existingTransfers, setExistingTransfers] = useState<Transfer[]>([]);
   const [existingBalances, setExistingBalances] = useState<BalanceHistory[]>([]);
   const [existingInvestments, setExistingInvestments] = useState<InvestmentHistory[]>([]);
@@ -293,8 +296,11 @@ export const useImportWizard = () => {
         fromAccountId: account.id,
         toAccountId: transferAccount.id,
         date: row.date,
+        amount: Number(row.fromAmount),
         fromAmount: Number(row.fromAmount),
         toAmount: Number(row.toAmount),
+        description: row.description,
+        category: "Transfer",
       });
     }
     return transactionFingerprint({
@@ -302,6 +308,7 @@ export const useImportWizard = () => {
       date: row.date,
       amount: Number(row.amount),
       description: row.description,
+      category: row.category,
       type: row.type,
     });
   };
@@ -333,6 +340,8 @@ export const useImportWizard = () => {
           date: transaction.date,
           amount: transaction.amount,
           description: transaction.description,
+          payee: transaction.payeeName,
+          category: transaction.category,
           type: transaction.type,
         });
         if (hash) {
@@ -350,8 +359,11 @@ export const useImportWizard = () => {
           fromAccountId: transfer.fromAccountId,
           toAccountId: transfer.toAccountId,
           date: transfer.date,
+          amount: transfer.amount,
           fromAmount: transfer.fromAmount ?? transfer.amount,
           toAmount: transfer.toAmount ?? transfer.amount,
+          description: transfer.description,
+          category: transfer.category,
         });
         if (hash) {
           fingerprints.add(hash);
@@ -445,7 +457,7 @@ export const useImportWizard = () => {
   const loadTransactionDuplicates = async () => {
     try {
       const [transactions, transfers] = await Promise.all([
-        apiClient.get<Transaction[]>("/api/transactions"),
+        apiClient.get<ExistingTransaction[]>("/api/transactions"),
         apiClient.get<Transfer[]>("/api/transfers"),
       ]);
       // Validate and filter out any invalid transactions/transfers

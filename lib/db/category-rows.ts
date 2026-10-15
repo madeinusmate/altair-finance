@@ -21,6 +21,8 @@ const transactionColumns = {
   metadata: schema.transactions.metadata,
   createdAt: schema.transactions.createdAt,
   importId: schema.transactions.importId,
+  fingerprint: schema.transactions.fingerprint,
+  sourceFingerprint: schema.transactions.sourceFingerprint,
 };
 
 const transferColumns = {
@@ -39,6 +41,8 @@ const transferColumns = {
   date: schema.transfers.date,
   createdAt: schema.transfers.createdAt,
   importId: schema.transfers.importId,
+  fingerprint: schema.transfers.fingerprint,
+  sourceFingerprint: schema.transfers.sourceFingerprint,
 };
 
 export const listTransactions = (db: Db, accountId?: string | null) => {

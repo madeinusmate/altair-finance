@@ -10,8 +10,9 @@ export type ImportRowDecision = {
   insert: boolean;
 };
 
-// First copy in the batch is insertable. A later copy is skipped unless that row
-// sets overrideDuplicate. An override is recorded so a further copy is still skipped.
+// Identity is the full-field fingerprint (exact date, exact other imported fields).
+// First copy in the batch is insertable. A later identical copy is skipped unless
+// that row sets overrideDuplicate. An override is recorded so a further copy is still skipped.
 export const planImportRows = (
   existingFingerprints: Iterable<string>,
   rows: FingerprintedImportRow[]

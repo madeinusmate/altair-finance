@@ -5,8 +5,8 @@ export type CleanedPayee = {
   normalizedName: string;
 };
 
-// Same case and whitespace folding as statement fingerprints, then one trailing
-// store or reference token. Internal stars stay so Uber Trip and Uber Eats differ.
+// Folds case and whitespace, then drops one trailing store or reference token.
+// Internal stars stay so Uber Trip and Uber Eats differ. Duplicate checks do not use this.
 export const cleanPayee = (input: string | null | undefined): CleanedPayee | null => {
   if (input == null) return null;
   const collapsed = input.trim().replace(/\s+/g, " ");

@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import { Account, Transaction, Transfer } from "@/lib/db/schema";
+
+type ExistingTransaction = Transaction & { payeeName?: string | null };
 import { useAuth } from "@/lib/auth-context";
 import { PdfUpload } from "./pdf-upload";
 import { PdfReviewTable, TransactionRow } from "./pdf-review-table";
@@ -39,12 +41,15 @@ import {
 } from "@/lib/categorization/rules";
 import { transactionFingerprint, transferFingerprint } from "@/lib/import/fingerprint";
 import { applyReviewDuplicates } from "@/lib/import/review-duplicates";
+import { identityPayeeName } from "@/lib/payees/draft";
 import { cleanPayee } from "@/lib/payees/normalize";
 
 const PDF_IDENTITY_FIELDS = [
   "date",
   "amount",
   "description",
+  "payeeName",
+  "category",
   "type",
   "fromAccountId",
   "toAccountId",
@@ -87,7 +92,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
   const [isImporting, setIsImporting] = useState(false);
   const [processingError, setProcessingError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [existingTransactions, setExistingTransactions] = useState<Transaction[]>([]);
+  const [existingTransactions, setExistingTransactions] = useState<ExistingTransaction[]>([]);
   const [existingTransfers, setExistingTransfers] = useState<Transfer[]>([]);
   const [payees, setPayees] = useState<Array<{ id: string; name: string }>>([]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -114,18 +119,27 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
         fromAccountId: row.fromAccountId,
         toAccountId: row.toAccountId,
         date: row.date,
+        amount: row.fromAmount || 0,
         fromAmount: row.fromAmount || 0,
         toAmount: row.toAmount || 0,
+        description: row.description,
+        category: "Transfer",
       });
     }
     if (row.type !== "debit" && row.type !== "credit") {
       return null;
     }
+    const known = payees.map((payee) => ({
+      name: payee.name,
+      normalizedName: cleanPayee(payee.name)?.normalizedName ?? payee.name.trim().toLowerCase(),
+    }));
     return transactionFingerprint({
       accountId: selectedAccountId,
       date: row.date,
       amount: row.amount,
       description: row.description,
+      payee: identityPayeeName(row.payeeName, known),
+      category: row.category,
       type: row.type,
     });
   };
@@ -148,6 +162,8 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
           date: transaction.date,
           amount: transaction.amount,
           description: transaction.description,
+          payee: transaction.payeeName,
+          category: transaction.category,
           type: transaction.type,
         });
         if (hash) {
@@ -165,8 +181,11 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
           fromAccountId: transfer.fromAccountId,
           toAccountId: transfer.toAccountId,
           date: transfer.date,
+          amount: transfer.amount,
           fromAmount: transfer.fromAmount ?? transfer.amount,
           toAmount: transfer.toAmount ?? transfer.amount,
+          description: transfer.description,
+          category: transfer.category,
         });
         if (hash) {
           existing.add(hash);
@@ -244,7 +263,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
     const loadExisting = async () => {
       try {
         const [transactions, transfers] = await Promise.all([
-          apiClient.get<Transaction[]>("/api/transactions"),
+          apiClient.get<ExistingTransaction[]>("/api/transactions"),
           apiClient.get<Transfer[]>("/api/transfers"),
         ]);
         setExistingTransactions(transactions);
@@ -264,7 +283,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
     scheduleFlags(rowsRef.current);
     // Edits schedule their own pass. This covers ledger prefetch and a new file.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existingTransactions, existingTransfers, rows.length, selectedAccountId]);
+  }, [existingTransactions, existingTransfers, rows.length, selectedAccountId, payees]);
 
   const summary = getSummary(rows);
 

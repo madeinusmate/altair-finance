@@ -386,7 +386,7 @@ export const HelpGuide = () => (
           </li>
         </ul>
         <p>
-          You review every row before it is saved. Invalid rows stay out. Duplicate rows are ones already in the books — the same account, date, amount, and description fingerprint — and they are skipped so importing a file twice does not double the ledger.
+          You review every row before it is saved. Invalid rows stay out. A row is a duplicate only when its date is the same day and every other imported field is exactly the same: account, description, payee, amount, category, and type. Transfers also compare both accounts and both amounts. A different description, payee, or category is kept. Importing the same file twice does not double the ledger.
         </p>
         <h3 className="pt-2 text-base font-medium text-foreground">PDF statements</h3>
         <p>

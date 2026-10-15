@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
-import { isValidTransferCategoryId, parseCategoryId } from "@/lib/db/category-helpers";
+import { isValidTransferCategoryId, loadTransactionCategoryById, parseCategoryId } from "@/lib/db/category-helpers";
 import { listTransfers, readTransfer } from "@/lib/db/category-rows";
 import { transferFingerprint } from "@/lib/import/fingerprint";
 
@@ -105,11 +105,15 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     const now = new Date();
     const id = uuidv4();
+    const category = loadTransactionCategoryById(db, categoryId);
     const fingerprint = await transferFingerprint({
       fromAccountId,
       toAccountId,
+      amount: finalFromAmount,
       fromAmount: finalFromAmount,
       toAmount: finalToAmount,
+      description: description || null,
+      category: category?.name ?? "",
       date,
     });
 
@@ -218,11 +222,15 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       finalExchangeRate = exchangeRate !== undefined ? Number(exchangeRate) : finalToAmount / finalFromAmount;
     }
 
+    const category = loadTransactionCategoryById(db, categoryId);
     const fingerprint = await transferFingerprint({
       fromAccountId,
       toAccountId,
+      amount: finalFromAmount,
       fromAmount: finalFromAmount,
       toAmount: finalToAmount,
+      description: description || null,
+      category: category?.name ?? "",
       date,
     });
 

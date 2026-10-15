@@ -162,13 +162,38 @@ const ensureAccountAppearanceColumns = (sqlite: DatabaseInstance): void => {
 const hashFingerprintPayload = (payload: string): string =>
   crypto.createHash("sha256").update(payload).digest("hex");
 
+// Rewrites a stored hash when the identity formula changes. Keeps source_fingerprint
+// when it already records an older import identity that differs from the current row.
+const nextSourceFingerprint = (
+  next: string,
+  current: string | null,
+  source: string | null
+): string => (source == null || source === current ? next : source);
+
 const backfillLedgerFingerprints = (sqlite: DatabaseInstance): void => {
   if (tableExists(sqlite, "transactions")) {
+    const columns = tableColumnNames(sqlite, "transactions");
+    const hasCategoryId = columns.has("category_id") && tableExists(sqlite, "transaction_categories");
+    const hasPayee = columns.has("payee_id") && tableExists(sqlite, "payees");
+    const categorySelect = hasCategoryId
+      ? "COALESCE(c.name, t.category)"
+      : columns.has("category")
+        ? "t.category"
+        : "NULL";
+    const categoryJoin = hasCategoryId
+      ? "LEFT JOIN transaction_categories c ON c.id = t.category_id"
+      : "";
+    const payeeSelect = hasPayee ? "p.name" : "NULL";
+    const payeeJoin = hasPayee ? "LEFT JOIN payees p ON p.id = t.payee_id" : "";
     const rows = sqlite
       .prepare(
-        `SELECT id, account_id, type, amount, description, date
-         FROM transactions
-         WHERE fingerprint IS NULL`
+        `SELECT t.id, t.account_id, t.type, t.amount, t.description, t.date,
+                t.fingerprint, t.source_fingerprint,
+                ${categorySelect} AS category_name,
+                ${payeeSelect} AS payee_name
+         FROM transactions t
+         ${categoryJoin}
+         ${payeeJoin}`
       )
       .all() as Array<{
       id: string;
@@ -177,11 +202,15 @@ const backfillLedgerFingerprints = (sqlite: DatabaseInstance): void => {
       amount: number;
       description: string | null;
       date: number;
+      fingerprint: string | null;
+      source_fingerprint: string | null;
+      category_name: string | null;
+      payee_name: string | null;
     }>;
     const update = sqlite.prepare(
       `UPDATE transactions
        SET fingerprint = ?, source_fingerprint = ?
-       WHERE id = ? AND fingerprint IS NULL`
+       WHERE id = ?`
     );
     const write = sqlite.transaction(() => {
       for (const row of rows) {
@@ -190,13 +219,19 @@ const backfillLedgerFingerprints = (sqlite: DatabaseInstance): void => {
           date: row.date,
           amount: row.amount,
           description: row.description,
+          payee: row.payee_name,
+          category: row.category_name,
           type: row.type,
         });
         if (!payload) {
           continue;
         }
         const hash = hashFingerprintPayload(payload);
-        update.run(hash, hash, row.id);
+        const source = nextSourceFingerprint(hash, row.fingerprint, row.source_fingerprint);
+        if (row.fingerprint === hash && row.source_fingerprint === source) {
+          continue;
+        }
+        update.run(hash, source, row.id);
       }
     });
     write();
@@ -204,13 +239,27 @@ const backfillLedgerFingerprints = (sqlite: DatabaseInstance): void => {
 
   if (tableExists(sqlite, "transfers") && tableColumnNames(sqlite, "transfers").has("fingerprint")) {
     const transferColumns = tableColumnNames(sqlite, "transfers");
-    const fromAmountSql = transferColumns.has("from_amount") ? "from_amount" : "NULL";
-    const toAmountSql = transferColumns.has("to_amount") ? "to_amount" : "NULL";
+    const fromAmountSql = transferColumns.has("from_amount") ? "t.from_amount" : "NULL";
+    const toAmountSql = transferColumns.has("to_amount") ? "t.to_amount" : "NULL";
+    const descriptionSql = transferColumns.has("description") ? "t.description" : "NULL";
+    const hasCategoryId = transferColumns.has("category_id") && tableExists(sqlite, "transaction_categories");
+    const categorySelect = hasCategoryId
+      ? "COALESCE(c.name, t.category)"
+      : transferColumns.has("category")
+        ? "t.category"
+        : "NULL";
+    const categoryJoin = hasCategoryId
+      ? "LEFT JOIN transaction_categories c ON c.id = t.category_id"
+      : "";
     const rows = sqlite
       .prepare(
-        `SELECT id, from_account_id, to_account_id, amount, ${fromAmountSql} AS from_amount, ${toAmountSql} AS to_amount, date
-         FROM transfers
-         WHERE fingerprint IS NULL`
+        `SELECT t.id, t.from_account_id, t.to_account_id, t.amount,
+                ${fromAmountSql} AS from_amount, ${toAmountSql} AS to_amount,
+                ${descriptionSql} AS description, t.date,
+                t.fingerprint, t.source_fingerprint,
+                ${categorySelect} AS category_name
+         FROM transfers t
+         ${categoryJoin}`
       )
       .all() as Array<{
       id: string;
@@ -219,12 +268,16 @@ const backfillLedgerFingerprints = (sqlite: DatabaseInstance): void => {
       amount: number;
       from_amount: number | null;
       to_amount: number | null;
+      description: string | null;
       date: number;
+      fingerprint: string | null;
+      source_fingerprint: string | null;
+      category_name: string | null;
     }>;
     const update = sqlite.prepare(
       `UPDATE transfers
        SET fingerprint = ?, source_fingerprint = ?
-       WHERE id = ? AND fingerprint IS NULL`
+       WHERE id = ?`
     );
     const write = sqlite.transaction(() => {
       for (const row of rows) {
@@ -232,31 +285,47 @@ const backfillLedgerFingerprints = (sqlite: DatabaseInstance): void => {
           fromAccountId: row.from_account_id,
           toAccountId: row.to_account_id,
           date: row.date,
+          amount: row.amount,
           fromAmount: row.from_amount ?? row.amount,
           toAmount: row.to_amount ?? row.amount,
+          description: row.description,
+          category: row.category_name,
         });
         if (!payload) {
           continue;
         }
         const hash = hashFingerprintPayload(payload);
-        update.run(hash, hash, row.id);
+        const source = nextSourceFingerprint(hash, row.fingerprint, row.source_fingerprint);
+        if (row.fingerprint === hash && row.source_fingerprint === source) {
+          continue;
+        }
+        update.run(hash, source, row.id);
       }
     });
     write();
   }
 
-  if (tableExists(sqlite, "balance_history")) {
+  const refreshBalanceFingerprints = (tableName: "balance_history" | "investment_history") => {
+    if (!tableExists(sqlite, tableName) || !tableColumnNames(sqlite, tableName).has("fingerprint")) {
+      return;
+    }
     const rows = sqlite
       .prepare(
-        `SELECT id, account_id, balance, date
-         FROM balance_history
-         WHERE fingerprint IS NULL`
+        `SELECT id, account_id, balance, date, fingerprint, source_fingerprint
+         FROM ${tableName}`
       )
-      .all() as Array<{ id: string; account_id: string; balance: number; date: number }>;
+      .all() as Array<{
+      id: string;
+      account_id: string;
+      balance: number;
+      date: number;
+      fingerprint: string | null;
+      source_fingerprint: string | null;
+    }>;
     const update = sqlite.prepare(
-      `UPDATE balance_history
+      `UPDATE ${tableName}
        SET fingerprint = ?, source_fingerprint = ?
-       WHERE id = ? AND fingerprint IS NULL`
+       WHERE id = ?`
     );
     const write = sqlite.transaction(() => {
       for (const row of rows) {
@@ -269,41 +338,18 @@ const backfillLedgerFingerprints = (sqlite: DatabaseInstance): void => {
           continue;
         }
         const hash = hashFingerprintPayload(payload);
-        update.run(hash, hash, row.id);
-      }
-    });
-    write();
-  }
-
-  if (tableExists(sqlite, "investment_history")) {
-    const rows = sqlite
-      .prepare(
-        `SELECT id, account_id, balance, date
-         FROM investment_history
-         WHERE fingerprint IS NULL`
-      )
-      .all() as Array<{ id: string; account_id: string; balance: number; date: number }>;
-    const update = sqlite.prepare(
-      `UPDATE investment_history
-       SET fingerprint = ?, source_fingerprint = ?
-       WHERE id = ? AND fingerprint IS NULL`
-    );
-    const write = sqlite.transaction(() => {
-      for (const row of rows) {
-        const payload = balanceFingerprintPayload({
-          accountId: row.account_id,
-          date: row.date,
-          balance: row.balance,
-        });
-        if (!payload) {
+        const source = nextSourceFingerprint(hash, row.fingerprint, row.source_fingerprint);
+        if (row.fingerprint === hash && row.source_fingerprint === source) {
           continue;
         }
-        const hash = hashFingerprintPayload(payload);
-        update.run(hash, hash, row.id);
+        update.run(hash, source, row.id);
       }
     });
     write();
-  }
+  };
+
+  refreshBalanceFingerprints("balance_history");
+  refreshBalanceFingerprints("investment_history");
 };
 
 const ensureLedgerFingerprintColumns = (sqlite: DatabaseInstance): void => {

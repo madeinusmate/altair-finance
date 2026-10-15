@@ -6,6 +6,7 @@ import { transactionFingerprint, transferFingerprint } from "@/lib/import/finger
 import { loadTransactionFingerprints, loadTransferFingerprints } from "@/lib/import/load-fingerprints";
 import { planImportRows } from "@/lib/import/plan-import-rows";
 import { resolvePayeeId } from "@/lib/payees/assign";
+import { identityPayeeName } from "@/lib/payees/draft";
 
 type LedgerDb = ReturnType<typeof getDb>;
 
@@ -53,7 +54,13 @@ const isImportRowError = (error: unknown): error is Error =>
 
 const isTransferRow = (row: ImportTransactionRow): row is TransferImportRow => row.type === "transfer";
 
-const fingerprintForRow = async (row: ImportTransactionRow): Promise<string | null> => {
+type KnownPayee = { name: string; normalizedName: string };
+
+const fingerprintForRow = async (
+  row: ImportTransactionRow,
+  transferCategoryName: string,
+  payees: KnownPayee[]
+): Promise<string | null> => {
   if (!row || typeof row !== "object") {
     return null;
   }
@@ -62,8 +69,12 @@ const fingerprintForRow = async (row: ImportTransactionRow): Promise<string | nu
       fromAccountId: row.fromAccountId,
       toAccountId: row.toAccountId,
       date: row.date,
+      amount: row.fromAmount,
       fromAmount: row.fromAmount,
       toAmount: row.toAmount,
+      description: row.description,
+      payee: "",
+      category: transferCategoryName,
     });
   }
   return transactionFingerprint({
@@ -71,6 +82,8 @@ const fingerprintForRow = async (row: ImportTransactionRow): Promise<string | nu
     date: row.date,
     amount: row.amount,
     description: row.description,
+    payee: identityPayeeName(row.payeeName, payees),
+    category: row.category,
     type: row.type,
   });
 };
@@ -99,10 +112,17 @@ export const commitTransactionImport = async (
   }
 
   try {
+    const categoriesForIdentity = db.select().from(schema.transactionCategories).all();
+    const transferCategoryName =
+      categoriesForIdentity.find((category) => category.name === "Transfer")?.name ?? "Transfer";
+    const knownPayees = db
+      .select({ name: schema.payees.name, normalizedName: schema.payees.normalizedName })
+      .from(schema.payees)
+      .all();
     const fingerprinted = await Promise.all(
       rows.map(async (row) => ({
         row,
-        fingerprint: await fingerprintForRow(row),
+        fingerprint: await fingerprintForRow(row, transferCategoryName, knownPayees),
         overrideDuplicate: row?.overrideDuplicate === true,
       }))
     );
