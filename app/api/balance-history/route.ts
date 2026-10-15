@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { eq, desc } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
+import { balanceFingerprint } from "@/lib/import/fingerprint";
 
 // GET balance history by account
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
@@ -69,6 +70,11 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     const now = new Date();
     const id = uuidv4();
+    const fingerprint = await balanceFingerprint({
+      accountId,
+      balance: Number(balance),
+      date,
+    });
 
     const newEntry = {
       id,
@@ -76,6 +82,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       balance: Number(balance),
       date: new Date(date),
       createdAt: now,
+      fingerprint,
     };
 
     db.insert(schema.balanceHistory).values(newEntry).run();
@@ -117,10 +124,17 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Balance entry not found" }, { status: 404 });
     }
 
+    const fingerprint = await balanceFingerprint({
+      accountId: existing.accountId,
+      balance: Number(balance),
+      date,
+    });
+
     db.update(schema.balanceHistory)
       .set({
         balance: Number(balance),
         date: new Date(date),
+        fingerprint,
       })
       .where(eq(schema.balanceHistory.id, id))
       .run();

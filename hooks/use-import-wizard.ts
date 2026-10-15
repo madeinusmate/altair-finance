@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client";
 import { Account, BalanceHistory, InvestmentHistory, Transaction, Transfer } from "@/lib/db/schema";
@@ -26,6 +26,8 @@ import {
   toCategorizationRules,
   toCategoryAllowances,
 } from "@/lib/categorization/rules";
+import { balanceFingerprint, transactionFingerprint, transferFingerprint } from "@/lib/import/fingerprint";
+import { applyReviewDuplicates } from "@/lib/import/review-duplicates";
 
 export type ImportType = "transactions" | "balances" | "accounts";
 
@@ -39,7 +41,11 @@ export type TransactionRow = ParsedTransactionRow & {
   excluded?: boolean;
   overrideDuplicate?: boolean;
 };
-export type BalanceRow = ParsedBalanceRow & { duplicate?: boolean };
+export type BalanceRow = ParsedBalanceRow & {
+  duplicate?: boolean;
+  excluded?: boolean;
+  overrideDuplicate?: boolean;
+};
 export type AccountRow = ParsedAccountRow & { duplicate?: boolean };
 
 export type CompletionSummary =
@@ -48,12 +54,16 @@ export type CompletionSummary =
       transactions: number;
       transfers: number;
       total: number;
+      skippedDuplicates: number;
+      fileAlreadyImported: boolean;
     }
   | {
       type: "balances";
       balances: number;
       investments: number;
       total: number;
+      skippedDuplicates: number;
+      fileAlreadyImported: boolean;
     }
   | {
       type: "accounts";
@@ -62,7 +72,18 @@ export type CompletionSummary =
 
 const normalizeAccountName = (name: string) => name.trim().toLowerCase();
 
-const getDateKey = (value: number) => new Date(value).toISOString().split("T")[0];
+const TRANSACTION_IDENTITY_KEYS = new Set<string>([
+  "date",
+  "account",
+  "description",
+  "amount",
+  "fromAmount",
+  "toAmount",
+  "type",
+  "transferAccount",
+]);
+
+const BALANCE_IDENTITY_KEYS = new Set<string>(["date", "account", "balance"]);
 
 // Safely convert a date (string, Date, or number) to a timestamp
 const safeDateToTimestamp = (date: string | Date | number | null | undefined): number => {
@@ -84,70 +105,32 @@ const safeDateToTimestamp = (date: string | Date | number | null | undefined): n
   return dateObj.getTime();
 };
 
-const buildTransactionKey = (accountId: string, date: string, amount: number, description: string) =>
-  `${accountId}|${date}|${amount}|${description.trim().toLowerCase()}`;
-
-const buildTransferKey = (fromId: string, toId: string, date: string, fromAmount: number, toAmount: number) =>
-  `${fromId}|${toId}|${date}|${fromAmount}|${toAmount}`;
-
-const buildBalanceKey = (accountId: string, date: string, balance: number) =>
-  `${accountId}|${date}|${balance}`;
-
-const getTransactionSummary = (rows: TransactionRow[]) => {
-  const total = rows.length;
-  const invalid = rows.filter((row) => row.errors.length > 0).length;
-  const warnings = rows.filter((row) => row.warnings.length > 0).length;
-  const duplicates = rows.filter((row) => row.duplicate).length;
-  return {
-    total,
-    invalid,
-    warnings,
-    duplicates,
-    valid: total - invalid,
-  };
-};
-
-const getBalanceSummary = (rows: BalanceRow[]) => {
-  const total = rows.length;
-  const invalid = rows.filter((row) => row.errors.length > 0).length;
-  const warnings = rows.filter((row) => row.warnings.length > 0).length;
-  const duplicates = rows.filter((row) => row.duplicate).length;
-  return {
-    total,
-    invalid,
-    warnings,
-    duplicates,
-    valid: total - invalid,
-  };
-};
-
-const getAccountSummary = (rows: AccountRow[]) => {
-  const total = rows.length;
-  const invalid = rows.filter((row) => row.errors.length > 0).length;
-  const warnings = rows.filter((row) => row.warnings.length > 0).length;
-  const duplicates = rows.filter((row) => row.duplicate).length;
-  return {
-    total,
-    invalid,
-    warnings,
-    duplicates,
-    valid: total - invalid,
-  };
-};
-
-const updateRowsIfChanged = <Row extends { duplicate?: boolean; warnings: string[] }>(
-  rows: Row[],
-  updateRow: (row: Row) => Row
+const summarizeRows = <Row extends { errors: string[]; warnings: string[]; duplicate?: boolean; excluded?: boolean }>(
+  rows: Row[]
 ) => {
-  const nextRows = rows.map(updateRow);
-  const changed = nextRows.some((row, index) => {
-    const previous = rows[index];
-    return (
-      row.duplicate !== previous.duplicate ||
-      row.warnings.join("|") !== previous.warnings.join("|")
-    );
-  });
-  return changed ? nextRows : rows;
+  const total = rows.length;
+  const invalid = rows.filter((row) => row.errors.length > 0).length;
+  const warnings = rows.filter((row) => row.warnings.length > 0).length;
+  const duplicates = rows.filter((row) => row.duplicate).length;
+  const skipped = rows.filter((row) => row.duplicate && row.excluded && row.errors.length === 0).length;
+  const valid = rows.filter((row) => row.errors.length === 0 && !row.excluded).length;
+  return {
+    total,
+    invalid,
+    warnings,
+    duplicates,
+    skipped,
+    valid,
+  };
+};
+
+const reportImportNotices = (skippedDuplicates: number, fileAlreadyImported: boolean) => {
+  if (skippedDuplicates > 0) {
+    toast(`Skipped ${skippedDuplicates} duplicate ${skippedDuplicates === 1 ? "row" : "rows"}`);
+  }
+  if (fileAlreadyImported) {
+    toast("This file was imported before");
+  }
 };
 
 export const useImportWizard = () => {
@@ -177,6 +160,22 @@ export const useImportWizard = () => {
   const [existingInvestments, setExistingInvestments] = useState<InvestmentHistory[]>([]);
 
   const accountMap = useMemo(() => buildAccountNameMap(accounts), [accounts]);
+  const transactionRowsRef = useRef<TransactionRow[]>([]);
+  const balanceRowsRef = useRef<BalanceRow[]>([]);
+  const transactionFlagVersion = useRef(0);
+  const balanceFlagVersion = useRef(0);
+  transactionRowsRef.current = transactionRows;
+  balanceRowsRef.current = balanceRows;
+
+  const rememberTransactionRows = (rows: TransactionRow[]) => {
+    transactionRowsRef.current = rows;
+    setTransactionRows(rows);
+  };
+
+  const rememberBalanceRows = (rows: BalanceRow[]) => {
+    balanceRowsRef.current = rows;
+    setBalanceRows(rows);
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -280,143 +279,167 @@ export const useImportWizard = () => {
     setExistingInvestments([]);
   };
 
-  const applyTransactionDuplicateFlag = (row: TransactionRow) => {
-    try {
-      const account = accountMap.get(normalizeAccountName(row.account));
-      if (!account) {
-        return row;
-      }
-      const amountValue = Number(row.amount);
-      const fromAmountValue = Number(row.fromAmount);
-      const toAmountValue = Number(row.toAmount);
-      const descriptionValue = row.description || "";
-      let isDuplicate = false;
-
-      if (row.type === "transfer") {
-        const transferAccount = accountMap.get(normalizeAccountName(row.transferAccount));
-        if (transferAccount) {
-          const key = buildTransferKey(account.id, transferAccount.id, row.date, fromAmountValue, toAmountValue);
-          isDuplicate = existingTransfers.some((transfer) => {
-            try {
-              const transferDate = safeDateToTimestamp(transfer.date);
-              if (transferDate === 0) {
-                return false; // Skip invalid dates
-              }
-              return (
-                buildTransferKey(
-                  transfer.fromAccountId,
-                  transfer.toAccountId,
-                  getDateKey(transferDate),
-                  transfer.fromAmount ?? transfer.amount, // Fallback for backward compatibility
-                  transfer.toAmount ?? transfer.amount    // Fallback for backward compatibility
-                ) === key
-              );
-            } catch (error) {
-              console.warn("Error checking transfer duplicate:", error, transfer);
-              return false;
-            }
-          });
-        }
-      } else {
-        const key = buildTransactionKey(account.id, row.date, amountValue, descriptionValue);
-        isDuplicate = existingTransactions.some((transaction) => {
-          try {
-            const transactionDate = safeDateToTimestamp(transaction.date);
-            if (transactionDate === 0) {
-              return false; // Skip invalid dates
-            }
-            return (
-              buildTransactionKey(
-                transaction.accountId,
-                getDateKey(transactionDate),
-                transaction.amount,
-                transaction.description || ""
-              ) === key
-            );
-          } catch (error) {
-            console.warn("Error checking transaction duplicate:", error, transaction);
-            return false;
-          }
-        });
-      }
-
-      const warningMessage = "Possible duplicate";
-      const hasWarning = row.warnings.includes(warningMessage);
-      if (isDuplicate && !hasWarning) {
-        return {
-          ...row,
-          duplicate: true,
-          warnings: [...row.warnings, warningMessage],
-        };
-      }
-      if (!isDuplicate && hasWarning) {
-        return {
-          ...row,
-          duplicate: false,
-          warnings: row.warnings.filter((warning) => warning !== warningMessage),
-        };
-      }
-      return { ...row, duplicate: isDuplicate };
-    } catch (error) {
-      console.error("Error in applyTransactionDuplicateFlag:", error, row);
-      // Return row without duplicate flag on error
-      return { ...row, duplicate: false };
+  const fingerprintForTransactionRow = async (row: TransactionRow): Promise<string | null> => {
+    const account = accountMap.get(normalizeAccountName(row.account));
+    if (!account) {
+      return null;
     }
+    if (row.type === "transfer") {
+      const transferAccount = accountMap.get(normalizeAccountName(row.transferAccount));
+      if (!transferAccount) {
+        return null;
+      }
+      return transferFingerprint({
+        fromAccountId: account.id,
+        toAccountId: transferAccount.id,
+        date: row.date,
+        fromAmount: Number(row.fromAmount),
+        toAmount: Number(row.toAmount),
+      });
+    }
+    return transactionFingerprint({
+      accountId: account.id,
+      date: row.date,
+      amount: Number(row.amount),
+      description: row.description,
+      type: row.type,
+    });
   };
 
-  const applyBalanceDuplicateFlag = (row: BalanceRow) => {
-    try {
-      const account = accountMap.get(normalizeAccountName(row.account));
-      if (!account) {
-        return row;
-      }
-      const balanceValue = Number(row.balance);
-      const key = buildBalanceKey(account.id, row.date, balanceValue);
-
-      const matchesHistory = (history: BalanceHistory | InvestmentHistory) => {
-        try {
-          const historyDate = safeDateToTimestamp(history.date);
-          if (historyDate === 0) {
-            return false; // Skip invalid dates
-          }
-          return (
-            buildBalanceKey(
-              history.accountId,
-              getDateKey(historyDate),
-              history.balance
-            ) === key
-          );
-        } catch (error) {
-          console.warn("Error checking balance duplicate:", error, history);
-          return false;
-        }
-      };
-
-      const isDuplicate =
-        existingBalances.some(matchesHistory) || existingInvestments.some(matchesHistory);
-
-      const warningMessage = "Possible duplicate";
-      const hasWarning = row.warnings.includes(warningMessage);
-      if (isDuplicate && !hasWarning) {
-        return {
-          ...row,
-          duplicate: true,
-          warnings: [...row.warnings, warningMessage],
-        };
-      }
-      if (!isDuplicate && hasWarning) {
-        return {
-          ...row,
-          duplicate: false,
-          warnings: row.warnings.filter((warning) => warning !== warningMessage),
-        };
-      }
-      return { ...row, duplicate: isDuplicate };
-    } catch (error) {
-      console.error("Error in applyBalanceDuplicateFlag:", error, row);
-      // Return row without duplicate flag on error
-      return { ...row, duplicate: false };
+  const fingerprintForBalanceRow = async (row: BalanceRow): Promise<string | null> => {
+    const account = accountMap.get(normalizeAccountName(row.account));
+    if (!account) {
+      return null;
     }
+    return balanceFingerprint({
+      accountId: account.id,
+      date: row.date,
+      balance: Number(row.balance),
+    });
+  };
+
+  const collectExistingTransactionFingerprints = async () => {
+    const fingerprints = new Set<string>();
+    await Promise.all([
+      ...existingTransactions.map(async (transaction) => {
+        if (transaction.fingerprint) {
+          fingerprints.add(transaction.fingerprint);
+        }
+        if (transaction.sourceFingerprint) {
+          fingerprints.add(transaction.sourceFingerprint);
+        }
+        const hash = await transactionFingerprint({
+          accountId: transaction.accountId,
+          date: transaction.date,
+          amount: transaction.amount,
+          description: transaction.description,
+          type: transaction.type,
+        });
+        if (hash) {
+          fingerprints.add(hash);
+        }
+      }),
+      ...existingTransfers.map(async (transfer) => {
+        if (transfer.fingerprint) {
+          fingerprints.add(transfer.fingerprint);
+        }
+        if (transfer.sourceFingerprint) {
+          fingerprints.add(transfer.sourceFingerprint);
+        }
+        const hash = await transferFingerprint({
+          fromAccountId: transfer.fromAccountId,
+          toAccountId: transfer.toAccountId,
+          date: transfer.date,
+          fromAmount: transfer.fromAmount ?? transfer.amount,
+          toAmount: transfer.toAmount ?? transfer.amount,
+        });
+        if (hash) {
+          fingerprints.add(hash);
+        }
+      }),
+    ]);
+    return fingerprints;
+  };
+
+  const collectExistingBalanceFingerprints = async () => {
+    const fingerprints = new Set<string>();
+    await Promise.all(
+      [...existingBalances, ...existingInvestments].map(async (entry) => {
+        if (entry.fingerprint) {
+          fingerprints.add(entry.fingerprint);
+        }
+        if (entry.sourceFingerprint) {
+          fingerprints.add(entry.sourceFingerprint);
+        }
+        const hash = await balanceFingerprint({
+          accountId: entry.accountId,
+          date: entry.date,
+          balance: entry.balance,
+        });
+        if (hash) {
+          fingerprints.add(hash);
+        }
+      })
+    );
+    return fingerprints;
+  };
+
+  const flagTransactionRows = async (rows: TransactionRow[]): Promise<TransactionRow[]> => {
+    const existing = await collectExistingTransactionFingerprints();
+    const withFingerprints = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        fingerprint: await fingerprintForTransactionRow(row),
+      }))
+    );
+    return applyReviewDuplicates(withFingerprints, existing).map((row) => {
+      const { fingerprint, ...rest } = row;
+      void fingerprint;
+      return rest;
+    });
+  };
+
+  const flagBalanceRows = async (rows: BalanceRow[]): Promise<BalanceRow[]> => {
+    const existing = await collectExistingBalanceFingerprints();
+    const withFingerprints = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        fingerprint: await fingerprintForBalanceRow(row),
+      }))
+    );
+    return applyReviewDuplicates(withFingerprints, existing).map((row) => {
+      const { fingerprint, ...rest } = row;
+      void fingerprint;
+      return rest;
+    });
+  };
+
+  const scheduleTransactionFlags = (rows: TransactionRow[]) => {
+    const version = ++transactionFlagVersion.current;
+    void flagTransactionRows(rows)
+      .then((flagged) => {
+        if (version !== transactionFlagVersion.current) {
+          return;
+        }
+        rememberTransactionRows(flagged);
+      })
+      .catch((error) => {
+        console.error("Error updating transaction duplicate flags:", error);
+      });
+  };
+
+  const scheduleBalanceFlags = (rows: BalanceRow[]) => {
+    const version = ++balanceFlagVersion.current;
+    void flagBalanceRows(rows)
+      .then((flagged) => {
+        if (version !== balanceFlagVersion.current) {
+          return;
+        }
+        rememberBalanceRows(flagged);
+      })
+      .catch((error) => {
+        console.error("Error updating balance duplicate flags:", error);
+      });
   };
 
   const loadTransactionDuplicates = async () => {
@@ -510,41 +533,26 @@ export const useImportWizard = () => {
     if (importType === "balances" && balanceRows.length > 0) {
       loadBalanceDuplicates(balanceRows);
     }
+    // Reload when the import type or row count changes. Edits do not refetch the ledger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [importType, transactionRows.length, balanceRows.length, accountMap]);
 
   useEffect(() => {
-    if (importType !== "transactions") {
+    if (importType !== "transactions" || transactionRows.length === 0) {
       return;
     }
-    if (transactionRows.length === 0) {
-      return;
-    }
-    try {
-      setTransactionRows((currentRows) =>
-        updateRowsIfChanged(currentRows, applyTransactionDuplicateFlag)
-      );
-    } catch (error) {
-      console.error("Error updating transaction duplicate flags:", error);
-      // Don't crash the app, just log the error
-    }
-  }, [existingTransactions, existingTransfers, importType, transactionRows.length]);
+    scheduleTransactionFlags(transactionRowsRef.current);
+    // Recompute when the ledger preview or the row count changes. Edits schedule their own pass.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingTransactions, existingTransfers, importType, transactionRows.length, accountMap]);
 
   useEffect(() => {
-    if (importType !== "balances") {
+    if (importType !== "balances" || balanceRows.length === 0) {
       return;
     }
-    if (balanceRows.length === 0) {
-      return;
-    }
-    try {
-      setBalanceRows((currentRows) =>
-        updateRowsIfChanged(currentRows, applyBalanceDuplicateFlag)
-      );
-    } catch (error) {
-      console.error("Error updating balance duplicate flags:", error);
-      // Don't crash the app, just log the error
-    }
-  }, [existingBalances, existingInvestments, importType, balanceRows.length]);
+    scheduleBalanceFlags(balanceRowsRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingBalances, existingInvestments, importType, balanceRows.length, accountMap]);
 
   const processFile = async () => {
     // Check if we have either file or paste content
@@ -612,50 +620,50 @@ export const useImportWizard = () => {
 
   const updateTransactionRow = (rowId: string, key: keyof TransactionRow, value: string) => {
     try {
-      setTransactionRows((currentRows) => {
-        const nextRows = currentRows.map((row) => {
-          if (row.id !== rowId) {
-            return row;
-          }
-          try {
-            const updatedRow = { ...row, [key]: value };
-            const editedKey = String(key);
-            const rawRow = {
-              date: updatedRow.date,
-              account: updatedRow.account,
-              description: updatedRow.description,
-              amount: updatedRow.amount,
-              from_amount: updatedRow.fromAmount,
-              to_amount: updatedRow.toAmount,
-              category: shouldBlankCategoryForRematch(row, editedKey) ? "" : updatedRow.category,
-              type: updatedRow.type,
-              transfer_account: updatedRow.transferAccount,
-            };
-            const [validated] = validateTransactionRows([rawRow], accounts, transactionCategories);
-            const reconciled = reconcileReviewRow(
-              row,
-              {
-                ...validated,
-                id: row.id,
-                rowNumber: row.rowNumber,
-              },
-              editedKey,
-              categorizationRules,
-              categoryAllowances
-            );
-            return applyTransactionDuplicateFlag({
-              ...reconciled,
-              excluded: row.excluded,
-              overrideDuplicate: row.overrideDuplicate,
-            });
-          } catch (error) {
-            console.error("Error updating transaction row:", error, row);
-            return row; // Return original row on error
-          }
-        });
-
-        return nextRows;
+      const identityChanged = TRANSACTION_IDENTITY_KEYS.has(String(key));
+      const nextRows = transactionRowsRef.current.map((row) => {
+        if (row.id !== rowId) {
+          return row;
+        }
+        try {
+          const updatedRow = { ...row, [key]: value };
+          const editedKey = String(key);
+          const rawRow = {
+            date: updatedRow.date,
+            account: updatedRow.account,
+            description: updatedRow.description,
+            amount: updatedRow.amount,
+            from_amount: updatedRow.fromAmount,
+            to_amount: updatedRow.toAmount,
+            category: shouldBlankCategoryForRematch(row, editedKey) ? "" : updatedRow.category,
+            type: updatedRow.type,
+            transfer_account: updatedRow.transferAccount,
+          };
+          const [validated] = validateTransactionRows([rawRow], accounts, transactionCategories);
+          const reconciled = reconcileReviewRow(
+            row,
+            {
+              ...validated,
+              id: row.id,
+              rowNumber: row.rowNumber,
+            },
+            editedKey,
+            categorizationRules,
+            categoryAllowances
+          );
+          return {
+            ...reconciled,
+            excluded: identityChanged ? false : row.excluded,
+            overrideDuplicate: identityChanged ? false : row.overrideDuplicate,
+            duplicate: identityChanged ? false : row.duplicate,
+          };
+        } catch (error) {
+          console.error("Error updating transaction row:", error, row);
+          return row;
+        }
       });
+      rememberTransactionRows(nextRows);
+      scheduleTransactionFlags(nextRows);
     } catch (error) {
       console.error("Error in updateTransactionRow:", error);
     }
@@ -663,36 +671,59 @@ export const useImportWizard = () => {
 
   const updateBalanceRow = (rowId: string, key: keyof BalanceRow, value: string) => {
     try {
-      setBalanceRows((currentRows) => {
-        const nextRows = currentRows.map((row) => {
-          if (row.id !== rowId) {
-            return row;
-          }
-          try {
-            const updatedRow = { ...row, [key]: value };
-            const rawRow = {
-              date: updatedRow.date,
-              account: updatedRow.account,
-              balance: updatedRow.balance,
-            };
-            const [validated] = validateBalanceRows([rawRow], accounts);
-            const updated = {
-              ...validated,
-              id: row.id,
-              rowNumber: row.rowNumber,
-            };
-            return applyBalanceDuplicateFlag(updated);
-          } catch (error) {
-            console.error("Error updating balance row:", error, row);
-            return row; // Return original row on error
-          }
-        });
-
-        return nextRows;
+      const identityChanged = BALANCE_IDENTITY_KEYS.has(String(key));
+      const nextRows = balanceRowsRef.current.map((row) => {
+        if (row.id !== rowId) {
+          return row;
+        }
+        try {
+          const updatedRow = { ...row, [key]: value };
+          const rawRow = {
+            date: updatedRow.date,
+            account: updatedRow.account,
+            balance: updatedRow.balance,
+          };
+          const [validated] = validateBalanceRows([rawRow], accounts);
+          return {
+            ...validated,
+            id: row.id,
+            rowNumber: row.rowNumber,
+            excluded: identityChanged ? false : row.excluded,
+            overrideDuplicate: identityChanged ? false : row.overrideDuplicate,
+            duplicate: identityChanged ? false : row.duplicate,
+          };
+        } catch (error) {
+          console.error("Error updating balance row:", error, row);
+          return row;
+        }
       });
+      rememberBalanceRows(nextRows);
+      scheduleBalanceFlags(nextRows);
     } catch (error) {
       console.error("Error in updateBalanceRow:", error);
     }
+  };
+
+  const toggleTransactionExcluded = (rowId: string) => {
+    const nextRows = transactionRowsRef.current.map((row) => {
+      if (row.id !== rowId || !row.duplicate) {
+        return row;
+      }
+      const excluded = !row.excluded;
+      return { ...row, excluded, overrideDuplicate: !excluded };
+    });
+    rememberTransactionRows(nextRows);
+  };
+
+  const toggleBalanceExcluded = (rowId: string) => {
+    const nextRows = balanceRowsRef.current.map((row) => {
+      if (row.id !== rowId || !row.duplicate) {
+        return row;
+      }
+      const excluded = !row.excluded;
+      return { ...row, excluded, overrideDuplicate: !excluded };
+    });
+    rememberBalanceRows(nextRows);
   };
 
   const updateAccountRow = (rowId: string, key: keyof AccountRow, value: string) => {
@@ -745,23 +776,25 @@ export const useImportWizard = () => {
               throw new Error(`Transfer account not found: ${row.transferAccount}`);
             }
             return {
-              type: "transfer",
+              type: "transfer" as const,
               fromAccountId: account.id,
               toAccountId: transferAccount.id,
               fromAmount: Number(row.fromAmount),
               toAmount: Number(row.toAmount),
               description: row.description || null,
               date: row.date,
+              ...(row.duplicate ? { overrideDuplicate: true } : {}),
             };
           }
 
           return {
-            type: row.type,
+            type: row.type as "debit" | "credit",
             accountId: account.id,
             category: transactionCategories.includes(row.category) ? row.category : (transactionCategories.includes("Other Expenses") ? "Other Expenses" : transactionCategories[0] || "Other Expenses"),
             amount: Number(row.amount),
             description: row.description || null,
             date: row.date,
+            ...(row.duplicate ? { overrideDuplicate: true } : {}),
           };
         });
 
@@ -803,6 +836,7 @@ export const useImportWizard = () => {
         const result = await apiClient.post<{
           transactions: number;
           transfers: number;
+          skippedDuplicates?: number;
           importId?: string | null;
           isDuplicate?: boolean;
           skippedDuplicates?: number;
@@ -813,17 +847,17 @@ export const useImportWizard = () => {
           fileHash: fileHash,
         });
 
-        // Show warning if duplicate detected
-        if (result.isDuplicate) {
-          console.warn("Duplicate import detected - file hash matches existing import");
-          // Could show a toast notification here in the future
-        }
+        const skippedDuplicates = result.skippedDuplicates ?? 0;
+        const fileAlreadyImported = result.isDuplicate === true;
+        reportImportNotices(skippedDuplicates, fileAlreadyImported);
 
         setCompletion({
           type: "transactions",
           transactions: result.transactions,
           transfers: result.transfers,
           total: result.transactions + result.transfers,
+          skippedDuplicates,
+          fileAlreadyImported,
         });
 
         const learned = await learnImportedRows(validRows, categoryAllowances, result);
@@ -831,7 +865,7 @@ export const useImportWizard = () => {
           toast.error("Imported, but a description rule could not be saved");
         }
       } else if (importType === "balances") {
-        const validRows = balanceRows.filter((row) => row.errors.length === 0);
+        const validRows = balanceRows.filter((row) => row.errors.length === 0 && !row.excluded);
         if (validRows.length === 0) {
           throw new Error("No valid rows to import.");
         }
@@ -846,6 +880,7 @@ export const useImportWizard = () => {
             accountId: account.id,
             balance: Number(row.balance),
             date: row.date,
+            ...(row.duplicate ? { overrideDuplicate: true } : {}),
           };
         });
 
@@ -883,6 +918,7 @@ export const useImportWizard = () => {
         const result = await apiClient.post<{
           balances: number;
           investments: number;
+          skippedDuplicates?: number;
           importId?: string | null;
           isDuplicate?: boolean;
         }>("/api/import/balances", { 
@@ -891,17 +927,17 @@ export const useImportWizard = () => {
           fileHash: fileHash,
         });
 
-        // Show warning if duplicate detected
-        if (result.isDuplicate) {
-          console.warn("Duplicate import detected - file hash matches existing import");
-          // Could show a toast notification here in the future
-        }
+        const skippedDuplicates = result.skippedDuplicates ?? 0;
+        const fileAlreadyImported = result.isDuplicate === true;
+        reportImportNotices(skippedDuplicates, fileAlreadyImported);
 
         setCompletion({
           type: "balances",
           balances: result.balances,
           investments: result.investments,
           total: result.balances + result.investments,
+          skippedDuplicates,
+          fileAlreadyImported,
         });
       } else if (importType === "accounts") {
         const validRows = accountRows.filter((row) => row.errors.length === 0);
@@ -960,10 +996,10 @@ export const useImportWizard = () => {
 
   const summary =
     importType === "transactions"
-      ? getTransactionSummary(transactionRows)
+      ? summarizeRows(transactionRows)
       : importType === "balances"
-        ? getBalanceSummary(balanceRows)
-        : getAccountSummary(accountRows);
+        ? summarizeRows(balanceRows)
+        : summarizeRows(accountRows);
 
   return {
     step,
@@ -991,6 +1027,8 @@ export const useImportWizard = () => {
     updateTransactionRow,
     updateBalanceRow,
     updateAccountRow,
+    toggleTransactionExcluded,
+    toggleBalanceExcluded,
     importRows,
   };
 };

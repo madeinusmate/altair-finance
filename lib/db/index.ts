@@ -4,6 +4,11 @@ import * as schema from "./schema";
 import * as crypto from "crypto";
 import path from "path";
 import fs from "fs";
+import {
+  balanceFingerprintPayload,
+  transactionFingerprintPayload,
+  transferFingerprintPayload,
+} from "../import/fingerprint";
 
 type DatabaseInstance = InstanceType<typeof Database>;
 
@@ -100,6 +105,187 @@ const ensureUserSettingsColumns = (sqlite: DatabaseInstance): void => {
   }
 };
 
+const FINGERPRINT_TABLES = ["transactions", "transfers", "balance_history", "investment_history"] as const;
+
+const tableExists = (sqlite: DatabaseInstance, tableName: string): boolean => {
+  const row = sqlite
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(tableName);
+  return Boolean(row);
+};
+
+const tableColumnNames = (sqlite: DatabaseInstance, tableName: string): Set<string> => {
+  const columns = sqlite.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  return new Set(columns.map((column) => column.name));
+};
+
+const hashFingerprintPayload = (payload: string): string =>
+  crypto.createHash("sha256").update(payload).digest("hex");
+
+const backfillLedgerFingerprints = (sqlite: DatabaseInstance): void => {
+  if (tableExists(sqlite, "transactions")) {
+    const rows = sqlite
+      .prepare(
+        `SELECT id, account_id, type, amount, description, date
+         FROM transactions
+         WHERE fingerprint IS NULL`
+      )
+      .all() as Array<{
+      id: string;
+      account_id: string;
+      type: string;
+      amount: number;
+      description: string | null;
+      date: number;
+    }>;
+    const update = sqlite.prepare(
+      `UPDATE transactions
+       SET fingerprint = ?, source_fingerprint = ?
+       WHERE id = ? AND fingerprint IS NULL`
+    );
+    const write = sqlite.transaction(() => {
+      for (const row of rows) {
+        const payload = transactionFingerprintPayload({
+          accountId: row.account_id,
+          date: row.date,
+          amount: row.amount,
+          description: row.description,
+          type: row.type,
+        });
+        if (!payload) {
+          continue;
+        }
+        const hash = hashFingerprintPayload(payload);
+        update.run(hash, hash, row.id);
+      }
+    });
+    write();
+  }
+
+  if (tableExists(sqlite, "transfers") && tableColumnNames(sqlite, "transfers").has("fingerprint")) {
+    const transferColumns = tableColumnNames(sqlite, "transfers");
+    const fromAmountSql = transferColumns.has("from_amount") ? "from_amount" : "NULL";
+    const toAmountSql = transferColumns.has("to_amount") ? "to_amount" : "NULL";
+    const rows = sqlite
+      .prepare(
+        `SELECT id, from_account_id, to_account_id, amount, ${fromAmountSql} AS from_amount, ${toAmountSql} AS to_amount, date
+         FROM transfers
+         WHERE fingerprint IS NULL`
+      )
+      .all() as Array<{
+      id: string;
+      from_account_id: string;
+      to_account_id: string;
+      amount: number;
+      from_amount: number | null;
+      to_amount: number | null;
+      date: number;
+    }>;
+    const update = sqlite.prepare(
+      `UPDATE transfers
+       SET fingerprint = ?, source_fingerprint = ?
+       WHERE id = ? AND fingerprint IS NULL`
+    );
+    const write = sqlite.transaction(() => {
+      for (const row of rows) {
+        const payload = transferFingerprintPayload({
+          fromAccountId: row.from_account_id,
+          toAccountId: row.to_account_id,
+          date: row.date,
+          fromAmount: row.from_amount ?? row.amount,
+          toAmount: row.to_amount ?? row.amount,
+        });
+        if (!payload) {
+          continue;
+        }
+        const hash = hashFingerprintPayload(payload);
+        update.run(hash, hash, row.id);
+      }
+    });
+    write();
+  }
+
+  if (tableExists(sqlite, "balance_history")) {
+    const rows = sqlite
+      .prepare(
+        `SELECT id, account_id, balance, date
+         FROM balance_history
+         WHERE fingerprint IS NULL`
+      )
+      .all() as Array<{ id: string; account_id: string; balance: number; date: number }>;
+    const update = sqlite.prepare(
+      `UPDATE balance_history
+       SET fingerprint = ?, source_fingerprint = ?
+       WHERE id = ? AND fingerprint IS NULL`
+    );
+    const write = sqlite.transaction(() => {
+      for (const row of rows) {
+        const payload = balanceFingerprintPayload({
+          accountId: row.account_id,
+          date: row.date,
+          balance: row.balance,
+        });
+        if (!payload) {
+          continue;
+        }
+        const hash = hashFingerprintPayload(payload);
+        update.run(hash, hash, row.id);
+      }
+    });
+    write();
+  }
+
+  if (tableExists(sqlite, "investment_history")) {
+    const rows = sqlite
+      .prepare(
+        `SELECT id, account_id, balance, date
+         FROM investment_history
+         WHERE fingerprint IS NULL`
+      )
+      .all() as Array<{ id: string; account_id: string; balance: number; date: number }>;
+    const update = sqlite.prepare(
+      `UPDATE investment_history
+       SET fingerprint = ?, source_fingerprint = ?
+       WHERE id = ? AND fingerprint IS NULL`
+    );
+    const write = sqlite.transaction(() => {
+      for (const row of rows) {
+        const payload = balanceFingerprintPayload({
+          accountId: row.account_id,
+          date: row.date,
+          balance: row.balance,
+        });
+        if (!payload) {
+          continue;
+        }
+        const hash = hashFingerprintPayload(payload);
+        update.run(hash, hash, row.id);
+      }
+    });
+    write();
+  }
+};
+
+const ensureLedgerFingerprintColumns = (sqlite: DatabaseInstance): void => {
+  for (const tableName of FINGERPRINT_TABLES) {
+    if (!tableExists(sqlite, tableName)) {
+      continue;
+    }
+    const names = tableColumnNames(sqlite, tableName);
+    if (!names.has("fingerprint")) {
+      sqlite.exec(`ALTER TABLE ${tableName} ADD COLUMN fingerprint TEXT`);
+    }
+    if (!names.has("source_fingerprint")) {
+      sqlite.exec(`ALTER TABLE ${tableName} ADD COLUMN source_fingerprint TEXT`);
+    }
+    sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_${tableName}_fingerprint ON ${tableName}(fingerprint)`);
+    sqlite.exec(
+      `CREATE INDEX IF NOT EXISTS idx_${tableName}_source_fingerprint ON ${tableName}(source_fingerprint)`
+    );
+  }
+  backfillLedgerFingerprints(sqlite);
+};
+
 export const runMigrations = (sqlite: DatabaseInstance): void => {
   try {
     // Drop before the transfers early-return below so an old file that lacks
@@ -107,6 +293,7 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
     dropOpenBankingTokenTables(sqlite);
     ensureCategorizationRulesTable(sqlite);
     ensureUserSettingsColumns(sqlite);
+    ensureLedgerFingerprintColumns(sqlite);
 
     // Migration: Create imports table if it doesn't exist
     const importsTableCheck = sqlite.prepare(`
@@ -373,7 +560,9 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       description TEXT,
       date INTEGER NOT NULL,
       metadata TEXT,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      fingerprint TEXT,
+      source_fingerprint TEXT
     );
 
     CREATE TABLE IF NOT EXISTS transfers (
@@ -387,7 +576,9 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       category TEXT NOT NULL DEFAULT 'Transfer',
       description TEXT,
       date INTEGER NOT NULL,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      fingerprint TEXT,
+      source_fingerprint TEXT
     );
 
     CREATE TABLE IF NOT EXISTS balance_history (
@@ -395,7 +586,9 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
       balance REAL NOT NULL,
       date INTEGER NOT NULL,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      fingerprint TEXT,
+      source_fingerprint TEXT
     );
 
     CREATE TABLE IF NOT EXISTS investment_history (
@@ -403,7 +596,9 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
       balance REAL NOT NULL,
       date INTEGER NOT NULL,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      fingerprint TEXT,
+      source_fingerprint TEXT
     );
 
     CREATE TABLE IF NOT EXISTS imports (
@@ -439,6 +634,14 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     CREATE INDEX IF NOT EXISTS idx_imports_type ON imports(type);
     CREATE INDEX IF NOT EXISTS idx_imports_created_at ON imports(created_at);
     CREATE INDEX IF NOT EXISTS idx_imports_file_hash ON imports(file_hash);
+    CREATE INDEX IF NOT EXISTS idx_transactions_fingerprint ON transactions(fingerprint);
+    CREATE INDEX IF NOT EXISTS idx_transactions_source_fingerprint ON transactions(source_fingerprint);
+    CREATE INDEX IF NOT EXISTS idx_transfers_fingerprint ON transfers(fingerprint);
+    CREATE INDEX IF NOT EXISTS idx_transfers_source_fingerprint ON transfers(source_fingerprint);
+    CREATE INDEX IF NOT EXISTS idx_balance_history_fingerprint ON balance_history(fingerprint);
+    CREATE INDEX IF NOT EXISTS idx_balance_history_source_fingerprint ON balance_history(source_fingerprint);
+    CREATE INDEX IF NOT EXISTS idx_investment_history_fingerprint ON investment_history(fingerprint);
+    CREATE INDEX IF NOT EXISTS idx_investment_history_source_fingerprint ON investment_history(source_fingerprint);
 
     CREATE TABLE IF NOT EXISTS budgets (
       id TEXT PRIMARY KEY,
@@ -654,6 +857,12 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       ensureCategorizationRulesTable(sqlite);
     } catch (error) {
       console.warn("[DB Migration] Could not create categorization_rules table:", error);
+    }
+
+    try {
+      ensureLedgerFingerprintColumns(sqlite);
+    } catch (error) {
+      console.warn("[DB Migration] Could not add ledger fingerprints:", error);
     }
     
     console.log("[DB Init] Migrations completed");

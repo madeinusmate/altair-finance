@@ -27,6 +27,7 @@ export type TransactionRow = ParsedTransaction & {
   ruleMatch?: string;
   ruleHint?: string;
   categoryTouched?: boolean;
+  overrideDuplicate?: boolean;
   isTransfer?: boolean;
   fromAccountId?: string;
   toAccountId?: string;

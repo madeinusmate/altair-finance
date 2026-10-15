@@ -77,6 +77,8 @@ const ImportWizardPage = () => {
     updateTransactionRow,
     updateBalanceRow,
     updateAccountRow,
+    toggleTransactionExcluded,
+    toggleBalanceExcluded,
     importRows,
   } = useImportWizard();
 
@@ -132,7 +134,7 @@ const ImportWizardPage = () => {
         ? "Balances CSV"
         : "Accounts CSV";
 
-  const canProceedFromReview = summary.invalid === 0 && rows.length > 0;
+  const canProceedFromReview = summary.invalid === 0 && summary.valid > 0;
 
   // Reset filter when entering review step or when import type changes
   const resetKey = `${step}-${importType}`;
@@ -319,7 +321,7 @@ const ImportWizardPage = () => {
           <CardHeader>
             <CardTitle>Review import</CardTitle>
             <CardDescription>
-              Fix any errors. Warnings will not block the import.
+              Fix any errors. Duplicate rows are left out unless you include them.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -348,11 +350,18 @@ const ImportWizardPage = () => {
                   onFilterChange={setReviewFilter}
                 />
 
+                {(importType === "transactions" || importType === "balances") && summary.duplicates > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    {summary.skipped} duplicate {summary.skipped === 1 ? "row" : "rows"} will be skipped unless included.
+                  </p>
+                )}
+
                 {importType === "transactions" && (
                   <CsvReviewTable
                     rows={filteredTransactionRows}
                     onRowChange={updateTransactionRow}
                     rowHeight={112}
+                    onToggleExclude={toggleTransactionExcluded}
                     columns={[
                       { key: "date", label: "Date", inputType: "date" },
                       {
@@ -464,6 +473,7 @@ const ImportWizardPage = () => {
                   <CsvReviewTable
                     rows={filteredBalanceRows}
                     onRowChange={updateBalanceRow}
+                    onToggleExclude={toggleBalanceExcluded}
                     columns={[
                       { key: "date", label: "Date", inputType: "date" },
                       {
@@ -584,9 +594,14 @@ const ImportWizardPage = () => {
               <Button onClick={handleImport} disabled={!canProceedFromReview || isImporting}>
                 {isImporting ? "Importing..." : "Complete import"}
               </Button>
-              {!canProceedFromReview && rows.length > 0 && (
+              {!canProceedFromReview && rows.length > 0 && summary.invalid > 0 && (
                 <p className="text-xs text-muted-foreground">
                   Fix errors before continuing.
+                </p>
+              )}
+              {!canProceedFromReview && rows.length > 0 && summary.invalid === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Duplicate rows are left out unless you include one.
                 </p>
               )}
             </div>
@@ -606,6 +621,12 @@ const ImportWizardPage = () => {
                 <Badge variant="secondary">Transactions: {completion.transactions}</Badge>
                 <Badge variant="secondary">Transfers: {completion.transfers}</Badge>
                 <Badge variant="default">Total imported: {completion.total}</Badge>
+                {completion.skippedDuplicates > 0 && (
+                  <Badge variant="outline">Skipped duplicates: {completion.skippedDuplicates}</Badge>
+                )}
+                {completion.fileAlreadyImported && (
+                  <p className="text-sm text-muted-foreground">This file was imported before.</p>
+                )}
               </div>
             )}
             {completion && completion.type === "balances" && (
@@ -613,6 +634,12 @@ const ImportWizardPage = () => {
                 <Badge variant="secondary">Balances: {completion.balances}</Badge>
                 <Badge variant="secondary">Investments: {completion.investments}</Badge>
                 <Badge variant="default">Total imported: {completion.total}</Badge>
+                {completion.skippedDuplicates > 0 && (
+                  <Badge variant="outline">Skipped duplicates: {completion.skippedDuplicates}</Badge>
+                )}
+                {completion.fileAlreadyImported && (
+                  <p className="text-sm text-muted-foreground">This file was imported before.</p>
+                )}
               </div>
             )}
             {completion && completion.type === "accounts" && (

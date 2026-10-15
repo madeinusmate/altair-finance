@@ -55,6 +55,8 @@ export const transactions = sqliteTable("transactions", {
   metadata: text("metadata"), // optional JSON; leftover provider payloads stay as stored
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   importId: text("import_id").references(() => imports.id, { onDelete: "set null" }),
+  fingerprint: text("fingerprint"),
+  sourceFingerprint: text("source_fingerprint"),
 });
 
 export const transfers = sqliteTable("transfers", {
@@ -74,6 +76,8 @@ export const transfers = sqliteTable("transfers", {
   date: integer("date", { mode: "timestamp" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   importId: text("import_id").references(() => imports.id, { onDelete: "set null" }),
+  fingerprint: text("fingerprint"),
+  sourceFingerprint: text("source_fingerprint"),
 });
 
 export const balanceHistory = sqliteTable("balance_history", {
@@ -85,6 +89,8 @@ export const balanceHistory = sqliteTable("balance_history", {
   date: integer("date", { mode: "timestamp" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   importId: text("import_id").references(() => imports.id, { onDelete: "set null" }),
+  fingerprint: text("fingerprint"),
+  sourceFingerprint: text("source_fingerprint"),
 });
 
 export const investmentHistory = sqliteTable("investment_history", {
@@ -96,6 +102,8 @@ export const investmentHistory = sqliteTable("investment_history", {
   date: integer("date", { mode: "timestamp" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   importId: text("import_id").references(() => imports.id, { onDelete: "set null" }),
+  fingerprint: text("fingerprint"),
+  sourceFingerprint: text("source_fingerprint"),
 });
 
 export const exchangeRates = sqliteTable("exchange_rates", {
