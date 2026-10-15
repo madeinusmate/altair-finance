@@ -7,6 +7,7 @@ import {
   startOfDay,
   startOfMonth,
   subDays,
+  subMonths,
 } from "date-fns";
 
 /**
@@ -30,6 +31,8 @@ export interface InsightMonth {
   month: string;
   monthLabel: string;
   monthStart: Date;
+  start: Date;
+  end: Date;
   asOf: Date;
 }
 
@@ -40,11 +43,11 @@ export type PreviousPeriod = {
 };
 
 const parseParts = (value: string): [number, number, number] | null => {
-  const parts = value.split("-");
-  if (parts.length !== 3) return null;
-  const year = Number(parts[0]);
-  const month = Number(parts[1]);
-  const day = Number(parts[2]);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
   if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   return [year, month, day];
@@ -78,6 +81,12 @@ export const parseLocalDateStart = (value: string): Date | null => buildLocalDat
 
 export const parseLocalDateEnd = (value: string): Date | null => buildLocalDate(value, "end");
 
+/** Local midnight for a `yyyy-MM-dd` dashboard param. Not `new Date("YYYY-MM-DD")`. */
+export const parseLocalDate = (value: string): Date | null => parseLocalDateStart(value);
+
+/** Local end of that calendar day (`23:59:59.999`). */
+export const parseLocalEndDate = (value: string): Date | null => parseLocalDateEnd(value);
+
 export const parseLocalDateRange = (startDate: string, endDate: string): LocalDateRange | null => {
   const start = parseLocalDateStart(startDate);
   const end = parseLocalDateEnd(endDate);
@@ -102,6 +111,9 @@ export const earliestTimestamp = (dates: readonly (Date | null | undefined)[]): 
   return earliest;
 };
 
+export const earliestInstant = (dates: ReadonlyArray<Date | null | undefined>): Date | null =>
+  earliestTimestamp(dates);
+
 export const monthAsOf = (monthStart: Date, rangeEnd: Date): Date => {
   const monthEnd = endOfMonth(monthStart);
   return monthEnd.getTime() <= rangeEnd.getTime() ? monthEnd : rangeEnd;
@@ -114,10 +126,13 @@ export const listMonths = (start: Date, end: Date): InsightMonth[] => {
 
   while (current.getTime() <= normalizedEnd.getTime()) {
     const monthStart = new Date(current);
+    const monthEnd = endOfMonth(monthStart);
     months.push({
       month: format(monthStart, "yyyy-MM"),
       monthLabel: format(monthStart, "MMM yyyy"),
       monthStart,
+      start: monthStart,
+      end: monthEnd,
       asOf: monthAsOf(monthStart, end),
     });
     current = addMonths(current, 1);
@@ -128,6 +143,34 @@ export const listMonths = (start: Date, end: Date): InsightMonth[] => {
 
 /** Months from startOfMonth(start) through startOfMonth(end), inclusive. Key yyyy-MM. */
 export const monthsInRange = (start: Date, end: Date): InsightMonth[] => listMonths(start, end);
+
+/**
+ * The `count` complete calendar months before the month that contains `now`.
+ * On 15 Oct 2026, `trailingCompleteMonths(now, 3)` is July, August, and September.
+ */
+export const trailingCompleteMonths = (now: Date, count: number): InsightMonth[] => {
+  if (count <= 0) {
+    return [];
+  }
+
+  const currentMonthStart = startOfMonth(now);
+  const first = startOfMonth(subMonths(currentMonthStart, count));
+  const lastComplete = endOfMonth(subMonths(currentMonthStart, 1));
+  return monthsInRange(first, lastComplete);
+};
+
+/** A complete month exists when the ledger's oldest instant falls on or before that month's end. */
+export const completeMonthsOnLedger = (
+  months: ReadonlyArray<InsightMonth>,
+  oldest: Date | null,
+): InsightMonth[] => {
+  if (!oldest || Number.isNaN(oldest.getTime())) {
+    return [];
+  }
+
+  const oldestTime = oldest.getTime();
+  return months.filter((month) => oldestTime <= month.end.getTime());
+};
 
 /**
  * Equal length in calendar days, ending the day before the selected start.
