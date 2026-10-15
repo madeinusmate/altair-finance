@@ -11,6 +11,7 @@ export const ensurePayeesSchema = (sqlite: Sqlite): void => {
       name TEXT NOT NULL,
       normalized_name TEXT NOT NULL UNIQUE,
       icon TEXT,
+      icon_image TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -19,6 +20,9 @@ export const ensurePayeesSchema = (sqlite: Sqlite): void => {
   const payeeColumns = sqlite.prepare("PRAGMA table_info(payees)").all() as Array<{ name: string }>;
   if (!payeeColumns.some((column) => column.name === "icon")) {
     sqlite.exec("ALTER TABLE payees ADD COLUMN icon TEXT");
+  }
+  if (!payeeColumns.some((column) => column.name === "icon_image")) {
+    sqlite.exec("ALTER TABLE payees ADD COLUMN icon_image TEXT");
   }
 
   const columns = sqlite.prepare("PRAGMA table_info(transactions)").all() as Array<{ name: string }>;

@@ -3,13 +3,15 @@ import { eq } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/lib/db/schema";
 import { cleanPayee } from "./normalize";
+import { normalizePayeeIconImage } from "./icon-image";
 
 type BooksDb = BetterSQLite3Database<typeof schema>;
 
 export const resolvePayeeId = (
   db: BooksDb,
   rawName: string | null | undefined,
-  icon?: string | null
+  icon?: string | null,
+  iconImage?: string | null
 ): string | null => {
   const cleaned = cleanPayee(rawName);
   if (!cleaned) return null;
@@ -30,6 +32,7 @@ export const resolvePayeeId = (
       name: cleaned.displayName,
       normalizedName: cleaned.normalizedName,
       icon: iconName,
+      iconImage: normalizePayeeIconImage(iconImage),
       createdAt: now,
       updatedAt: now,
     })

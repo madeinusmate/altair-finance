@@ -22,7 +22,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import * as LucideIcons from "lucide-react";
 import { PayeeCombobox } from "@/components/payee-combobox";
 import { PayeeIconSelect } from "@/components/payees/payee-icon-select";
-import { getIconComponent } from "@/components/category-management/category-edit-dialog";
+import { PayeeImageField } from "@/components/payees/payee-image-field";
+import { PayeeMark } from "@/components/payees/payee-mark";
 import { cleanPayee } from "@/lib/payees/normalize";
 
 type PayeeOption = {
@@ -30,6 +31,7 @@ type PayeeOption = {
   name: string;
   normalizedName: string;
   icon?: string | null;
+  iconImage?: string | null;
 };
 
 interface TransactionFormProps {
@@ -88,6 +90,7 @@ export const TransactionForm = ({
   const [description, setDescription] = useState(transaction?.description || "");
   const [payeeName, setPayeeName] = useState(transaction?.payeeName || "");
   const [payeeIcon, setPayeeIcon] = useState("");
+  const [payeeIconImage, setPayeeIconImage] = useState("");
   const [payees, setPayees] = useState<PayeeOption[]>([]);
   const [date, setDate] = useState(
     transaction ? new Date(transaction.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
@@ -190,7 +193,7 @@ export const TransactionForm = ({
 
   const payeePayload = {
     payeeName: payeeName.trim() || null,
-    ...(matchedPayee ? {} : { payeeIcon: payeeIcon || null }),
+    ...(matchedPayee ? {} : { payeeIcon: payeeIcon || null, payeeIconImage: payeeIconImage || null }),
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -351,15 +354,23 @@ export const TransactionForm = ({
         />
         {matchedPayee ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            {getIconComponent(matchedPayee.icon)}
+            <PayeeMark image={matchedPayee.iconImage} icon={matchedPayee.icon} fallback="" />
             <span>
-              {matchedPayee.icon
+              {matchedPayee.iconImage || matchedPayee.icon
                 ? `Using the icon saved for ${matchedPayee.name}`
                 : `${matchedPayee.name} has no icon yet. Set one in settings.`}
             </span>
           </p>
         ) : cleanPayee(payeeName) ? (
-          <PayeeIconSelect id="payee-icon" value={payeeIcon} onChange={setPayeeIcon} disabled={isLoading} />
+          <>
+            <PayeeIconSelect id="payee-icon" value={payeeIcon} onChange={setPayeeIcon} disabled={isLoading} />
+            <PayeeImageField
+              id="payee-image"
+              value={payeeIconImage}
+              onChange={setPayeeIconImage}
+              disabled={isLoading}
+            />
+          </>
         ) : null}
       </div>
 

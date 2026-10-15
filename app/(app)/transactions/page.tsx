@@ -39,7 +39,7 @@ import { toast } from "sonner";
 import { Search, ArrowLeftRight, Pencil, Trash2, Plus } from "lucide-react";
 import { Transaction, Account, Transfer } from "@/lib/db/schema";
 import { transactionSubtitle, transactionTitle } from "@/lib/payees/display";
-import { getIconComponent } from "@/components/category-management/category-edit-dialog";
+import { PayeeMark } from "@/components/payees/payee-mark";
 import { format } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -72,7 +72,8 @@ const formatCurrency = (amount: number, currency: string): string => {
 const TransactionsPage = () => {
   const { getKey, usesBooksOwner } = useAuth();
   const [transactions, setTransactions] = useState<LedgerTransaction[]>([]);
-  const [payees, setPayees] = useState<Array<{ id: string; name: string }>>([]);
+  const [payees, setPayees] = useState<Array<{ id: string; name: string; icon?: string | null; iconImage?: string | null }>>([]);
+  const payeeById = useMemo(() => new Map(payees.map((payee) => [payee.id, payee])), [payees]);
   const [payeeFilter, setPayeeFilter] = useState<string>("all");
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -638,8 +639,13 @@ const TransactionsPage = () => {
                               <TableRow>
                                 <TableCell className="max-w-[240px] font-medium">
                                   <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm">
-                                      {getIconComponent(transaction.payeeIcon, "h-5 w-5") ?? title.charAt(0).toUpperCase()}
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-sm">
+                                      <PayeeMark
+                                        image={transaction.payeeId ? payeeById.get(transaction.payeeId)?.iconImage : null}
+                                        icon={transaction.payeeId ? payeeById.get(transaction.payeeId)?.icon ?? transaction.payeeIcon : transaction.payeeIcon}
+                                        fallback={title.charAt(0).toUpperCase()}
+                                        className="h-5 w-5"
+                                      />
                                     </div>
                                     <div className="min-w-0">
                                       <span className="block truncate">{title}</span>

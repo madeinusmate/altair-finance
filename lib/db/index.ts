@@ -389,6 +389,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       name TEXT NOT NULL,
       normalized_name TEXT NOT NULL UNIQUE,
       icon TEXT,
+      icon_image TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );

@@ -16,11 +16,14 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { PayeeIconSelect } from "@/components/payees/payee-icon-select";
+import { PayeeImageField } from "@/components/payees/payee-image-field";
+import { PayeeMark } from "@/components/payees/payee-mark";
 
 type PayeeRow = {
   id: string;
   name: string;
   icon?: string | null;
+  iconImage?: string | null;
   transactionCount: number;
 };
 
@@ -30,6 +33,7 @@ export const PayeesSettings = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [iconDrafts, setIconDrafts] = useState<Record<string, string>>({});
+  const [imageDrafts, setImageDrafts] = useState<Record<string, string>>({});
   const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({});
 
   const loadPayees = async () => {
@@ -41,6 +45,7 @@ export const PayeesSettings = () => {
       setPayees(data.payees || []);
       setDrafts(Object.fromEntries((data.payees || []).map((payee) => [payee.id, payee.name])));
       setIconDrafts(Object.fromEntries((data.payees || []).map((payee) => [payee.id, payee.icon || ""])));
+      setImageDrafts(Object.fromEntries((data.payees || []).map((payee) => [payee.id, payee.iconImage || ""])));
     } catch (error) {
       console.error(error);
       toast.error("Failed to load payees");
@@ -57,7 +62,12 @@ export const PayeesSettings = () => {
     const name = drafts[id]?.trim();
     if (!name) return;
     try {
-      await apiClient.patch("/api/payees", { id, name, icon: iconDrafts[id] || null });
+      await apiClient.patch("/api/payees", {
+        id,
+        name,
+        icon: iconDrafts[id] || null,
+        iconImage: imageDrafts[id] || null,
+      });
       toast.success("Payee renamed");
       await loadPayees();
     } catch (error) {
@@ -96,6 +106,14 @@ export const PayeesSettings = () => {
             {payees.map((payee) => (
               <li key={payee.id} className="flex flex-col gap-2 border-b pb-3 sm:flex-row sm:items-center">
                 <div className="min-w-[8rem] text-sm text-muted-foreground">{payee.transactionCount}</div>
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs">
+                  <PayeeMark
+                    image={imageDrafts[payee.id] ?? payee.iconImage}
+                    icon={iconDrafts[payee.id] ?? payee.icon}
+                    fallback={payee.name.charAt(0).toUpperCase()}
+                    className="h-4 w-4"
+                  />
+                </div>
                 <Input
                   value={drafts[payee.id] ?? payee.name}
                   onChange={(event) => setDrafts((current) => ({ ...current, [payee.id]: event.target.value }))}
@@ -106,6 +124,13 @@ export const PayeesSettings = () => {
                     id={`payee-icon-${payee.id}`}
                     value={iconDrafts[payee.id] ?? payee.icon ?? ""}
                     onChange={(value) => setIconDrafts((current) => ({ ...current, [payee.id]: value }))}
+                  />
+                </div>
+                <div className="w-full sm:min-w-[240px]">
+                  <PayeeImageField
+                    id={`payee-image-${payee.id}`}
+                    value={imageDrafts[payee.id] ?? payee.iconImage ?? ""}
+                    onChange={(value) => setImageDrafts((current) => ({ ...current, [payee.id]: value }))}
                   />
                 </div>
                 <Button type="button" variant="outline" onClick={() => renamePayee(payee.id)}>

@@ -5,6 +5,7 @@ import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { isValidTransactionCategory, isValidTransactionCategoryForType } from "@/lib/db/category-helpers";
 import { resolvePayeeId } from "@/lib/payees/assign";
+import { normalizePayeeIconImage, PayeeIconImageError } from "@/lib/payees/icon-image";
 
 // GET all transactions or by account
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
@@ -51,7 +52,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { accountId, type, category, amount, description, date, payeeName, payeeIcon } = body;
+    const { accountId, type, category, amount, description, date, payeeName, payeeIcon, payeeIconImage } = body;
 
     if (!accountId || !type || !category || amount === undefined || !date) {
       return NextResponse.json(
@@ -107,7 +108,8 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       payeeId: resolvePayeeId(
         db,
         typeof payeeName === "string" ? payeeName : null,
-        typeof payeeIcon === "string" ? payeeIcon : null
+        typeof payeeIcon === "string" ? payeeIcon : null,
+        normalizePayeeIconImage(payeeIconImage)
       ),
       date: new Date(date),
       createdAt: now,
@@ -117,6 +119,9 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     return NextResponse.json(newTransaction, { status: 201 });
   } catch (error) {
+    if (error instanceof PayeeIconImageError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Error creating transaction:", error);
     return NextResponse.json({ error: "Failed to create transaction" }, { status: 500 });
   }
@@ -131,7 +136,7 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { id, type, category, amount, description, date, payeeName, payeeIcon } = body;
+    const { id, type, category, amount, description, date, payeeName, payeeIcon, payeeIconImage } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Transaction ID is required" }, { status: 400 });
@@ -197,7 +202,12 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       date: new Date(date),
     };
     if (typeof payeeName === "string" || payeeName === null) {
-      updates.payeeId = resolvePayeeId(db, payeeName, typeof payeeIcon === "string" ? payeeIcon : null);
+      updates.payeeId = resolvePayeeId(
+        db,
+        payeeName,
+        typeof payeeIcon === "string" ? payeeIcon : null,
+        normalizePayeeIconImage(payeeIconImage)
+      );
     }
 
     db.update(schema.transactions).set(updates).where(eq(schema.transactions.id, id)).run();
@@ -210,6 +220,9 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
 
     return NextResponse.json(updated);
   } catch (error) {
+    if (error instanceof PayeeIconImageError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Error updating transaction:", error);
     return NextResponse.json({ error: "Failed to update transaction" }, { status: 500 });
   }

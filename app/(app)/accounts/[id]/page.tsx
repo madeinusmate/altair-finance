@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, useMemo } from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -62,7 +62,7 @@ import {
 } from "@/components/ui/pagination";
 import { Account, Transaction, Transfer, BalanceHistory, InvestmentHistory } from "@/lib/db/schema";
 import { transactionSubtitle, transactionTitle } from "@/lib/payees/display";
-import { getIconComponent } from "@/components/category-management/category-edit-dialog";
+import { PayeeMark } from "@/components/payees/payee-mark";
 import { TransactionForm } from "@/components/transaction-form";
 import { TransferForm } from "@/components/transfer-form";
 import { BalanceUpdateForm } from "@/components/balance-update-form";
@@ -103,7 +103,8 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   const router = useRouter();
   const [account, setAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<LedgerTransaction[]>([]);
-  const [payees, setPayees] = useState<Array<{ id: string; name: string }>>([]);
+  const [payees, setPayees] = useState<Array<{ id: string; name: string; icon?: string | null; iconImage?: string | null }>>([]);
+  const payeeById = useMemo(() => new Map(payees.map((payee) => [payee.id, payee])), [payees]);
   const [payeeFilter, setPayeeFilter] = useState("all");
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [balanceHistory, setBalanceHistory] = useState<BalanceHistory[]>([]);
@@ -1006,7 +1007,11 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                               </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2 font-medium">
-                                  {getIconComponent(transaction.payeeIcon)}
+                                  <PayeeMark
+                                    image={transaction.payeeId ? payeeById.get(transaction.payeeId)?.iconImage : null}
+                                    icon={transaction.payeeId ? payeeById.get(transaction.payeeId)?.icon ?? transaction.payeeIcon : transaction.payeeIcon}
+                                    fallback=""
+                                  />
                                   {transactionTitle(transaction.payeeName, transaction.description, transaction.category)}
                                 </div>
                                 {transactionSubtitle(transaction.payeeName, transaction.description) ? (

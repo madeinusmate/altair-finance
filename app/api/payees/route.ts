@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
+import { normalizePayeeIconImage, PayeeIconImageError } from "@/lib/payees/icon-image";
 
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
   const key = getEncryptionKey(request);
@@ -17,6 +18,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
         name: schema.payees.name,
         normalizedName: schema.payees.normalizedName,
         icon: schema.payees.icon,
+        iconImage: schema.payees.iconImage,
         transactionCount: sql<number>`(
           SELECT COUNT(*) FROM transactions WHERE transactions.payee_id = ${schema.payees.id}
         )`.as("transaction_count"),
@@ -57,8 +59,20 @@ export const PATCH = async (request: NextRequest): Promise<NextResponse> => {
         ? (typeof body.icon === "string" && body.icon.trim() ? body.icon.trim() : null)
         : existing.icon;
 
+    let iconImage = existing.iconImage;
+    if (body?.iconImage === null || typeof body?.iconImage === "string") {
+      try {
+        iconImage = normalizePayeeIconImage(body.iconImage);
+      } catch (error) {
+        if (error instanceof PayeeIconImageError) {
+          return NextResponse.json({ error: error.message }, { status: 400 });
+        }
+        throw error;
+      }
+    }
+
     db.update(schema.payees)
-      .set({ name, icon, updatedAt: new Date() })
+      .set({ name, icon, iconImage, updatedAt: new Date() })
       .where(eq(schema.payees.id, id))
       .run();
 
