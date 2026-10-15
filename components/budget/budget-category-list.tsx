@@ -31,6 +31,7 @@ import { SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
 
 interface BudgetWithSpending {
   id: string;
+  categoryId: number;
   categoryName: string;
   amount: number;
   currency: string;
@@ -40,9 +41,14 @@ interface BudgetWithSpending {
   isOverBudget: boolean;
 }
 
+interface BudgetCategoryOption {
+  id: number;
+  name: string;
+}
+
 interface BudgetCategoryListProps {
   budgets: BudgetWithSpending[];
-  allCategories: string[];
+  allCategories: BudgetCategoryOption[];
   currency: string;
   overallBudget: number;
   isLoading?: boolean;
@@ -76,7 +82,8 @@ export const BudgetCategoryList = ({
   enabledCurrencies = SUPPORTED_CURRENCIES,
 }: BudgetCategoryListProps) => {
   const [editingBudget, setEditingBudget] = useState<BudgetWithSpending | null>(null);
-  const [creatingCategory, setCreatingCategory] = useState<string | null>(null);
+  const [creatingCategory, setCreatingCategory] = useState<BudgetCategoryOption | null>(null);
+  const [chooseCategory, setChooseCategory] = useState(false);
   const [deletingBudget, setDeletingBudget] = useState<BudgetWithSpending | null>(null);
 
   const handleDelete = async () => {
@@ -88,16 +95,13 @@ export const BudgetCategoryList = ({
       onRefresh();
       setDeletingBudget(null);
     } catch (error: unknown) {
-      const errorMessage = error && typeof error === "object" && "response" in error && error.response && typeof error.response === "object" && "data" in error.response && error.response.data && typeof error.response.data === "object" && "error" in error.response.data && typeof error.response.data.error === "string" ? error.response.data.error : "Failed to delete budget";
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete budget";
       toast.error(errorMessage);
     }
   };
 
-  // Create a map of budgets by category name
-  const budgetMap = new Map(budgets.map((b) => [b.categoryName, b]));
-
-  // Get categories without budgets
-  const categoriesWithoutBudgets = allCategories.filter((cat) => !budgetMap.has(cat));
+  const budgetedCategoryIds = new Set(budgets.map((budget) => budget.categoryId));
+  const categoriesWithoutBudgets = allCategories.filter((category) => !budgetedCategoryIds.has(category.id));
 
   if (isLoading) {
     return (
@@ -135,7 +139,7 @@ export const BudgetCategoryList = ({
           ) : budgets.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <p className="text-sm text-muted-foreground mb-4">No budgets set yet</p>
-              <Button onClick={() => setCreatingCategory("")}>
+              <Button onClick={() => setChooseCategory(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create Your First Budget
               </Button>
@@ -205,8 +209,8 @@ export const BudgetCategoryList = ({
                   );
                 })}
                 {categoriesWithoutBudgets.map((category) => (
-                  <TableRow key={category} className="opacity-60">
-                    <TableCell className="font-medium">{category}</TableCell>
+                  <TableRow key={category.id} className="opacity-60">
+                    <TableCell className="font-medium">{category.name}</TableCell>
                     <TableCell className="text-right text-muted-foreground">Unlimited</TableCell>
                     <TableCell className="text-right text-muted-foreground">-</TableCell>
                     <TableCell className="text-right">-</TableCell>
@@ -231,15 +235,17 @@ export const BudgetCategoryList = ({
       </Card>
 
       <BudgetEditDialog
-        open={editingBudget !== null || creatingCategory !== null}
+        open={editingBudget !== null || creatingCategory !== null || chooseCategory}
         onOpenChange={(open) => {
           if (!open) {
             setEditingBudget(null);
             setCreatingCategory(null);
+            setChooseCategory(false);
           }
         }}
         budget={editingBudget || undefined}
-        categoryName={creatingCategory || undefined}
+        categoryId={creatingCategory?.id}
+        categoryName={editingBudget?.categoryName || creatingCategory?.name}
         currencies={enabledCurrencies}
         defaultCurrency={currency}
         onSuccess={onRefresh}

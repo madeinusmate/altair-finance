@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useMemo, useState, use } from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -80,6 +81,14 @@ import { PdfStatementImport } from "@/components/pdf-import/pdf-statement-import
 import { FileText } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { CategoryBadge } from "@/components/category-management/category-badge";
+import { BulkRecategorizeBar, type BulkCategory } from "@/components/ledger/bulk-recategorize-bar";
+import {
+  headerCheckboxState,
+  ledgerSelectionKey,
+  toggleFilteredSelection,
+  toLedgerSelection,
+  type LedgerSelectionEntry,
+} from "@/lib/ledger/selection";
 
 type UnifiedItem = 
   | { type: "transaction"; data: Transaction }
@@ -124,8 +133,8 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all"); // "all" | "debit" | "credit" | "transfer"
-  const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
-  const [categoryMap, setCategoryMap] = useState<Map<string, { color?: string | null; icon?: string | null }>>(new Map());
+  const [transactionCategories, setTransactionCategories] = useState<BulkCategory[]>([]);
+  const [selectedRows, setSelectedRows] = useState<Map<string, LedgerSelectionEntry>>(new Map());
   
   // Investment performance chart state
   const [dateRange, setDateRange] = useState<DashboardDateRange>(() => {
@@ -188,7 +197,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
           apiClient.get<BalanceHistory[]>(`/api/balance-history?accountId=${id}`),
           apiClient.get<InvestmentHistory[]>(`/api/investment-history?accountId=${id}`),
           apiClient.get<Account[]>("/api/accounts"),
-          apiClient.get<{ categories: Array<{ name: string; color?: string | null; icon?: string | null }> }>("/api/transaction-categories"),
+          apiClient.get<{ categories: BulkCategory[] }>("/api/transaction-categories"),
         ]);
 
       setAccount(accountData);
@@ -197,13 +206,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
       setBalanceHistory(balanceData);
       setInvestmentHistory(investmentData);
       setAccounts(allAccounts);
-      setTransactionCategories(categoriesData.categories.map((c) => c.name));
-      // Create a map of category name to category metadata
-      const catMap = new Map<string, { color?: string | null; icon?: string | null }>();
-      categoriesData.categories.forEach((cat) => {
-        catMap.set(cat.name, { color: cat.color, icon: cat.icon });
-      });
-      setCategoryMap(catMap);
+      setTransactionCategories(categoriesData.categories);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch account");
     } finally {
@@ -289,9 +292,22 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
     toast.success("Investment value updated");
   };
 
+  const dropSelection = (kind: "transaction" | "transfer", rowId: string) => {
+    const key = ledgerSelectionKey(kind, rowId);
+    setSelectedRows((current) => {
+      if (!current.has(key)) {
+        return current;
+      }
+      const next = new Map(current);
+      next.delete(key);
+      return next;
+    });
+  };
+
   const handleDeleteTransaction = async (transactionId: string) => {
     try {
       await apiClient.delete(`/api/transactions?id=${transactionId}`);
+      dropSelection("transaction", transactionId);
       fetchData();
       toast.success("Transaction deleted");
     } catch {
@@ -318,6 +334,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   const handleDeleteTransfer = async (transferId: string) => {
     try {
       await apiClient.delete(`/api/transfers?id=${transferId}`);
+      dropSelection("transfer", transferId);
       fetchData();
       toast.success("Transfer deleted");
     } catch {
@@ -380,10 +397,25 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
     toast.success("Investment entry updated");
   };
 
+  const categoryById = useMemo(
+    () => new Map(transactionCategories.map((category) => [category.id, category])),
+    [transactionCategories]
+  );
+
+  const handleRecategorized = async () => {
+    await fetchData();
+    setSelectedRows(new Map());
+  };
+
   // Reset to page 1 when items per page or filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [itemsPerPage, searchQuery, categoryFilter, typeFilter]);
+
+  // This register has no date filter. Reset when the filters that exist today change.
+  useEffect(() => {
+    setSelectedRows(new Map());
+  }, [id, itemsPerPage, searchQuery, categoryFilter, typeFilter]);
 
   if (isLoading) {
     return (
@@ -794,14 +826,14 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
             if (searchQuery) {
               const query = searchQuery.toLowerCase();
               const matchesDescription = t.description?.toLowerCase().includes(query);
-              const matchesCategory = t.category.toLowerCase().includes(query);
+              const matchesCategory = (t.category ?? "").toLowerCase().includes(query);
               if (!matchesDescription && !matchesCategory) {
                 return false;
               }
             }
 
             // Category filter
-            if (categoryFilter !== "all" && t.category !== categoryFilter) {
+            if (categoryFilter !== "all" && String(t.categoryId ?? "") !== categoryFilter) {
               return false;
             }
 
@@ -823,7 +855,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
             if (searchQuery) {
               const query = searchQuery.toLowerCase();
               const matchesDescription = t.description?.toLowerCase().includes(query);
-              const matchesCategory = t.category?.toLowerCase().includes(query);
+              const matchesCategory = (t.category ?? "").toLowerCase().includes(query);
               const otherAccount = accounts.find(
                 (a) => a.id === (t.fromAccountId === id ? t.toAccountId : t.fromAccountId)
               );
@@ -834,7 +866,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
             }
 
             // Category filter
-            if (categoryFilter !== "all" && t.category !== categoryFilter) {
+            if (categoryFilter !== "all" && String(t.categoryId ?? "") !== categoryFilter) {
               return false;
             }
 
@@ -852,6 +884,22 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
         const startIndex = (currentPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
         const paginatedItems = filteredItems.slice(startIndex, endIndex);
+        const selectableEntries = filteredItems.map(toLedgerSelection);
+        const headerChecked = headerCheckboxState(
+          selectableEntries.map((entry) => entry.key),
+          new Set(selectedRows.keys())
+        );
+        const toggleRow = (entry: LedgerSelectionEntry, checked: boolean) => {
+          setSelectedRows((current) => {
+            const next = new Map(current);
+            if (checked) {
+              next.set(entry.key, entry);
+            } else {
+              next.delete(entry.key);
+            }
+            return next;
+          });
+        };
 
         return (
           <Card>
@@ -913,8 +961,8 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                       <SelectContent>
                         <SelectItem value="all">All Categories</SelectItem>
                         {transactionCategories.map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {cat}
+                          <SelectItem key={cat.id} value={String(cat.id)}>
+                            {cat.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -932,6 +980,12 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                     </Select>
                   </div>
 
+                  <BulkRecategorizeBar
+                    selectedRows={[...selectedRows.values()]}
+                    categories={transactionCategories}
+                    onCompleted={handleRecategorized}
+                  />
+
                   {totalItems === 0 ? (
                     <p className="text-muted-foreground text-center py-8">
                       No transactions match your filters
@@ -941,6 +995,18 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                       <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-10">
+                          <Checkbox
+                            checked={headerChecked}
+                            onCheckedChange={(value) => {
+                              setSelectedRows((current) =>
+                                toggleFilteredSelection(current, selectableEntries, value === true)
+                              );
+                            }}
+                            aria-label={`Select ${selectableEntries.length} matching`}
+                            disabled={selectableEntries.length === 0}
+                          />
+                        </TableHead>
                         <TableHead>Date</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Category</TableHead>
@@ -956,6 +1022,15 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                           const transaction = item.data;
                           return (
                             <TableRow key={`transaction-${transaction.id}`}>
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedRows.has(ledgerSelectionKey("transaction", transaction.id))}
+                                  onCheckedChange={(value) =>
+                                    toggleRow(toLedgerSelection(item), value === true)
+                                  }
+                                  aria-label={`Select transaction ${transaction.description?.trim() || transaction.category}`}
+                                />
+                              </TableCell>
                               <TableCell>{format(new Date(transaction.date), "MMM d, yyyy")}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
@@ -969,9 +1044,9 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                               </TableCell>
                               <TableCell>
                                 <CategoryBadge
-                                  name={transaction.category}
-                                  color={categoryMap.get(transaction.category)?.color}
-                                  icon={categoryMap.get(transaction.category)?.icon}
+                                  name={categoryById.get(transaction.categoryId ?? -1)?.name || transaction.category}
+                                  color={categoryById.get(transaction.categoryId ?? -1)?.color}
+                                  icon={categoryById.get(transaction.categoryId ?? -1)?.icon}
                                 />
                               </TableCell>
                               <TableCell>{transaction.description || "-"}</TableCell>
@@ -1019,6 +1094,15 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                           
                           return (
                             <TableRow key={`transfer-${transfer.id}`}>
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedRows.has(ledgerSelectionKey("transfer", transfer.id))}
+                                  onCheckedChange={(value) =>
+                                    toggleRow(toLedgerSelection(item), value === true)
+                                  }
+                                  aria-label={`Select transfer ${transfer.description?.trim() || "Transfer"}`}
+                                />
+                              </TableCell>
                               <TableCell>{format(new Date(transfer.date), "MMM d, yyyy")}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
@@ -1042,9 +1126,9 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                               </TableCell>
                               <TableCell>
                                 <CategoryBadge
-                                  name={transfer.category || "Transfer"}
-                                  color={categoryMap.get(transfer.category || "Transfer")?.color}
-                                  icon={categoryMap.get(transfer.category || "Transfer")?.icon}
+                                  name={categoryById.get(transfer.categoryId ?? -1)?.name || transfer.category || "Transfer"}
+                                  color={categoryById.get(transfer.categoryId ?? -1)?.color}
+                                  icon={categoryById.get(transfer.categoryId ?? -1)?.icon}
                                 />
                               </TableCell>
                               <TableCell>
@@ -1410,9 +1494,9 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                               </TableCell>
                               <TableCell>
                                 <CategoryBadge
-                                  name={transfer.category || "Transfer"}
-                                  color={categoryMap.get(transfer.category || "Transfer")?.color}
-                                  icon={categoryMap.get(transfer.category || "Transfer")?.icon}
+                                  name={categoryById.get(transfer.categoryId ?? -1)?.name || transfer.category || "Transfer"}
+                                  color={categoryById.get(transfer.categoryId ?? -1)?.color}
+                                  icon={categoryById.get(transfer.categoryId ?? -1)?.icon}
                                 />
                               </TableCell>
                               <TableCell>

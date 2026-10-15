@@ -291,6 +291,7 @@ export const TransactionsCsvImport = () => {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to import transactions";
       setImportError(message);
+      toast.error(message);
     } finally {
       setIsImporting(false);
     }

@@ -36,13 +36,27 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     const fxSnapshot = await getFxSnapshot(db);
 
     // Get all budgets to know which categories to calculate
-    const budgets = db.select().from(schema.budgets).all();
-    const budgetCategories = new Set(budgets.map((b) => b.categoryName));
+    const budgets = db
+      .select({
+        categoryId: schema.budgets.categoryId,
+        categoryName: schema.transactionCategories.name,
+      })
+      .from(schema.budgets)
+      .innerJoin(
+        schema.transactionCategories,
+        eq(schema.budgets.categoryId, schema.transactionCategories.id)
+      )
+      .where(eq(schema.transactionCategories.transactionType, "debit"))
+      .all();
+    const budgetCategories = new Map(
+      budgets.flatMap((budget) =>
+        budget.categoryId == null || !budget.categoryName ? [] : [[budget.categoryId, budget.categoryName] as const]
+      )
+    );
 
-    // Get all debit transactions in date range (excluding transfers and investments)
     const transactions = db
       .select({
-        category: schema.transactions.category,
+        categoryId: schema.transactions.categoryId,
         amount: schema.transactions.amount,
         accountId: schema.transactions.accountId,
       })
@@ -53,8 +67,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
           eq(schema.transactions.type, "debit"),
           gte(schema.transactions.date, startDate),
           lte(schema.transactions.date, endDate),
-          ne(schema.accounts.type, "investment"),
-          ne(schema.transactions.category, "Transfer")
+          ne(schema.accounts.type, "investment")
         )
       )
       .all();
@@ -64,11 +77,10 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     const accountCurrencyMap = new Map(accounts.map((acc) => [acc.id, acc.currency]));
 
     // Aggregate spending by category
-    const spendingMap = new Map<string, number>();
+    const spendingMap = new Map<number, number>();
 
     transactions.forEach((transaction) => {
-      // Only include categories that have budgets
-      if (!budgetCategories.has(transaction.category)) {
+      if (transaction.categoryId == null || !budgetCategories.has(transaction.categoryId)) {
         return;
       }
 
@@ -85,16 +97,17 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
           fxSnapshot.rates
         );
 
-        const current = spendingMap.get(transaction.category) || 0;
-        spendingMap.set(transaction.category, current + convertedAmount);
+        const current = spendingMap.get(transaction.categoryId) || 0;
+        spendingMap.set(transaction.categoryId, current + convertedAmount);
       } catch (error) {
         console.error(`Error converting amount:`, error);
       }
     });
 
     // Convert to array format
-    const spending = Array.from(spendingMap.entries()).map(([categoryName, spent]) => ({
-      categoryName,
+    const spending = Array.from(spendingMap.entries()).map(([categoryId, spent]) => ({
+      categoryId,
+      categoryName: budgetCategories.get(categoryId) ?? "",
       spent,
       currency,
     }));

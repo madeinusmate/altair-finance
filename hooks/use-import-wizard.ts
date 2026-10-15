@@ -15,6 +15,7 @@ import {
 } from "@/lib/csv/import-validators";
 import { parseCsvFile, parseCsvString, countCsvRows } from "@/lib/csv/parse";
 import { calculateFileHash } from "@/lib/csv/file-hash";
+import { toast } from "sonner";
 
 export type ImportType = "transactions" | "balances" | "accounts";
 
@@ -901,7 +902,9 @@ export const useImportWizard = () => {
       setIsImporting(false);
       return true;
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Import failed");
+      const message = error instanceof Error ? error.message : "Import failed";
+      setImportError(message);
+      toast.error(message);
       setIsImporting(false);
       return false;
     }

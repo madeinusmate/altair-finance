@@ -1,6 +1,7 @@
 import Database from "better-sqlite3-multiple-ciphers";
 import { drizzle, BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
+import { inferCatalogType } from "./category-identity";
 import * as crypto from "crypto";
 import path from "path";
 import fs from "fs";
@@ -30,6 +31,7 @@ const applyCipherPragmas = (sqlite: DatabaseInstance, encryptionKey: string): vo
   sqlite.pragma("cipher = 'sqlcipher'");
   sqlite.pragma("legacy = 4");
   sqlite.pragma(`key = '${escapeSqlString(encryptionKey)}'`);
+  sqlite.pragma("foreign_keys = ON");
   sqlite.pragma("journal_mode = WAL");
 };
 
@@ -73,7 +75,217 @@ const ensureUserSettingsColumns = (sqlite: DatabaseInstance): void => {
   }
 };
 
+type ForeignKeyViolation = {
+  table: string;
+  rowid: number;
+  parent: string;
+  fkid: number;
+};
+
+const tableExists = (sqlite: DatabaseInstance, name: string): boolean => {
+  return !!sqlite
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(name);
+};
+
+const columnNameSet = (sqlite: DatabaseInstance, table: string): Set<string> => {
+  const columns = sqlite.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  return new Set(columns.map((column) => column.name));
+};
+
+const logForeignKeyViolations = (sqlite: DatabaseInstance, label: string): ForeignKeyViolation[] => {
+  const violations = sqlite.prepare("PRAGMA foreign_key_check").all() as ForeignKeyViolation[];
+  if (violations.length === 0) {
+    return violations;
+  }
+
+  const counts = new Map<string, number>();
+  for (const violation of violations) {
+    const key = `${violation.table}->${violation.parent}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const summary = [...counts.entries()].map(([key, count]) => `${key} (${count})`).join(", ");
+  console.warn(`[DB Migration] ${label}: ${summary}`);
+  return violations;
+};
+
+export const ensureCategoryIds = (sqlite: DatabaseInstance): void => {
+  if (!tableExists(sqlite, "transactions")) {
+    return;
+  }
+  if (!tableExists(sqlite, "transaction_categories")) {
+    throw new Error("transaction_categories is missing; cannot attach category_id");
+  }
+
+  const migrate = sqlite.transaction(() => {
+    const categoryColumns = columnNameSet(sqlite, "transaction_categories");
+    if (!categoryColumns.has("transaction_type")) {
+      sqlite.exec("ALTER TABLE transaction_categories ADD COLUMN transaction_type TEXT");
+    }
+
+    if (tableExists(sqlite, "transfers")) {
+      const transferColumns = columnNameSet(sqlite, "transfers");
+      if (!transferColumns.has("category")) {
+        sqlite.exec("ALTER TABLE transfers ADD COLUMN category TEXT NOT NULL DEFAULT 'Transfer'");
+      }
+    }
+
+    const addCategoryId = (table: "transactions" | "transfers" | "budgets") => {
+      if (!tableExists(sqlite, table)) {
+        return;
+      }
+      if (!columnNameSet(sqlite, table).has("category_id")) {
+        sqlite.exec(
+          `ALTER TABLE ${table} ADD COLUMN category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT`
+        );
+      }
+    };
+
+    addCategoryId("transactions");
+    addCategoryId("transfers");
+    addCategoryId("budgets");
+
+    logForeignKeyViolations(sqlite, "Pre-existing foreign key violations left unchanged");
+
+    const catalog = sqlite
+      .prepare("SELECT id, name FROM transaction_categories")
+      .all() as Array<{ id: number; name: string }>;
+    const byName = new Map(catalog.map((row) => [row.name, row.id]));
+
+    const collectNames = (sql: string): string[] => {
+      const rows = sqlite.prepare(sql).all() as Array<{ name: string | null }>;
+      return rows.flatMap((row) => (row.name == null ? [] : [row.name]));
+    };
+
+    const missingNames = new Set<string>();
+    for (const name of collectNames(
+      "SELECT DISTINCT category AS name FROM transactions WHERE category IS NOT NULL"
+    )) {
+      if (!byName.has(name)) {
+        missingNames.add(name);
+      }
+    }
+    if (tableExists(sqlite, "transfers") && columnNameSet(sqlite, "transfers").has("category")) {
+      for (const name of collectNames(
+        "SELECT DISTINCT category AS name FROM transfers WHERE category IS NOT NULL"
+      )) {
+        if (!byName.has(name)) {
+          missingNames.add(name);
+        }
+      }
+    }
+    if (tableExists(sqlite, "budgets") && columnNameSet(sqlite, "budgets").has("category_name")) {
+      for (const name of collectNames(
+        "SELECT DISTINCT category_name AS name FROM budgets WHERE category_name IS NOT NULL"
+      )) {
+        if (!byName.has(name)) {
+          missingNames.add(name);
+        }
+      }
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const insertCategory = sqlite.prepare(
+      "INSERT INTO transaction_categories (name, transaction_type, created_at, updated_at) VALUES (?, ?, ?, ?)"
+    );
+    const typesForName = sqlite.prepare("SELECT type FROM transactions WHERE category = ?");
+
+    for (const name of missingNames) {
+      const typeRows = typesForName.all(name) as Array<{ type: string }>;
+      const types = typeRows.flatMap((row): Array<"debit" | "credit"> =>
+        row.type === "debit" || row.type === "credit" ? [row.type] : []
+      );
+      const info = insertCategory.run(name, inferCatalogType(types), now, now);
+      byName.set(name, Number(info.lastInsertRowid));
+    }
+
+    sqlite.exec(`
+      UPDATE transactions
+      SET category_id = (
+        SELECT id FROM transaction_categories WHERE name = transactions.category
+      )
+      WHERE category_id IS NULL
+    `);
+
+    if (tableExists(sqlite, "transfers") && columnNameSet(sqlite, "transfers").has("category")) {
+      sqlite.exec(`
+        UPDATE transfers
+        SET category_id = (
+          SELECT id FROM transaction_categories WHERE name = transfers.category
+        )
+        WHERE category_id IS NULL AND category IS NOT NULL
+      `);
+
+      const unresolvedTransfers = sqlite
+        .prepare("SELECT COUNT(*) AS count FROM transfers WHERE category_id IS NULL")
+        .get() as { count: number };
+      if (unresolvedTransfers.count > 0) {
+        let transferCategoryId = byName.get("Transfer");
+        if (transferCategoryId == null) {
+          const info = insertCategory.run("Transfer", null, now, now);
+          transferCategoryId = Number(info.lastInsertRowid);
+          byName.set("Transfer", transferCategoryId);
+        }
+        sqlite
+          .prepare("UPDATE transfers SET category_id = ? WHERE category_id IS NULL")
+          .run(transferCategoryId);
+      }
+    }
+
+    if (tableExists(sqlite, "budgets") && columnNameSet(sqlite, "budgets").has("category_name")) {
+      sqlite.exec(`
+        UPDATE budgets
+        SET category_id = (
+          SELECT id FROM transaction_categories WHERE name = budgets.category_name
+        )
+        WHERE category_id IS NULL
+      `);
+    }
+
+    const nullTransactions = sqlite
+      .prepare("SELECT COUNT(*) AS count FROM transactions WHERE category_id IS NULL")
+      .get() as { count: number };
+    if (nullTransactions.count > 0) {
+      throw new Error("Category backfill left transactions without category_id");
+    }
+    if (tableExists(sqlite, "transfers") && columnNameSet(sqlite, "transfers").has("category_id")) {
+      const nullTransfers = sqlite
+        .prepare("SELECT COUNT(*) AS count FROM transfers WHERE category_id IS NULL")
+        .get() as { count: number };
+      if (nullTransfers.count > 0) {
+        throw new Error("Category backfill left transfers without category_id");
+      }
+    }
+    if (tableExists(sqlite, "budgets") && columnNameSet(sqlite, "budgets").has("category_id")) {
+      const nullBudgets = sqlite
+        .prepare("SELECT COUNT(*) AS count FROM budgets WHERE category_id IS NULL")
+        .get() as { count: number };
+      if (nullBudgets.count > 0) {
+        throw new Error("Category backfill left budgets without category_id");
+      }
+    }
+
+    const categoryViolations = logForeignKeyViolations(sqlite, "Foreign key check after category backfill").filter(
+      (violation) => violation.parent === "transaction_categories"
+    );
+    if (categoryViolations.length > 0) {
+      throw new Error(`category_id foreign key check failed (${categoryViolations.length} rows)`);
+    }
+
+    sqlite.exec("CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON transactions(category_id)");
+    if (tableExists(sqlite, "transfers")) {
+      sqlite.exec("CREATE INDEX IF NOT EXISTS idx_transfers_category_id ON transfers(category_id)");
+    }
+    if (tableExists(sqlite, "budgets")) {
+      sqlite.exec("CREATE INDEX IF NOT EXISTS idx_budgets_category_id ON budgets(category_id)");
+    }
+  });
+
+  migrate();
+};
+
 export const runMigrations = (sqlite: DatabaseInstance): void => {
+  ensureCategoryIds(sqlite);
   try {
     ensureUserSettingsColumns(sqlite);
 
@@ -227,6 +439,7 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
           CREATE TABLE budgets (
             id TEXT PRIMARY KEY,
             category_name TEXT NOT NULL,
+            category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
             amount REAL NOT NULL,
             currency TEXT NOT NULL,
             created_at INTEGER NOT NULL,
@@ -299,6 +512,7 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
     // Ignore migration errors - they might occur if table structure is unexpected
     console.warn("[DB Migration] Could not run migrations:", error);
   }
+  ensureCategoryIds(sqlite);
 };
 
 export const getDb = (encryptionKey: string): BetterSQLite3Database<typeof schema> => {
@@ -309,10 +523,15 @@ export const getDb = (encryptionKey: string): BetterSQLite3Database<typeof schem
   }
 
   const sqlite = openSqlite(encryptionKey);
-  
+
   // Run migrations before creating drizzle instance
   // This ensures columns exist before Drizzle tries to query them
-  runMigrations(sqlite);
+  try {
+    runMigrations(sqlite);
+  } catch (error) {
+    sqlite.close();
+    throw error;
+  }
   
   const db = drizzle(sqlite, { schema });
   connectionCache.set(keyHash, db);
@@ -377,6 +596,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
       type TEXT NOT NULL CHECK (type IN ('debit', 'credit')),
       category TEXT NOT NULL,
+      category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
       amount REAL NOT NULL,
       description TEXT,
       date INTEGER NOT NULL,
@@ -393,6 +613,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       to_amount REAL,
       exchange_rate REAL,
       category TEXT NOT NULL DEFAULT 'Transfer',
+      category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
       description TEXT,
       date INTEGER NOT NULL,
       created_at INTEGER NOT NULL
@@ -466,6 +687,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     CREATE TABLE IF NOT EXISTS budgets (
       id TEXT PRIMARY KEY,
       category_name TEXT NOT NULL,
+      category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
       amount REAL NOT NULL,
       currency TEXT NOT NULL,
       created_at INTEGER NOT NULL,
@@ -486,6 +708,9 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
 
     CREATE INDEX IF NOT EXISTS idx_budgets_category_name ON budgets(category_name);
     CREATE INDEX IF NOT EXISTS idx_transactions_category_date_type ON transactions(category, date, type);
+    CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON transactions(category_id);
+    CREATE INDEX IF NOT EXISTS idx_transfers_category_id ON transfers(category_id);
+    CREATE INDEX IF NOT EXISTS idx_budgets_category_id ON budgets(category_id);
 
     INSERT INTO meta (id, schema_version, created_at)
     SELECT '${META_ID}', ${SCHEMA_VERSION}, strftime('%s','now')
@@ -563,6 +788,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
           CREATE TABLE budgets (
             id TEXT PRIMARY KEY,
             category_name TEXT NOT NULL,
+            category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
             amount REAL NOT NULL,
             currency TEXT NOT NULL,
             created_at INTEGER NOT NULL,
@@ -733,7 +959,11 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     console.warn("[DB Init] Could not store username:", error);
   }
 
-  sqlite.close();
+  try {
+    ensureCategoryIds(sqlite);
+  } finally {
+    sqlite.close();
+  }
 };
 
 const seedDefaultCategories = (sqlite: DatabaseInstance): void => {

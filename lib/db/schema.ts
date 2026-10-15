@@ -48,7 +48,9 @@ export const transactions = sqliteTable("transactions", {
     .notNull()
     .references(() => accounts.id, { onDelete: "cascade" }),
   type: text("type", { enum: ["debit", "credit"] }).notNull(),
+  // Leftover label from before category_id. Must not be read for identity.
   category: text("category").notNull(),
+  categoryId: integer("category_id").references(() => transactionCategories.id, { onDelete: "restrict" }),
   amount: real("amount").notNull(),
   description: text("description"),
   date: integer("date", { mode: "timestamp" }).notNull(),
@@ -69,7 +71,9 @@ export const transfers = sqliteTable("transfers", {
   fromAmount: real("from_amount").notNull(),
   toAmount: real("to_amount").notNull(),
   exchangeRate: real("exchange_rate"),
+  // Leftover label from before category_id. Must not be read for identity.
   category: text("category").notNull().default("Transfer"),
+  categoryId: integer("category_id").references(() => transactionCategories.id, { onDelete: "restrict" }),
   description: text("description"),
   date: integer("date", { mode: "timestamp" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
@@ -133,7 +137,9 @@ export const openBankingTokens = sqliteTable("open_banking_tokens", {
 
 export const budgets = sqliteTable("budgets", {
   id: text("id").primaryKey(),
+  // Leftover label from before category_id. Must not be read for identity.
   categoryName: text("category_name").notNull(),
+  categoryId: integer("category_id").references(() => transactionCategories.id, { onDelete: "restrict" }),
   amount: real("amount").notNull(),
   currency: text("currency").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),

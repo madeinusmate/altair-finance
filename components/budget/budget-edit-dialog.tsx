@@ -27,15 +27,23 @@ import { isSupportedCurrency, SUPPORTED_CURRENCIES, type SupportedCurrency } fro
 
 interface Budget {
   id: string;
+  categoryId: number;
   categoryName: string;
   amount: number;
   currency: string;
+}
+
+interface BudgetCategoryOption {
+  id: number;
+  name: string;
+  transactionType?: "debit" | "credit" | null;
 }
 
 interface BudgetEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   budget?: Budget | null;
+  categoryId?: number;
   categoryName?: string;
   currencies?: readonly SupportedCurrency[];
   defaultCurrency?: string;
@@ -46,6 +54,7 @@ export const BudgetEditDialog = ({
   open,
   onOpenChange,
   budget,
+  categoryId,
   categoryName,
   currencies = SUPPORTED_CURRENCIES,
   defaultCurrency = "USD",
@@ -56,21 +65,24 @@ export const BudgetEditDialog = ({
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<BudgetCategoryOption[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
 
-  // Fetch debit categories when dialog opens for creating a new budget (budgets only track expenses)
+  // Debit categories only. The type=debit query also returns null-type rows.
   useEffect(() => {
-    if (open && !budget && !categoryName) {
+    if (open && !budget && categoryId == null) {
       setCategoriesLoading(true);
       apiClient
-        .get<{ categories: Array<{ name: string }> }>("/api/transaction-categories?type=debit")
+        .get<{ categories: BudgetCategoryOption[] }>("/api/transaction-categories?type=debit")
         .then((data) => {
-          const categoryNames = data.categories.map((c) => c.name);
-          setCategories(categoryNames);
-          if (categoryNames.length > 0 && !selectedCategory) {
-            setSelectedCategory(categoryNames[0]);
-          }
+          const debitCategories = data.categories.filter((category) => category.transactionType === "debit");
+          setCategories(debitCategories);
+          setSelectedCategory((current) => {
+            if (current && debitCategories.some((category) => String(category.id) === current)) {
+              return current;
+            }
+            return debitCategories[0] ? String(debitCategories[0].id) : "";
+          });
         })
         .catch((err) => {
           console.error("Error fetching categories:", err);
@@ -80,7 +92,7 @@ export const BudgetEditDialog = ({
           setCategoriesLoading(false);
         });
     }
-  }, [open, budget, categoryName]);
+  }, [open, budget, categoryId]);
 
   const startingCurrency =
     isSupportedCurrency(defaultCurrency) && currencies.includes(defaultCurrency)
@@ -91,18 +103,18 @@ export const BudgetEditDialog = ({
     if (budget) {
       setAmount(budget.amount.toString());
       setCurrency(budget.currency);
-      setSelectedCategory(budget.categoryName);
-    } else if (categoryName) {
+      setSelectedCategory(String(budget.categoryId));
+    } else if (categoryId != null) {
       setAmount("");
       setCurrency(startingCurrency);
-      setSelectedCategory(categoryName);
+      setSelectedCategory(String(categoryId));
     } else {
       setAmount("");
       setCurrency(startingCurrency);
       setSelectedCategory("");
     }
     setError(null);
-  }, [budget, categoryName, open, startingCurrency]);
+  }, [budget, categoryId, open, startingCurrency]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,8 +126,8 @@ export const BudgetEditDialog = ({
       return;
     }
 
-    const targetCategoryName = budget?.categoryName || categoryName || selectedCategory;
-    if (!targetCategoryName) {
+    const targetCategoryId = budget?.categoryId ?? categoryId ?? Number(selectedCategory);
+    if (!Number.isInteger(targetCategoryId) || targetCategoryId <= 0) {
       setError("Please select a category");
       return;
     }
@@ -124,7 +136,7 @@ export const BudgetEditDialog = ({
 
     try {
       await apiClient.post("/api/budgets", {
-        categoryName: targetCategoryName,
+        categoryId: targetCategoryId,
         amount: amountNum,
         currency,
       });
@@ -133,7 +145,7 @@ export const BudgetEditDialog = ({
       onSuccess();
       onOpenChange(false);
     } catch (err: unknown) {
-      const errorMessage = err && typeof err === "object" && "response" in err && err.response && typeof err.response === "object" && "data" in err.response && err.response.data && typeof err.response.data === "object" && "error" in err.response.data && typeof err.response.data.error === "string" ? err.response.data.error : "Failed to save budget";
+      const errorMessage = err instanceof Error ? err.message : "Failed to save budget";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -164,23 +176,21 @@ export const BudgetEditDialog = ({
               </Alert>
             )}
 
-            {!budget && !categoryName && (
+            {!budget && categoryId == null && (
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
                 <Select
-                  value={selectedCategory}
+                  value={selectedCategory || undefined}
                   onValueChange={setSelectedCategory}
                   disabled={isLoading || categoriesLoading}
                 >
                   <SelectTrigger id="category">
-                    <SelectValue placeholder="Select a category">
-                      {categoriesLoading ? "Loading..." : selectedCategory || "Select a category"}
-                    </SelectValue>
+                    <SelectValue placeholder={categoriesLoading ? "Loading..." : "Select a category"} />
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat}
+                      <SelectItem key={cat.id} value={String(cat.id)}>
+                        {cat.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -227,7 +237,7 @@ export const BudgetEditDialog = ({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading || categoriesLoading || (!budget && !categoryName && !selectedCategory)}>
+            <Button type="submit" disabled={isLoading || categoriesLoading || (!budget && categoryId == null && !selectedCategory)}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {budget ? "Update" : "Create"}
             </Button>

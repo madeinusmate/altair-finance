@@ -1,5 +1,22 @@
-import { eq, or, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb, schema } from "./index";
+
+export const parseCategoryId = (value: unknown): number | null => {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    return null;
+  }
+  return value;
+};
+
+const categoryMatchesType = (
+  transactionType: string | null,
+  expected: "debit" | "credit"
+): boolean => {
+  if (transactionType === null) {
+    return true;
+  }
+  return transactionType === expected;
+};
 
 /**
  * Check if a transaction category exists in the database
@@ -41,6 +58,41 @@ export const isValidTransactionCategoryForType = (
 
   // Otherwise, transactionType must match
   return categoryRecord.transactionType === transactionType;
+};
+
+export const isValidCategoryIdForType = (
+  db: ReturnType<typeof getDb>,
+  categoryId: number,
+  transactionType: "debit" | "credit"
+): boolean => {
+  const categoryRecord = db
+    .select()
+    .from(schema.transactionCategories)
+    .where(eq(schema.transactionCategories.id, categoryId))
+    .get();
+
+  if (!categoryRecord) {
+    return false;
+  }
+
+  return categoryMatchesType(categoryRecord.transactionType, transactionType);
+};
+
+export const isValidTransferCategoryId = (
+  db: ReturnType<typeof getDb>,
+  categoryId: number
+): boolean => {
+  const categoryRecord = db
+    .select()
+    .from(schema.transactionCategories)
+    .where(eq(schema.transactionCategories.id, categoryId))
+    .get();
+
+  if (!categoryRecord) {
+    return false;
+  }
+
+  return categoryRecord.transactionType === null;
 };
 
 /**

@@ -9,17 +9,12 @@ import { startOfMonth, endOfDay, format } from "date-fns";
 // Calculate spending for a category in current month
 const calculateCategorySpending = async (
   db: ReturnType<typeof getDb>,
-  categoryName: string,
+  categoryId: number,
   startDate: Date,
   endDate: Date,
   targetCurrency: SupportedCurrency,
   fxSnapshot: Awaited<ReturnType<typeof getFxSnapshot>>
 ): Promise<number> => {
-  // Exclude Transfer category
-  if (categoryName === "Transfer") {
-    return 0;
-  }
-
   const transactions = db
     .select({
       amount: schema.transactions.amount,
@@ -30,7 +25,7 @@ const calculateCategorySpending = async (
     .where(
       and(
         eq(schema.transactions.type, "debit"),
-        eq(schema.transactions.category, categoryName),
+        eq(schema.transactions.categoryId, categoryId),
         gte(schema.transactions.date, startDate),
         lte(schema.transactions.date, endDate),
         ne(schema.accounts.type, "investment")
@@ -88,7 +83,21 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     const month = format(now, "yyyy-MM");
 
     // Get all budgets
-    const budgets = db.select().from(schema.budgets).all();
+    const budgets = db
+      .select({
+        id: schema.budgets.id,
+        categoryId: schema.budgets.categoryId,
+        amount: schema.budgets.amount,
+        currency: schema.budgets.currency,
+        transactionType: schema.transactionCategories.transactionType,
+      })
+      .from(schema.budgets)
+      .innerJoin(
+        schema.transactionCategories,
+        eq(schema.budgets.categoryId, schema.transactionCategories.id)
+      )
+      .all()
+      .filter((budget) => budget.transactionType === "debit" && budget.categoryId != null);
 
     if (budgets.length === 0) {
       return NextResponse.json({
@@ -123,7 +132,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
         // Calculate spending
         const spent = await calculateCategorySpending(
           db,
-          budget.categoryName,
+          budget.categoryId!,
           startDate,
           endDate,
           currency,

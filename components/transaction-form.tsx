@@ -41,8 +41,7 @@ export const TransactionForm = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { getKey, usesBooksOwner } = useAuth();
-  const [categories, setCategories] = useState<string[]>([]);
-  const [categoryMap, setCategoryMap] = useState<Map<string, { color?: string | null; icon?: string | null }>>(new Map());
+  const [categories, setCategories] = useState<Array<{ id: number; name: string; color?: string | null; icon?: string | null }>>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   // Helper function to get icon component
@@ -68,8 +67,8 @@ export const TransactionForm = ({
   const [type, setType] = useState<"debit" | "credit">(
     transaction?.type || "debit"
   );
-  const [category, setCategory] = useState<string>(
-    transaction?.category || ""
+  const [categoryId, setCategoryId] = useState<string>(
+    transaction?.categoryId != null ? String(transaction.categoryId) : ""
   );
   const [amount, setAmount] = useState(
     transaction?.amount.toString() || ""
@@ -89,29 +88,22 @@ export const TransactionForm = ({
       }
 
       try {
-        const data = await apiClient.get<{ categories: Array<{ name: string; color?: string | null; icon?: string | null }> }>(
+        const data = await apiClient.get<{ categories: Array<{ id: number; name: string; color?: string | null; icon?: string | null }> }>(
           `/api/transaction-categories?type=${type}`
         );
-        const categoryNames = data.categories.map((c) => c.name);
-        setCategories(categoryNames);
-        
-        // Create a map of category name to category metadata
-        const catMap = new Map<string, { color?: string | null; icon?: string | null }>();
-        data.categories.forEach((cat) => {
-          catMap.set(cat.name, { color: cat.color, icon: cat.icon });
-        });
-        setCategoryMap(catMap);
-        
-        // Clear category if current selection is not valid for this type
-        setCategory((currentCategory) => {
-          if (currentCategory && !categoryNames.includes(currentCategory)) {
+        setCategories(data.categories);
+        const allowed = new Set(data.categories.map((category) => String(category.id)));
+        setCategoryId((currentCategoryId) => {
+          if (currentCategoryId && allowed.has(currentCategoryId)) {
+            return currentCategoryId;
+          }
+          if (currentCategoryId && !allowed.has(currentCategoryId)) {
             return "";
           }
-          // Set default category if not set
-          if (!currentCategory && categoryNames.length > 0) {
-            return categoryNames[0];
+          if (!currentCategoryId && mode === "create" && data.categories[0]) {
+            return String(data.categories[0].id);
           }
-          return currentCategory;
+          return currentCategoryId;
         });
       } catch (error) {
         console.error("Error fetching categories:", error);
@@ -122,7 +114,7 @@ export const TransactionForm = ({
     };
 
     fetchCategories();
-  }, [getKey, type, transaction]);
+  }, [getKey, type, mode]);
 
   // Update selected account when accounts change
   useEffect(() => {
@@ -146,7 +138,7 @@ export const TransactionForm = ({
   useEffect(() => {
     if (transaction) {
       setType(transaction.type);
-      setCategory(transaction.category);
+      setCategoryId(transaction.categoryId != null ? String(transaction.categoryId) : "");
       setAmount(transaction.amount.toString());
       setDescription(transaction.description || "");
       setDate(new Date(transaction.date).toISOString().split("T")[0]);
@@ -159,11 +151,14 @@ export const TransactionForm = ({
     setIsLoading(true);
 
     try {
+      if (!categoryId) {
+        throw new Error("Please select a category");
+      }
       if (mode === "edit" && transaction) {
         await apiClient.put("/api/transactions", {
           id: transaction.id,
           type,
-          category,
+          categoryId: Number(categoryId),
           amount: parseFloat(amount),
           description: description || null,
           date,
@@ -176,7 +171,7 @@ export const TransactionForm = ({
         await apiClient.post("/api/transactions", {
           accountId: currentAccountId,
           type,
-          category,
+          categoryId: Number(categoryId),
           amount: parseFloat(amount),
           description: description || null,
           date,
@@ -245,21 +240,20 @@ export const TransactionForm = ({
           {categoriesLoading ? (
             <Skeleton className="h-9 w-full" />
           ) : (
-            <Select value={category} onValueChange={setCategory} disabled={categoriesLoading || categories.length === 0}>
+            <Select value={categoryId || undefined} onValueChange={setCategoryId} disabled={categoriesLoading || categories.length === 0}>
               <SelectTrigger id="category">
-                {category && getIconComponent(categoryMap.get(category)?.icon) && (
-                  <span className="mr-2">{getIconComponent(categoryMap.get(category)?.icon)}</span>
+                {categoryId && getIconComponent(categories.find((category) => String(category.id) === categoryId)?.icon) && (
+                  <span className="mr-2">{getIconComponent(categories.find((category) => String(category.id) === categoryId)?.icon)}</span>
                 )}
                 <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select category"} />
               </SelectTrigger>
               <SelectContent>
                 {categories.map((cat) => {
-                  const catData = categoryMap.get(cat);
-                  const iconComponent = getIconComponent(catData?.icon);
+                  const iconComponent = getIconComponent(cat.icon);
                   return (
-                    <SelectItem key={cat} value={cat}>
+                    <SelectItem key={cat.id} value={String(cat.id)}>
                       {iconComponent}
-                      <span>{cat}</span>
+                      <span>{cat.name}</span>
                     </SelectItem>
                   );
                 })}
@@ -310,7 +304,7 @@ export const TransactionForm = ({
         />
       </div>
 
-      <Button type="submit" className="w-full" disabled={isLoading || !amount || !currentAccountId}>
+      <Button type="submit" className="w-full" disabled={isLoading || !amount || !currentAccountId || !categoryId}>
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

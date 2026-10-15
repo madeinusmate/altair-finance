@@ -15,6 +15,7 @@ import { Wallet } from "lucide-react";
 
 interface BudgetWithSpending {
   id: string;
+  categoryId: number;
   categoryName: string;
   amount: number;
   currency: string;
@@ -38,7 +39,7 @@ const BudgetPage = () => {
   const { enabledCurrencies, selectedCurrency, selectCurrency, isReady } = useDisplayCurrencies();
   const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), "yyyy-MM"));
   const [budgetsData, setBudgetsData] = useState<BudgetsResponse | null>(null);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Array<{ id: number; name: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,11 +55,15 @@ const BudgetPage = () => {
         apiClient.get<BudgetsResponse>(
           `/api/budgets?currency=${selectedCurrency}&month=${selectedMonth}`
         ),
-        apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
+        apiClient.get<{ categories: Array<{ id: number; name: string; transactionType: "debit" | "credit" | null }> }>("/api/transaction-categories"),
       ]);
 
       setBudgetsData(budgetsRes);
-      setCategories(categoriesRes.categories.map((c) => c.name));
+      setCategories(
+        categoriesRes.categories
+          .filter((category) => category.transactionType === "debit")
+          .map((category) => ({ id: category.id, name: category.name }))
+      );
     } catch (err: unknown) {
       console.error("Error fetching budgets:", err);
       const errorMessage = err && typeof err === "object" && "response" in err && err.response && typeof err.response === "object" && "data" in err.response && err.response.data && typeof err.response.data === "object" && "error" in err.response.data && typeof err.response.data.error === "string" ? err.response.data.error : "Failed to load budgets";

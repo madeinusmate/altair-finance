@@ -10,6 +10,7 @@ import { startOfMonth, endOfDay, format } from "date-fns";
 
 interface BudgetWithSpending {
   id: string;
+  categoryId: number;
   categoryName: string;
   amount: number;
   currency: string;
@@ -19,21 +20,14 @@ interface BudgetWithSpending {
   isOverBudget: boolean;
 }
 
-// Calculate spending for a category in a date range
 const calculateCategorySpending = async (
   db: ReturnType<typeof getDb>,
-  categoryName: string,
+  categoryId: number,
   startDate: Date,
   endDate: Date,
   targetCurrency: SupportedCurrency,
   fxSnapshot: Awaited<ReturnType<typeof getFxSnapshot>>
 ): Promise<number> => {
-  // Exclude Transfer category
-  if (categoryName === "Transfer") {
-    return 0;
-  }
-
-  // Get all debit transactions for this category in date range
   const transactions = db
     .select({
       amount: schema.transactions.amount,
@@ -45,7 +39,7 @@ const calculateCategorySpending = async (
     .where(
       and(
         eq(schema.transactions.type, "debit"),
-        eq(schema.transactions.category, categoryName),
+        eq(schema.transactions.categoryId, categoryId),
         gte(schema.transactions.date, startDate),
         lte(schema.transactions.date, endDate),
         ne(schema.accounts.type, "investment")
@@ -117,10 +111,26 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       month = format(now, "yyyy-MM");
     }
 
-    // Get all budgets (migration should have created the table by now)
-    let budgets: Budget[];
+    let budgets: Array<Budget & { categoryName: string; categoryTransactionType: string | null }>;
     try {
-      budgets = db.select().from(schema.budgets).all();
+      budgets = db
+        .select({
+          id: schema.budgets.id,
+          categoryName: schema.transactionCategories.name,
+          categoryId: schema.budgets.categoryId,
+          categoryTransactionType: schema.transactionCategories.transactionType,
+          amount: schema.budgets.amount,
+          currency: schema.budgets.currency,
+          createdAt: schema.budgets.createdAt,
+          updatedAt: schema.budgets.updatedAt,
+        })
+        .from(schema.budgets)
+        .innerJoin(
+          schema.transactionCategories,
+          eq(schema.budgets.categoryId, schema.transactionCategories.id)
+        )
+        .all()
+        .filter((budget) => budget.categoryTransactionType === "debit" && budget.categoryId != null);
     } catch (error: unknown) {
       // If table doesn't exist yet, return empty budgets (migration should create it on next request)
       if (error && typeof error === "object" && "code" in error && "message" in error && error.code === "SQLITE_ERROR" && typeof error.message === "string" && error.message.includes("no such table")) {
@@ -136,7 +146,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
       budgets.map(async (budget) => {
         const spent = await calculateCategorySpending(
           db,
-          budget.categoryName,
+          budget.categoryId!,
           startDate,
           endDate,
           currency,
@@ -159,6 +169,7 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
 
         return {
           id: budget.id,
+          categoryId: budget.categoryId!,
           categoryName: budget.categoryName,
           amount: budgetAmount,
           currency,
@@ -200,10 +211,10 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { categoryName, amount, currency } = body;
+    const { categoryId, amount, currency } = body;
 
-    if (!categoryName || typeof categoryName !== "string") {
-      return NextResponse.json({ error: "categoryName is required" }, { status: 400 });
+    if (typeof categoryId !== "number" || !Number.isInteger(categoryId) || categoryId <= 0) {
+      return NextResponse.json({ error: "categoryId is required" }, { status: 400 });
     }
 
     if (typeof amount !== "number" || amount < 0) {
@@ -216,11 +227,10 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     const db = getDb(key);
 
-    // Verify category exists and is a debit category (budgets only track expenses)
     const category = db
       .select()
       .from(schema.transactionCategories)
-      .where(eq(schema.transactionCategories.name, categoryName))
+      .where(eq(schema.transactionCategories.id, categoryId))
       .get();
 
     if (!category) {
@@ -235,11 +245,10 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       );
     }
 
-    // Check if budget already exists for this category
     const existingBudget = db
       .select()
       .from(schema.budgets)
-      .where(eq(schema.budgets.categoryName, categoryName))
+      .where(eq(schema.budgets.categoryId, categoryId))
       .get();
 
     const now = new Date();
@@ -262,7 +271,8 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       // Create new budget
       const newBudget = {
         id: uuidv4(),
-        categoryName,
+        categoryName: category.name,
+        categoryId,
         amount,
         currency,
         createdAt: now,
