@@ -45,7 +45,7 @@ const RecoveryPage = () => {
           </div>
           <CardTitle className="text-2xl">Database Recovery</CardTitle>
           <CardDescription>
-            Netly could not open the local database with the stored key.
+            Altair could not open the local database with the stored key.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-muted-foreground">
@@ -63,7 +63,8 @@ const RecoveryPage = () => {
           <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
             <p className="text-foreground">Start Fresh (Destructive)</p>
             <p className="mt-1">
-              Delete the local database file at <span className="font-medium">data/netly.db</span>{" "}
+              Delete the local database file at <span className="font-medium">data/altair.db</span>{" "}
+              (or <span className="font-medium">data/netly.db</span> from an earlier install)
               and reload the app to create a new encrypted database.
             </p>
           </div>

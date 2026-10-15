@@ -144,7 +144,7 @@ export const PdfUpload = ({
             disabled={disabled}
           />
           <label htmlFor="pdf-cloud-parser" className="text-sm leading-snug">
-            Send this PDF to OpenAI for parsing. The file leaves this device. Netly does not include an API key. Cloud parsing works only if you set OPENAI_API_KEY yourself.
+            Send this PDF to OpenAI for parsing. The file leaves this device. Altair does not include an API key. Cloud parsing works only if you set OPENAI_API_KEY yourself.
           </label>
         </div>
       </div>

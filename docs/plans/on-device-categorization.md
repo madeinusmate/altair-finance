@@ -2,7 +2,7 @@
 
 ## Goal
 
-When a CSV or a PDF is reviewed, Netly fills a missing category from rules stored in the local database, matched on the transaction description. The review row shows which rule matched, and the person can pick a different category before import. Correcting a category remembers that description for next time. A small settings list can add or delete rules. Nothing is sent to a classifier. Rules run before insert. Rows the duplicate plan skips do not create rules and do not get inserted.
+When a CSV or a PDF is reviewed, Altair fills a missing category from rules stored in the local database, matched on the transaction description. The review row shows which rule matched, and the person can pick a different category before import. Correcting a category remembers that description for next time. A small settings list can add or delete rules. Nothing is sent to a classifier. Rules run before insert. Rows the duplicate plan skips do not create rules and do not get inserted.
 
 ## Current behavior
 

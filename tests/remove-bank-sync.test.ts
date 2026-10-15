@@ -49,7 +49,7 @@ const tokenTableNames = (sqlite: Sqlite): string[] => {
 
 const withTempDataDir = async (run: (dir: string) => Promise<void> | void): Promise<void> => {
   const previous = process.env.ELECTRON_USER_DATA;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "netly-remove-bank-sync-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "altair-remove-bank-sync-"));
   process.env.ELECTRON_USER_DATA = dir;
   clearConnectionCache();
   try {
@@ -192,7 +192,7 @@ describe("remove bank sync", { concurrency: 1 }, () => {
   it("drops token tables when an existing database is opened and leaves books in place", async () => {
     await withTempDataDir(async (dir) => {
       const encryptionKey = "existing-open-key";
-      const dbPath = path.join(dir, "netly.db");
+      const dbPath = path.join(dir, "altair.db");
       createLegacyDatabase(dbPath, encryptionKey);
 
       getDb(encryptionKey);
@@ -208,11 +208,11 @@ describe("remove bank sync", { concurrency: 1 }, () => {
   it("drops token tables during initializeDb without rewriting accounts or install_id", async () => {
     await withTempDataDir(async (dir) => {
       const encryptionKey = "existing-init-key";
-      createLegacyDatabase(path.join(dir, "netly.db"), encryptionKey);
+      createLegacyDatabase(path.join(dir, "altair.db"), encryptionKey);
 
       initializeDb(encryptionKey, "Ada");
 
-      const sqlite = openEncrypted(path.join(dir, "netly.db"), encryptionKey);
+      const sqlite = openEncrypted(path.join(dir, "altair.db"), encryptionKey);
       try {
         assertBooksUnchanged(sqlite);
       } finally {
@@ -222,7 +222,7 @@ describe("remove bank sync", { concurrency: 1 }, () => {
   });
 
   it("drops token tables even when the transfers table is missing", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "netly-remove-bank-sync-"));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "altair-remove-bank-sync-"));
     const sqlite = openEncrypted(path.join(dir, "partial.db"), "partial-open-key");
     try {
       sqlite.exec(`
@@ -260,7 +260,7 @@ describe("remove bank sync", { concurrency: 1 }, () => {
       const encryptionKey = "fresh-database-key";
       initializeDb(encryptionKey, "Ada");
       getDb(encryptionKey);
-      const sqlite = openEncrypted(path.join(dir, "netly.db"), encryptionKey);
+      const sqlite = openEncrypted(path.join(dir, "altair.db"), encryptionKey);
       try {
         assert.deepEqual(tokenTableNames(sqlite), []);
         const install = sqlite
@@ -274,14 +274,14 @@ describe("remove bank sync", { concurrency: 1 }, () => {
       } finally {
         sqlite.close();
       }
-      assert.equal(fs.existsSync(path.join(dir, "netly.db")), true);
+      assert.equal(fs.existsSync(path.join(dir, "altair.db")), true);
     });
   });
 
   it("does not backfill install_id when an old settings row has no such column", async () => {
     await withTempDataDir(async (dir) => {
       const encryptionKey = "old-settings-key";
-      const sqlite = openEncrypted(path.join(dir, "netly.db"), encryptionKey);
+      const sqlite = openEncrypted(path.join(dir, "altair.db"), encryptionKey);
       sqlite.exec(`
         CREATE TABLE accounts (
           id TEXT PRIMARY KEY,
@@ -312,7 +312,7 @@ describe("remove bank sync", { concurrency: 1 }, () => {
 
       initializeDb(encryptionKey, "Ada");
 
-      const opened = openEncrypted(path.join(dir, "netly.db"), encryptionKey);
+      const opened = openEncrypted(path.join(dir, "altair.db"), encryptionKey);
       try {
         assert.deepEqual(tokenTableNames(opened), []);
         const install = opened
@@ -332,7 +332,7 @@ describe("remove bank sync", { concurrency: 1 }, () => {
       const encryptionKey = "account-post-key";
       initializeDb(encryptionKey, "Ada");
 
-      const seeded = openEncrypted(path.join(dir, "netly.db"), encryptionKey);
+      const seeded = openEncrypted(path.join(dir, "altair.db"), encryptionKey);
       seeded
         .prepare(
           `INSERT INTO accounts (
@@ -371,7 +371,7 @@ describe("remove bank sync", { concurrency: 1 }, () => {
       assert.equal(response.status, 201, JSON.stringify(payload));
       assert.equal(payload.metadata, null);
 
-      const sqlite = openEncrypted(path.join(dir, "netly.db"), encryptionKey);
+      const sqlite = openEncrypted(path.join(dir, "altair.db"), encryptionKey);
       try {
         const created = sqlite
           .prepare("SELECT metadata FROM accounts WHERE name = 'Wallet'")
@@ -417,7 +417,7 @@ describe("remove bank sync", { concurrency: 1 }, () => {
     assert.equal(readme.includes("bring that integration back"), false);
 
     const doc = fs.readFileSync(path.join(root, "docs/open-banking.md"), "utf8");
-    assert.match(doc, /Bank connect is not part of Netly/);
+    assert.match(doc, /Bank connect is not part of Altair/);
     assert.match(doc, /no supported way to turn Finverse or Plaid back on/);
     assert.equal(doc.includes("oauth-relay"), false);
     assert.equal(doc.includes("git revert"), false);

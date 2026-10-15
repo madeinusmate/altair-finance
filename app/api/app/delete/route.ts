@@ -1,8 +1,9 @@
 import { NextRequest } from "next/server";
 import fs from "fs/promises";
+import path from "path";
 import { beginAuthVerifyAttempt } from "@/lib/auth-verify-rate-limit";
 import { getOwnerPassphrase, setOwnerPassphrase } from "@/lib/books-owner";
-import { clearConnectionCache, dbFileExists, getDbPath, validateKey } from "@/lib/db";
+import { clearConnectionCache, databaseFilesIn, dbFileExists, getDbPath, validateKey } from "@/lib/db";
 import { validateEncryptionKey } from "@/lib/encryption";
 import { confirmIntent } from "@/lib/intent-confirm";
 
@@ -65,10 +66,10 @@ export const DELETE = async (request: NextRequest): Promise<Response> => {
     }
 
     success = true;
-    const dbPath = getDbPath();
-    await deleteFileIfExists(dbPath);
-    await deleteFileIfExists(`${dbPath}-wal`);
-    await deleteFileIfExists(`${dbPath}-shm`);
+    // Remove both names so a leftover netly.db cannot reopen the books after delete.
+    for (const filePath of databaseFilesIn(path.dirname(getDbPath()))) {
+      await deleteFileIfExists(filePath);
+    }
 
     clearConnectionCache();
     setOwnerPassphrase(null);

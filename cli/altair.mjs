@@ -5,10 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const KEYCHAIN_ACCOUNT = "netly";
-const TOKEN_SERVICE = "netly.api-token";
 const GRANT_FILE_NAME = "agent-grant.json";
 const PORT_FILE_NAME = "owner.json";
+const TOKEN_READS = [
+  ["altair", "altair.api-token"],
+  ["netly", "netly.api-token"],
+];
 
 const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
@@ -112,11 +114,25 @@ const fail = (error) => {
   process.exit(1);
 };
 
-const homePointer = () => path.join(os.homedir(), "Library", "Application Support", "Netly", "home.json");
+export const homePointerCandidates = (home = os.homedir()) => [
+  path.join(home, "Library", "Application Support", "Altair", "home.json"),
+  path.join(home, "Library", "Application Support", "Netly", "home.json"),
+];
 
-const readKeychain = (helper, service) => {
+const readHomeFile = () => {
+  for (const candidate of homePointerCandidates()) {
+    try {
+      return JSON.parse(fs.readFileSync(candidate, "utf8"));
+    } catch {
+      // The grant pointer may still be in the Netly support directory.
+    }
+  }
+  return null;
+};
+
+const readKeychain = (helper, account, service) => {
   return new Promise((resolve, reject) => {
-    const child = spawn(helper, ["read", KEYCHAIN_ACCOUNT, service], { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(helper, ["read", account, service], { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     child.stdout.on("data", (chunk) => {
       stdout += chunk.toString();
@@ -152,7 +168,7 @@ const main = async () => {
 
   if (parsed.positionals.length === 0 || parsed.positionals[0] === "help") {
     const lines = COMMANDS.map((command) => command.words.join(" "));
-    process.stderr.write(`netly commands:\n${lines.map((line) => `  ${line}`).join("\n")}\n`);
+    process.stderr.write(`altair commands:\n${lines.map((line) => `  ${line}`).join("\n")}\n`);
     process.exit(parsed.positionals[0] === "help" ? 0 : 1);
     return;
   }
@@ -164,11 +180,9 @@ const main = async () => {
     if (!parsed.flags[name]) fail(`${command.words.join(" ")} needs --${name === "accountId" ? "account-id" : name}`);
   }
 
-  let home;
-  try {
-    home = JSON.parse(fs.readFileSync(homePointer(), "utf8"));
-  } catch {
-    fail("Netly agent grant is not set up");
+  const home = readHomeFile();
+  if (!home) {
+    fail("Altair agent grant is not set up");
     return;
   }
 
@@ -176,10 +190,10 @@ const main = async () => {
   try {
     grant = JSON.parse(fs.readFileSync(path.join(home.userData, GRANT_FILE_NAME), "utf8"));
   } catch {
-    fail("Netly agent grant is not set up");
+    fail("Altair agent grant is not set up");
     return;
   }
-  if (!grant.enabled) fail("Netly agent grant is not set up");
+  if (!grant.enabled) fail("Altair agent grant is not set up");
   if (grant.stopped) fail("Agent grant is stopped");
 
   let portRecord;
@@ -190,17 +204,23 @@ const main = async () => {
     return;
   }
 
-  let token;
-  try {
-    token = (await readKeychain(home.keychainHelper, TOKEN_SERVICE)).trim();
-  } catch {
+  let token = "";
+  for (const [account, service] of TOKEN_READS) {
+    try {
+      token = (await readKeychain(home.keychainHelper, account, service)).trim();
+      if (token) break;
+    } catch {
+      token = "";
+    }
+  }
+  if (!token) {
     fail("Could not read the agent grant");
     return;
   }
 
   const pathname = typeof command.path === "function" ? command.path(parsed.flags) : command.path;
   const url = `http://127.0.0.1:${portRecord.port}${withQuery(pathname, parsed.flags.query)}`;
-  const headers = { "x-netly-token": token };
+  const headers = { "x-altair-token": token };
   let body;
 
   if (command.multipart) {

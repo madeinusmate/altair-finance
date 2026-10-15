@@ -115,7 +115,7 @@ export const CsvUpload = ({
         <div className="space-y-1">
           <p className="text-sm font-medium">{label}</p>
           <p className="text-xs text-muted-foreground">
-            Upload a CSV file or paste CSV rows directly. Download the Netly template for reference.
+            Upload a CSV file or paste CSV rows directly. Download the Altair template for reference.
           </p>
           {fileName && (
             <p className="text-xs text-muted-foreground">

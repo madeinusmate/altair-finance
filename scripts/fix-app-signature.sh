@@ -1,5 +1,5 @@
 #!/bin/bash
-# Ad-hoc sign a Netly build you just produced on this machine.
+# Ad-hoc sign an Altair build you just produced on this machine.
 # This is not a substitute for an Apple Developer ID signature, and it does not
 # make the app trusted for anyone else. See docs/macos-unsigned-builds.md.
 
@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Default to the most common build output location
-DEFAULT_APP_PATH="$PROJECT_ROOT/dist/mac-arm64/Netly.app"
+DEFAULT_APP_PATH="$PROJECT_ROOT/dist/mac-arm64/Altair.app"
 APP_PATH="${1:-$DEFAULT_APP_PATH}"
 
 # If relative path, make it absolute relative to project root

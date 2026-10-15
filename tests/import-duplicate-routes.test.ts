@@ -18,7 +18,7 @@ type Ledger = ReturnType<typeof getDb>;
 const directories: string[] = [];
 
 const openLedger = (): { dir: string; db: Ledger } => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "netly-dup-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "altair-dup-"));
   directories.push(dir);
   process.env.ELECTRON_USER_DATA = dir;
   clearConnectionCache();

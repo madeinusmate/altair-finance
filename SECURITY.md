@@ -1,8 +1,8 @@
 # Security
 
-Report a vulnerability through [GitHub private security advisories](https://github.com/madeinusmate/netly/security/advisories/new) on this repository.
+Report a vulnerability through [GitHub private security advisories](https://github.com/madeinusmate/altair/security/advisories/new) on this repository.
 
-Netly keeps financial records in an encrypted database on the local machine. Please report vulnerabilities privately until a fix is released. Do not open a public GitHub issue for a security bug.
+Altair keeps financial records in an encrypted database on the local machine. Please report vulnerabilities privately until a fix is released. Do not open a public GitHub issue for a security bug.
 
 Leave secrets out of issues and pull requests. That includes passphrases, the per-launch API token, `.env.local`, and `OPENAI_API_KEY`.
 
@@ -26,4 +26,4 @@ Include steps to reproduce, the affected version, and whether the issue needs a 
 
 ## Supported setup
 
-The supported way to run Netly is the Electron app, with the server bound to `127.0.0.1`. Hosting the Next.js app as a public website is not a supported configuration.
+The supported way to run Altair is the Electron app, with the server bound to `127.0.0.1`. Hosting the Next.js app as a public website is not a supported configuration.

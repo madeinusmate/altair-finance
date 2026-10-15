@@ -2,7 +2,7 @@
 
 ## Goal
 
-Netly no longer has a bank-connect feature, and a future launch does not keep the pieces that would turn it back on. Accounts that were linked before stay ordinary local accounts. Their transactions stay. Token tables are dropped. The app does not call Finverse or Plaid. There is no reachable connect page.
+Altair no longer has a bank-connect feature, and a future launch does not keep the pieces that would turn it back on. Accounts that were linked before stay ordinary local accounts. Their transactions stay. Token tables are dropped. The app does not call Finverse or Plaid. There is no reachable connect page.
 
 ## Current behavior
 
@@ -39,7 +39,7 @@ Delete the leftover integration. Do not add a stub connect screen. Do not add re
 
 ### Docs and env
 
-- Replace `docs/open-banking.md` with a short note: bank connect is not part of Netly, token tables are dropped on startup, existing accounts and transactions remain and are edited like any other local account, and there is no supported way to turn Finverse or Plaid back on from this tree. Delete the restore steps, commit ids, and the relay instructions.
+- Replace `docs/open-banking.md` with a short note: bank connect is not part of Altair, token tables are dropped on startup, existing accounts and transactions remain and are edited like any other local account, and there is no supported way to turn Finverse or Plaid back on from this tree. Delete the restore steps, commit ids, and the relay instructions.
 - In `README.md`, remove the sentence that points at that doc as a way to bring the integration back. State that accounts are created by hand and that transactions come from entry, CSV, PDF, or a database backup.
 - Do not add `FINVERSE_*` or `PLAID_*` to `.env.example`.
 - Delete those six keys from the local gitignored `.env` if they are still present. Do not commit `.env`. Revoke the Finverse client in the provider dashboard; the secret has been sitting in that file. Do not print the secret while doing this.

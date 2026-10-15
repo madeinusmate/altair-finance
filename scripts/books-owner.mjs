@@ -6,10 +6,18 @@ import path from "node:path";
 const GRANT_FILE_NAME = "agent-grant.json";
 const PORT_FILE_NAME = "owner.json";
 
+const envValue = (name, legacy) => {
+  const current = process.env[name];
+  if (typeof current === "string" && current.length > 0) return current;
+  const previous = process.env[legacy];
+  if (typeof previous === "string" && previous.length > 0) return previous;
+  return undefined;
+};
+
 const userData = process.env.ELECTRON_USER_DATA;
-const serverPath = process.env.NETLY_SERVER_PATH;
-const appRoot = process.env.NETLY_APP_ROOT;
-const nodePath = process.env.NETLY_NODE_PATH || process.execPath;
+const serverPath = envValue("ALTAIR_SERVER_PATH", "NETLY_SERVER_PATH");
+const appRoot = envValue("ALTAIR_APP_ROOT", "NETLY_APP_ROOT");
+const nodePath = envValue("ALTAIR_NODE_PATH", "NETLY_NODE_PATH") || process.execPath;
 
 if (!userData || !serverPath || !appRoot) {
   process.stderr.write("Books owner is missing its paths\n");
@@ -66,7 +74,7 @@ const child = spawn(nodePath, [serverPath, "start", "-H", "127.0.0.1", "-p", Str
     PORT: String(port),
     NODE_ENV: "production",
     ELECTRON_USER_DATA: userData,
-    NETLY_BOOKS_OWNER: "1",
+    ALTAIR_BOOKS_OWNER: "1",
   },
   stdio: "inherit",
 });

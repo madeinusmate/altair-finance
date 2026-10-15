@@ -1,6 +1,6 @@
 import { LOCAL_API_TOKEN_HEADER } from "@/lib/local-api-guard";
 
-const PATCHED = "__netlyApiTokenFetch";
+const PATCHED = "__altairApiTokenFetch";
 
 export const shouldAttachApiToken = (rawUrl: string, pageOrigin: string): boolean => {
   if (rawUrl.startsWith("/api/") || rawUrl === "/api") return true;

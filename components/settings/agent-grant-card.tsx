@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 type Step = "explain" | "confirm" | "install-error" | "working";
 type AgentStatus = { enabled: boolean; stopped: boolean; running: boolean };
 
-const AGENT_PROMPT = `Netly is installed on this Mac. Find the netly command with \`command -v netly\`. It should be /usr/local/bin/netly. Run \`netly help\` and read stderr for the command list. Then run \`netly status\` and read the JSON on stdout. Do not look for an API token or a passphrase. If status says the agent grant is not set up or is stopped, stop and tell me.`;
+const AGENT_PROMPT = `Altair is installed on this Mac. Find the altair command with \`command -v altair\`. It should be /usr/local/bin/altair. Run \`altair help\` and read stderr for the command list. Then run \`altair status\` and read the JSON on stdout. Do not look for an API token or a passphrase. If status says the agent grant is not set up or is stopped, stop and tell me.`;
 
 export const AgentGrantCard = () => {
   const [step, setStep] = useState<Step>("explain");
@@ -45,14 +45,14 @@ export const AgentGrantCard = () => {
       ? await window.electron.installCommand()
       : { ok: true };
     if (!installed.ok) {
-      setInstallError(installed.error ?? "Could not install the netly command");
+      setInstallError(installed.error ?? "Could not install the altair command");
       setStep("install-error");
       return;
     }
 
     if (!window.electron?.activateOwner) {
       setStep("confirm");
-      toast.error("Open the Netly app to start the books owner");
+      toast.error("Open the Altair app to start the books owner");
       return;
     }
 
@@ -138,7 +138,7 @@ export const AgentGrantCard = () => {
         </div>
         <div className="flex flex-col gap-2">
           <p className="text-sm text-muted-foreground">
-            Paste this to an agent on this Mac. It finds <span className="font-medium text-foreground">netly</span> and
+            Paste this to an agent on this Mac. It finds <span className="font-medium text-foreground">altair</span> and
             reads status before it touches your books.
           </p>
           <pre className="whitespace-pre-wrap rounded-2xl border border-border bg-muted/40 p-3 text-xs leading-relaxed">
@@ -163,7 +163,7 @@ export const AgentGrantCard = () => {
       {step === "explain" && (
         <>
           <p className="text-sm text-muted-foreground">
-            An agent grant lets the <span className="font-medium text-foreground">netly</span> command
+            An agent grant lets the <span className="font-medium text-foreground">altair</span> command
             read and change your books while you are logged in, even when this window is closed.
             Any program you run can use that command. Deleting the books, deleting an account, and
             exporting the books wait for you to answer a dialog on this Mac.
@@ -177,7 +177,7 @@ export const AgentGrantCard = () => {
       {step === "confirm" && (
         <>
           <p className="text-sm text-muted-foreground">
-            Netly will keep your passphrase in the macOS keychain for the books owner. The command
+            Altair will keep your passphrase in the macOS keychain for the books owner. The command
             never receives it. The books stay open for this login session.
           </p>
           <div className="flex flex-wrap gap-2">

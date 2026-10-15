@@ -14,7 +14,7 @@ export const isUnsafeUploadName = (name: string): boolean => {
 };
 
 export const createImportTempDir = async (): Promise<string> => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "netly-import-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "altair-import-"));
   await chmod(dir, 0o700);
   return dir;
 };

@@ -63,7 +63,7 @@ export const POST = async (request: NextRequest): Promise<Response> => {
     archive.file(shmPath, { name: path.basename(shmPath) });
   }
 
-  const filename = `netly-backup-${getTimestamp()}.zip`;
+  const filename = `altair-backup-${getTimestamp()}.zip`;
 
   void archive.finalize();
 

@@ -142,7 +142,7 @@ export const validateImportedDatabase = async (
       errors.push({
         category: "schema",
         technical: `Database schema version ${schemaVersion} is newer than supported version ${SCHEMA_VERSION}`,
-        userFriendly: "This database was created with a newer version of Netly. Please update the app to import it.",
+        userFriendly: "This database was created with a newer version of Altair. Please update the app to import it.",
       });
     } else if (schemaVersion < SCHEMA_VERSION) {
       // Older schema versions can be migrated
@@ -325,7 +325,7 @@ export const backupDatabase = (): string | null => {
 
   const dataDir = path.dirname(dbPath);
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const backupPath = path.join(dataDir, `netly-backup-${timestamp}.db`);
+  const backupPath = path.join(dataDir, `altair-backup-${timestamp}.db`);
   const walPath = `${dbPath}-wal`;
   const shmPath = `${dbPath}-shm`;
   const backupWalPath = `${backupPath}-wal`;
@@ -403,11 +403,12 @@ export const extractZipFile = async (
         const fileName = path.basename(entry.fileName);
         const extractPath = path.join(extractTo, fileName);
 
-        if (fileName === "netly.db") {
+        // New backups use altair.db. Backups exported before the rename use netly.db.
+        if (fileName === "altair.db" || (fileName === "netly.db" && !dbFile)) {
           dbFile = { name: fileName, path: extractPath };
-        } else if (fileName === "netly.db-wal") {
+        } else if (fileName === "altair.db-wal" || (fileName === "netly.db-wal" && !walFile)) {
           walFile = { name: fileName, path: extractPath };
-        } else if (fileName === "netly.db-shm") {
+        } else if (fileName === "altair.db-shm" || (fileName === "netly.db-shm" && !shmFile)) {
           shmFile = { name: fileName, path: extractPath };
         }
 
@@ -446,7 +447,7 @@ export const extractZipFile = async (
 
       zipfile.on("end", () => {
         if (!dbFile) {
-          reject(new Error("ZIP file does not contain netly.db"));
+          reject(new Error("ZIP file does not contain altair.db or netly.db"));
           return;
         }
 

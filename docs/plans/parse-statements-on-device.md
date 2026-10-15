@@ -2,7 +2,7 @@
 
 ## Goal
 
-A person can drop a bank or credit-card PDF onto an account and get rows in the review table without the file leaving the machine. Parsing uses the PDF text layer plus heuristics. The same review table and `POST /api/import/transactions` path already used today stay in place. Sending the PDF to OpenAI is a separate choice, off every time the screen opens, with copy that says the file will leave the device. Netly does not ship an API key.
+A person can drop a bank or credit-card PDF onto an account and get rows in the review table without the file leaving the machine. Parsing uses the PDF text layer plus heuristics. The same review table and `POST /api/import/transactions` path already used today stay in place. Sending the PDF to OpenAI is a separate choice, off every time the screen opens, with copy that says the file will leave the device. Altair does not ship an API key.
 
 ## Current behavior
 
@@ -74,7 +74,7 @@ Copy, always visible under the file field:
 
 Checkbox label:
 
-> Send this PDF to OpenAI for parsing. The file leaves this device. Netly does not include an API key. Cloud parsing works only if you set OPENAI_API_KEY yourself.
+> Send this PDF to OpenAI for parsing. The file leaves this device. Altair does not include an API key. Cloud parsing works only if you set OPENAI_API_KEY yourself.
 
 The account dialog description in `app/(app)/accounts/[id]/page.tsx` should use the same first sentence so the closed dialog does not imply a private upload that is actually remote.
 

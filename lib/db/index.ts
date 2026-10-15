@@ -13,22 +13,40 @@ import {
   transactionFingerprintPayload,
   transferFingerprintPayload,
 } from "../import/fingerprint";
+import { DB_FILENAME, LEGACY_DB_FILENAME, readEnvAlias } from "@/lib/product";
 
 type DatabaseInstance = InstanceType<typeof Database>;
 
+// Open altair.db when it is already there. Otherwise keep using netly.db so an
+// existing install is not orphaned. A new database is created as altair.db.
+export const resolveDbFile = (dir: string, exists: (file: string) => boolean = fs.existsSync): string => {
+  const current = path.join(dir, DB_FILENAME);
+  if (exists(current)) return current;
+  const legacy = path.join(dir, LEGACY_DB_FILENAME);
+  if (exists(legacy)) return legacy;
+  return current;
+};
+
+export const databaseFilesIn = (dir: string): string[] => {
+  return [DB_FILENAME, LEGACY_DB_FILENAME].flatMap((name) => {
+    const file = path.join(dir, name);
+    return [file, `${file}-wal`, `${file}-shm`];
+  });
+};
+
 const getDbPath = (): string => {
-  // NETLY_DATA_DIR is for a throwaway first-run database. It must not set
-  // ELECTRON_USER_DATA, which turns on the local API token check.
-  const dataDir = process.env.NETLY_DATA_DIR;
+  // ALTAIR_DATA_DIR (or the older NETLY_DATA_DIR) is for a throwaway first-run
+  // database. It must not set ELECTRON_USER_DATA, which turns on the local API token check.
+  const dataDir = readEnvAlias(process.env, "ALTAIR_DATA_DIR", "NETLY_DATA_DIR");
   if (dataDir) {
-    return path.join(dataDir, "netly.db");
+    return resolveDbFile(dataDir);
   }
   // ELECTRON_USER_DATA is set by the Electron main process when spawning Next.js.
   const electronUserData = process.env.ELECTRON_USER_DATA;
   if (electronUserData) {
-    return path.join(electronUserData, "netly.db");
+    return resolveDbFile(electronUserData);
   }
-  return path.join(process.cwd(), "data", "netly.db");
+  return resolveDbFile(path.join(process.cwd(), "data"));
 };
 
 const META_ID = "primary";

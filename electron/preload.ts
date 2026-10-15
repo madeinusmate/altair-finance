@@ -1,6 +1,6 @@
 import { contextBridge, clipboard, ipcRenderer } from "electron";
 
-const apiToken = ipcRenderer.sendSync("netly-get-api-token");
+const apiToken = ipcRenderer.sendSync("altair-get-api-token");
 
 contextBridge.exposeInMainWorld("electron", {
   platform: process.platform,
@@ -8,9 +8,9 @@ contextBridge.exposeInMainWorld("electron", {
   clipboard: {
     readText: () => clipboard.readText(),
   },
-  openExternal: (url: string) => ipcRenderer.invoke("netly-open-external", url),
-  activateOwner: () => ipcRenderer.invoke("netly-owner-activate"),
-  stopOwner: () => ipcRenderer.invoke("netly-owner-stop"),
-  revokeOwner: () => ipcRenderer.invoke("netly-owner-revoke"),
-  installCommand: () => ipcRenderer.invoke("netly-install-command"),
+  openExternal: (url: string) => ipcRenderer.invoke("altair-open-external", url),
+  activateOwner: () => ipcRenderer.invoke("altair-owner-activate"),
+  stopOwner: () => ipcRenderer.invoke("altair-owner-stop"),
+  revokeOwner: () => ipcRenderer.invoke("altair-owner-revoke"),
+  installCommand: () => ipcRenderer.invoke("altair-install-command"),
 });

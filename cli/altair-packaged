@@ -1,6 +1,7 @@
 #!/bin/sh
-# Follow a symlink such as /usr/local/bin/netly before choosing the folder
-# that contains netly.mjs.
+# $0 is the path used to start this script. When that path is the
+# /usr/local/bin/altair symlink, dirname would be /usr/local/bin and the
+# bundled Node and altair.mjs would be missed. Follow the link first.
 self=$0
 case $self in
 */*) ;;
@@ -28,5 +29,9 @@ while [ -L "$self" ]; do
   esac
 done
 
-DIR=$(CDPATH= cd -- "$(dirname -- "$self")" && pwd) || exit 1
-exec node "$DIR/netly.mjs" "$@"
+ROOT=$(CDPATH= cd -- "$(dirname -- "$self")" && pwd) || exit 1
+NODE="$ROOT/node/arm64/node"
+if [ ! -x "$NODE" ]; then
+  NODE=$(command -v node) || exit 1
+fi
+exec "$NODE" "$ROOT/altair.mjs" "$@"

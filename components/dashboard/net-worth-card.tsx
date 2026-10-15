@@ -206,11 +206,11 @@ export const NetWorthCard = ({
             <div className="flex flex-col items-center gap-2">
               <div
                 role="img"
-                aria-label="Netly"
+                aria-label="Altair"
                 className="h-[54px] w-[88px] bg-[#3e3a34]/60 dark:bg-zinc-200/80 [filter:drop-shadow(0_1px_0_rgba(255,255,255,0.45))_drop-shadow(0_-1px_1px_rgba(40,24,16,0.28))] dark:[filter:drop-shadow(0_1px_0_rgba(0,0,0,0.55))_drop-shadow(0_-1px_0_rgba(255,255,255,0.18))]"
                 style={{
-                  WebkitMaskImage: "url(/netly-mark.png)",
-                  maskImage: "url(/netly-mark.png)",
+                  WebkitMaskImage: "url(/altair-mark.png)",
+                  maskImage: "url(/altair-mark.png)",
                   WebkitMaskSize: "contain",
                   maskSize: "contain",
                   WebkitMaskRepeat: "no-repeat",

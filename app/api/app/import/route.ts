@@ -128,7 +128,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
             {
               category: "format",
               technical: "Upload name must be a single file name",
-              userFriendly: "Please select a ZIP backup file exported from Netly.",
+              userFriendly: "Please select a ZIP backup file exported from Altair.",
             },
           ],
         },
@@ -147,7 +147,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
             {
               category: "format",
               technical: `File type: ${file.type}, expected ZIP archive`,
-              userFriendly: "Please select a valid ZIP backup file exported from Netly.",
+              userFriendly: "Please select a valid ZIP backup file exported from Altair.",
             },
           ],
         },
@@ -198,7 +198,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
               category: "format",
               technical: error instanceof Error ? error.message : String(error),
               userFriendly:
-                "The ZIP file could not be extracted. Please ensure it's a valid Netly backup file.",
+                "The ZIP file could not be extracted. Please ensure it's a valid Altair backup file.",
             },
           ],
         },

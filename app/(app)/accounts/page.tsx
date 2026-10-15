@@ -247,7 +247,7 @@ const AccountsPage = () => {
         : formatCurrency(account.balance, account.currency);
 
     return (
-      <li key={account.id} className={account.id === enteredId ? "netly-account-enter" : undefined}>
+      <li key={account.id} className={account.id === enteredId ? "altair-account-enter" : undefined}>
         <Link
           href={`/accounts/${account.id}`}
           className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted"
@@ -297,7 +297,7 @@ const AccountsPage = () => {
       </div>
 
       {accounts.length === 0 ? (
-        <Card className="netly-fade-in">
+        <Card className="altair-fade-in">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Wallet className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No accounts yet</h3>

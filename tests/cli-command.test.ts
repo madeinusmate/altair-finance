@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { COMMANDS, findCommand, parseArgs } from "../cli/netly.mjs";
+import { COMMANDS, findCommand, homePointerCandidates, parseArgs } from "../cli/altair.mjs";
 
-describe("netly command", () => {
+describe("altair command", () => {
   it("parses flags without treating them as commands", () => {
     const parsed = parseArgs(["accounts", "delete", "--id", "acc_1", "--query", "unused=1"]);
     assert.deepEqual(parsed.positionals, ["accounts", "delete"]);
@@ -24,5 +24,13 @@ describe("netly command", () => {
     const command = findCommand(["export"]);
     assert.ok(command);
     assert.deepEqual(command?.requires, ["out"]);
+  });
+
+  it("looks for the agent grant in Altair and then Netly", () => {
+    const pointers = homePointerCandidates("/Users/me");
+    assert.deepEqual(pointers, [
+      "/Users/me/Library/Application Support/Altair/home.json",
+      "/Users/me/Library/Application Support/Netly/home.json",
+    ]);
   });
 });

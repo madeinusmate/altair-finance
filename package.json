@@ -1,5 +1,5 @@
 {
-  "name": "netly",
+  "name": "altair",
   "version": "0.1.0",
   "private": true,
   "main": "electron/dist/main.js",
@@ -8,12 +8,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/madeinusmate/netly.git"
+    "url": "https://github.com/madeinusmate/altair.git"
   },
   "bugs": {
-    "url": "https://github.com/madeinusmate/netly/issues"
+    "url": "https://github.com/madeinusmate/altair/issues"
   },
-  "homepage": "https://github.com/madeinusmate/netly#readme",
+  "homepage": "https://github.com/madeinusmate/altair#readme",
   "scripts": {
     "dev": "next dev --turbopack -H 127.0.0.1 -p 8527",
     "dev:fresh": "tsx scripts/dev-fresh.ts",
@@ -122,8 +122,8 @@
   },
   "packageManager": "pnpm@8.15.9+sha512.499434c9d8fdd1a2794ebf4552b3b25c0a633abcee5bb15e7b5de90f32f47b513aca98cd5cfd001c31f0db454bc3804edccd578501e4ca293a6816166bbd9f81",
   "build": {
-    "appId": "com.netly.app",
-    "productName": "Netly",
+    "appId": "com.altair.app",
+    "productName": "Altair",
     "icon": "build/icon.png",
     "directories": {
       "output": "dist"
@@ -155,9 +155,9 @@
         ]
       },
       { "from": "scripts/books-owner.mjs", "to": "books-owner.mjs" },
-      { "from": "scripts/netly-keychain.swift", "to": "netly-keychain.swift" },
-      { "from": "cli/netly.mjs", "to": "netly.mjs" },
-      { "from": "cli/netly-packaged", "to": "netly" }
+      { "from": "scripts/altair-keychain.swift", "to": "altair-keychain.swift" },
+      { "from": "cli/altair.mjs", "to": "altair.mjs" },
+      { "from": "cli/altair-packaged", "to": "altair" }
     ],
     "publish": null,
     "mac": {

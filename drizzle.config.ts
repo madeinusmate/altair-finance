@@ -5,6 +5,6 @@ export default defineConfig({
   out: "./lib/db/migrations",
   dialect: "sqlite",
   dbCredentials: {
-    url: "./data/netly.db",
+    url: "./data/altair.db",
   },
 });

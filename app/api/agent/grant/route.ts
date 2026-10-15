@@ -2,21 +2,23 @@ import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getEncryptionKey } from "@/lib/api-utils";
 import {
-  KEYCHAIN_HELPER_NAME,
   PASSPHRASE_SERVICE,
   TOKEN_SERVICE,
   buildLaunchAgentPlist,
+  deleteKeychainSecrets,
   ensureKeychainHelper,
   installLaunchAgentPlist,
   readHome,
   removeGrant,
   removeHome,
   removeLaunchAgentPlist,
+  resolveKeychainHelper,
   runKeychain,
   writeGrant,
   writeHome,
 } from "@/electron/owner-control";
 import { setOwnerPassphrase } from "@/lib/books-owner";
+import { readEnvAlias } from "@/lib/product";
 import path from "path";
 
 export const dynamic = "force-dynamic";
@@ -32,11 +34,11 @@ const ownerEnv = ():
     }
   | null => {
   const userData = process.env.ELECTRON_USER_DATA;
-  const nodePath = process.env.NETLY_NODE_PATH;
-  const serverPath = process.env.NETLY_SERVER_PATH;
-  const appRoot = process.env.NETLY_APP_ROOT;
-  const scriptPath = process.env.NETLY_OWNER_SCRIPT;
-  const swiftSource = process.env.NETLY_KEYCHAIN_SOURCE;
+  const nodePath = readEnvAlias(process.env, "ALTAIR_NODE_PATH", "NETLY_NODE_PATH");
+  const serverPath = readEnvAlias(process.env, "ALTAIR_SERVER_PATH", "NETLY_SERVER_PATH");
+  const appRoot = readEnvAlias(process.env, "ALTAIR_APP_ROOT", "NETLY_APP_ROOT");
+  const scriptPath = readEnvAlias(process.env, "ALTAIR_OWNER_SCRIPT", "NETLY_OWNER_SCRIPT");
+  const swiftSource = readEnvAlias(process.env, "ALTAIR_KEYCHAIN_SOURCE", "NETLY_KEYCHAIN_SOURCE");
   if (!userData || !nodePath || !serverPath || !appRoot || !scriptPath || !swiftSource) {
     return null;
   }
@@ -46,12 +48,12 @@ const ownerEnv = ():
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
   const passphrase = getEncryptionKey(request);
   if (!passphrase) {
-    return NextResponse.json({ error: "Unlock Netly before creating an agent grant" }, { status: 401 });
+    return NextResponse.json({ error: "Unlock Altair before creating an agent grant" }, { status: 401 });
   }
 
   const env = ownerEnv();
   if (!env) {
-    return NextResponse.json({ error: "Open the Netly app to create an agent grant" }, { status: 400 });
+    return NextResponse.json({ error: "Open the Altair app to create an agent grant" }, { status: 400 });
   }
 
   try {
@@ -83,16 +85,11 @@ export const DELETE = async (): Promise<NextResponse> => {
     return NextResponse.json({ ok: true });
   }
 
-  const helper = readHome()?.keychainHelper ?? path.join(userData, KEYCHAIN_HELPER_NAME);
+  const helper = resolveKeychainHelper(userData, readHome()?.keychainHelper);
   try {
-    await runKeychain(helper, "delete", PASSPHRASE_SERVICE);
+    await deleteKeychainSecrets(helper);
   } catch {
-    // The item may already be gone.
-  }
-  try {
-    await runKeychain(helper, "delete", TOKEN_SERVICE);
-  } catch {
-    // The item may already be gone.
+    // The items may already be gone.
   }
 
   removeGrant(userData);

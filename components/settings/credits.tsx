@@ -55,7 +55,7 @@ export const Credits = () => (
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Libraries</DialogTitle>
-          <DialogDescription>Open-source libraries Netly is built with.</DialogDescription>
+          <DialogDescription>Open-source libraries Altair is built with.</DialogDescription>
         </DialogHeader>
         <div className="max-h-[min(24rem,60vh)] space-y-5 overflow-y-auto pr-1">
           {libraryGroups.map((group) => (

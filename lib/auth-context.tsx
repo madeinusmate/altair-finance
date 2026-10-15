@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { clearSessionKey, readSessionKey, writeSessionKey } from "@/lib/session-key";
 
 type AppState = "loading" | "new" | "locked" | "unlocked" | "corrupt";
 
@@ -19,14 +20,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const SESSION_KEY = "netly_encryption_key";
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [state, setState] = useState<AppState>("loading");
   const [usesBooksOwner, setUsesBooksOwner] = useState(false);
 
   const getSessionKey = useCallback((): string | null => {
-    return sessionStorage.getItem(SESSION_KEY);
+    return readSessionKey();
   }, []);
 
   const refreshStatus = useCallback(async (): Promise<AppState> => {
@@ -41,7 +40,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
       
       if (response.status === 429) {
-        sessionStorage.removeItem(SESSION_KEY);
+        clearSessionKey();
         setUsesBooksOwner(false);
         setState("locked");
         return "locked";
@@ -49,7 +48,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (!response.ok) {
         console.error("Status API returned error:", response.status);
-        sessionStorage.removeItem(SESSION_KEY);
+        clearSessionKey();
         setUsesBooksOwner(false);
         setState("new");
         return "new";
@@ -61,11 +60,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUsesBooksOwner(booksOwner);
 
       if (booksOwner) {
-        sessionStorage.removeItem(SESSION_KEY);
+        clearSessionKey();
       }
 
       if (nextState !== "unlocked") {
-        sessionStorage.removeItem(SESSION_KEY);
+        clearSessionKey();
       }
 
       setState(nextState);
@@ -73,7 +72,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       // On network error or other failure, treat as new install
       console.error("Failed to fetch status:", error);
-      sessionStorage.removeItem(SESSION_KEY);
+      clearSessionKey();
       setUsesBooksOwner(false);
       setState("new");
       return "new";
@@ -97,7 +96,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const data = await response.json();
 
       if (data.valid) {
-        sessionStorage.setItem(SESSION_KEY, key);
+        writeSessionKey(key);
         setState("unlocked");
         return { success: true };
       }
@@ -120,7 +119,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const data = await response.json();
 
       if (data.success) {
-        sessionStorage.setItem(SESSION_KEY, key);
+        writeSessionKey(key);
         setState("unlocked");
         return { success: true };
       }
@@ -147,7 +146,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const data = await response.json();
 
         if (data.success) {
-          sessionStorage.setItem(SESSION_KEY, key);
+          writeSessionKey(key);
           setState("unlocked");
           return { success: true };
         }
@@ -167,12 +166,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const lock = useCallback(() => {
-    sessionStorage.removeItem(SESSION_KEY);
+    clearSessionKey();
     setState("locked");
   }, []);
 
   const getKey = useCallback((): string | null => {
-    return sessionStorage.getItem(SESSION_KEY);
+    return readSessionKey();
   }, []);
 
   return (

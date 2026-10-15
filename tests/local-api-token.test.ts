@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { authorizeLocalApiRequest, tokensMatch } from "../lib/local-api-guard";
+import { authorizeLocalApiRequest, providedLocalApiToken, tokensMatch } from "../lib/local-api-guard";
 import { shouldAttachApiToken } from "../lib/install-api-token";
 
 const TOKEN = "a".repeat(64);
@@ -13,8 +13,8 @@ describe("local API token", () => {
 
   it("rejects a missing token when Electron started the server", () => {
     const decision = authorizeLocalApiRequest(null, {
-      ELECTRON_USER_DATA: "/tmp/netly",
-      NETLY_API_TOKEN: TOKEN,
+      ELECTRON_USER_DATA: "/tmp/altair",
+      ALTAIR_API_TOKEN: TOKEN,
     });
     assert.equal(decision.ok, false);
     if (!decision.ok) assert.equal(decision.status, 401);
@@ -22,21 +22,33 @@ describe("local API token", () => {
 
   it("fails closed when Electron is present but no token was configured", () => {
     const decision = authorizeLocalApiRequest("anything", {
-      ELECTRON_USER_DATA: "/tmp/netly",
+      ELECTRON_USER_DATA: "/tmp/altair",
     });
     assert.equal(decision.ok, false);
   });
 
   it("rejects a wrong token and a prefix of the real token", () => {
-    const env = { NETLY_API_TOKEN: TOKEN };
+    const env = { ALTAIR_API_TOKEN: TOKEN };
     assert.equal(authorizeLocalApiRequest("b".repeat(64), env).ok, false);
     assert.equal(authorizeLocalApiRequest(TOKEN.slice(0, 32), env).ok, false);
     assert.equal(tokensMatch(TOKEN + "x", TOKEN), false);
   });
 
   it("accepts the exact per-launch token", () => {
+    const decision = authorizeLocalApiRequest(TOKEN, { ALTAIR_API_TOKEN: TOKEN });
+    assert.deepEqual(decision, { ok: true });
+  });
+
+  it("accepts a token that is still in NETLY_API_TOKEN", () => {
     const decision = authorizeLocalApiRequest(TOKEN, { NETLY_API_TOKEN: TOKEN });
     assert.deepEqual(decision, { ok: true });
+  });
+
+  it("accepts the previous request header", () => {
+    const headers = {
+      get: (name: string) => (name === "x-netly-token" ? TOKEN : null),
+    };
+    assert.equal(providedLocalApiToken(headers), TOKEN);
   });
 });
 

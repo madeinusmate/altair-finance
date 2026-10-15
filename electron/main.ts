@@ -7,23 +7,30 @@ import findFreePort from "find-free-port";
 import waitOn from "wait-on";
 import { createMenu } from "./menu";
 import {
-  KEYCHAIN_HELPER_NAME,
-  TOKEN_SERVICE,
+  LAUNCH_AGENT_LABEL,
+  LEGACY_LAUNCH_AGENT_LABEL,
   buildLaunchAgentPlist,
   currentUid,
   installLaunchAgentPlist,
   launchAgentPlistPath,
   launchdDomain,
-  launchdTarget,
+  launchdTargetFor,
   pidIsRunning,
   readGrant,
   readHome,
+  readKeychainSecret,
   readPlistAppRoot,
   readPortFile,
-  runKeychain,
+  resolveKeychainHelper,
+  resolveMacUserDataDir,
   runLaunchctl,
   spawnCommand,
 } from "./owner-control";
+
+app.setName("Altair");
+if (process.platform === "darwin") {
+  app.setPath("userData", resolveMacUserDataDir());
+}
 
 const LOCAL_HOST = "127.0.0.1";
 let apiToken = randomBytes(32).toString("hex");
@@ -33,7 +40,7 @@ let serverOwnedByElectron = true;
 // address Next binds to.
 app.commandLine.appendSwitch("host-resolver-rules", "MAP localhost 127.0.0.1");
 
-ipcMain.on("netly-get-api-token", (event) => {
+ipcMain.on("altair-get-api-token", (event) => {
   event.returnValue = apiToken;
 });
 
@@ -54,7 +61,7 @@ const openGitHubUrl = async (value: unknown): Promise<void> => {
   await shell.openExternal(url.toString());
 };
 
-ipcMain.handle("netly-open-external", async (_event, value: unknown) => {
+ipcMain.handle("altair-open-external", async (_event, value: unknown) => {
   await openGitHubUrl(value);
 });
 
@@ -83,7 +90,7 @@ const installApiTokenHeader = (port: number): void => {
       callback({
         requestHeaders: {
           ...details.requestHeaders,
-          "X-Netly-Token": apiToken,
+          "X-Altair-Token": apiToken,
         },
       });
     }
@@ -357,7 +364,7 @@ const startNextServer = async (port: number): Promise<void> => {
       PORT: port.toString(),
       NODE_ENV: "production",
       ELECTRON_USER_DATA: app.getPath("userData"),
-      NETLY_API_TOKEN: apiToken,
+      ALTAIR_API_TOKEN: apiToken,
     };
 
     // Try bundled Node.js first, then system Node.js, then "node" from PATH
@@ -402,18 +409,18 @@ const startNextServer = async (port: number): Promise<void> => {
       ? execFileSync("which", ["node"], { encoding: "utf8" }).trim()
       : nodeExecutable;
     const repoRoot = app.isPackaged ? appRoot : path.join(__dirname, "..", "..");
-    env.NETLY_NODE_PATH = nodePath;
-    env.NETLY_SERVER_PATH = serverPath;
-    env.NETLY_APP_ROOT = appRoot;
-    env.NETLY_OWNER_SCRIPT = app.isPackaged
+    env.ALTAIR_NODE_PATH = nodePath;
+    env.ALTAIR_SERVER_PATH = serverPath;
+    env.ALTAIR_APP_ROOT = appRoot;
+    env.ALTAIR_OWNER_SCRIPT = app.isPackaged
       ? path.join(process.resourcesPath, "books-owner.mjs")
       : path.join(repoRoot, "scripts", "books-owner.mjs");
-    env.NETLY_KEYCHAIN_SOURCE = app.isPackaged
-      ? path.join(process.resourcesPath, "netly-keychain.swift")
-      : path.join(repoRoot, "scripts", "netly-keychain.swift");
-    env.NETLY_CLI_PATH = app.isPackaged
-      ? path.join(process.resourcesPath, "netly")
-      : path.join(repoRoot, "cli", "netly-bin");
+    env.ALTAIR_KEYCHAIN_SOURCE = app.isPackaged
+      ? path.join(process.resourcesPath, "altair-keychain.swift")
+      : path.join(repoRoot, "scripts", "altair-keychain.swift");
+    env.ALTAIR_CLI_PATH = app.isPackaged
+      ? path.join(process.resourcesPath, "altair")
+      : path.join(repoRoot, "cli", "altair-bin");
 
     nextServer = spawn(nodeExecutable, [serverPath, ...args], {
       cwd: appRoot,
@@ -509,7 +516,7 @@ const startNextServer = async (port: number): Promise<void> => {
 };
 
 const showErrorDialog = (message: string, detail?: string): void => {
-  dialog.showErrorBox("Netly Error", `${message}${detail ? `\n\n${detail}` : ""}`);
+  dialog.showErrorBox("Altair Error", `${message}${detail ? `\n\n${detail}` : ""}`);
 };
 
 const sleep = (ms: number): Promise<void> => {
@@ -517,14 +524,14 @@ const sleep = (ms: number): Promise<void> => {
 };
 
 const cliInstallPath = (): string => {
-  if (app.isPackaged) return path.join(process.resourcesPath, "netly");
-  return path.join(__dirname, "..", "..", "cli", "netly-bin");
+  if (app.isPackaged) return path.join(process.resourcesPath, "altair");
+  return path.join(__dirname, "..", "..", "cli", "altair-bin");
 };
 
 const ownerHealthy = async (port: number, token: string): Promise<boolean> => {
   try {
     const response = await fetch(`http://${LOCAL_HOST}:${port}/api/app/status`, {
-      headers: { "x-netly-token": token },
+      headers: { "x-altair-token": token },
     });
     return response.status < 500 && response.status !== 401;
   } catch {
@@ -534,9 +541,10 @@ const ownerHealthy = async (port: number, token: string): Promise<boolean> => {
 
 const readOwnerToken = async (): Promise<string | null> => {
   const home = readHome();
-  if (!home?.keychainHelper) return null;
+  const helper = resolveKeychainHelper(app.getPath("userData"), home?.keychainHelper);
+  if (!fs.existsSync(helper)) return null;
   try {
-    const token = (await runKeychain(home.keychainHelper, "read", TOKEN_SERVICE)).trim();
+    const token = (await readKeychainSecret(helper, "token")).trim();
     return token.length > 0 ? token : null;
   } catch {
     return null;
@@ -570,11 +578,17 @@ const stopOwnedServer = async (): Promise<void> => {
   if (nextServer === child) nextServer = null;
 };
 
-const bootoutOwner = async (): Promise<void> => {
+const bootoutLabel = async (label: string): Promise<void> => {
   const uid = currentUid();
+  const target = launchdTargetFor(uid, label);
+  await runLaunchctl(["disable", target]).catch(() => undefined);
+  await runLaunchctl(["bootout", target]).catch(() => undefined);
+};
+
+const bootoutOwner = async (): Promise<void> => {
   const userData = app.getPath("userData");
-  await runLaunchctl(["disable", launchdTarget(uid)]).catch(() => undefined);
-  await runLaunchctl(["bootout", launchdTarget(uid)]).catch(() => undefined);
+  await bootoutLabel(LAUNCH_AGENT_LABEL);
+  await bootoutLabel(LEGACY_LAUNCH_AGENT_LABEL);
   const record = readPortFile(userData);
   if (record && pidIsRunning(record.pid)) {
     try {
@@ -592,7 +606,7 @@ const bootstrapOwner = async (): Promise<number> => {
   if (!token) throw new Error("Agent grant token is missing");
   apiToken = token;
   serverOwnedByElectron = false;
-  await runLaunchctl(["enable", launchdTarget(uid)]).catch(() => undefined);
+  await runLaunchctl(["enable", launchdTargetFor(uid, LAUNCH_AGENT_LABEL)]).catch(() => undefined);
   await runLaunchctl(["bootstrap", launchdDomain(uid), launchAgentPlistPath()]).catch(() => undefined);
   return waitForOwner(userData, token);
 };
@@ -637,7 +651,7 @@ const ownerPlistMatchesThisApp = (): boolean => {
 
 const retargetOwnerToThisApp = (): void => {
   const paths = thisAppOwnerPaths();
-  const helper = readHome()?.keychainHelper ?? path.join(paths.userData, KEYCHAIN_HELPER_NAME);
+  const helper = resolveKeychainHelper(paths.userData, readHome()?.keychainHelper);
   installLaunchAgentPlist(buildLaunchAgentPlist({
     nodePath: paths.nodePath,
     scriptPath: paths.scriptPath,
@@ -680,7 +694,7 @@ const cleanup = (): void => {
   }
 };
 
-ipcMain.handle("netly-owner-activate", async () => {
+ipcMain.handle("altair-owner-activate", async () => {
   await stopOwnedServer();
   serverPort = await bootstrapOwner();
   installApiTokenHeader(serverPort);
@@ -690,7 +704,7 @@ ipcMain.handle("netly-owner-activate", async () => {
   return { ok: true };
 });
 
-ipcMain.handle("netly-owner-stop", async () => {
+ipcMain.handle("altair-owner-stop", async () => {
   await bootoutOwner();
   serverOwnedByElectron = true;
   apiToken = randomBytes(32).toString("hex");
@@ -703,7 +717,7 @@ ipcMain.handle("netly-owner-stop", async () => {
   return { ok: true };
 });
 
-ipcMain.handle("netly-owner-revoke", async () => {
+ipcMain.handle("altair-owner-revoke", async () => {
   await bootoutOwner();
   serverOwnedByElectron = true;
   apiToken = randomBytes(32).toString("hex");
@@ -716,18 +730,18 @@ ipcMain.handle("netly-owner-revoke", async () => {
   return { ok: true };
 });
 
-ipcMain.handle("netly-install-command", async () => {
+ipcMain.handle("altair-install-command", async () => {
   const source = cliInstallPath();
-  const shellCommand = `mkdir -p /usr/local/bin && ln -sfn ${JSON.stringify(source)} /usr/local/bin/netly && chmod +x ${JSON.stringify(source)}`;
+  const shellCommand = `mkdir -p /usr/local/bin && ln -sfn ${JSON.stringify(source)} /usr/local/bin/altair && chmod +x ${JSON.stringify(source)}`;
   const script = `do shell script ${JSON.stringify(shellCommand)} with administrator privileges`;
   try {
     const result = await spawnCommand("osascript", ["-e", script]);
     if (result.code !== 0) {
-      return { ok: false, error: result.stderr.trim() || "Could not install the netly command" };
+      return { ok: false, error: result.stderr.trim() || "Could not install the altair command" };
     }
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Could not install the netly command" };
+    return { ok: false, error: error instanceof Error ? error.message : "Could not install the altair command" };
   }
 });
 

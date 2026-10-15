@@ -2,7 +2,7 @@ import Link from "next/link";
 
 const sections = [
   { id: "start", title: "Start here" },
-  { id: "words", title: "Words Netly uses" },
+  { id: "words", title: "Words Altair uses" },
   { id: "books", title: "Books and the passphrase" },
   { id: "accounts", title: "Accounts" },
   { id: "transactions", title: "Transactions" },
@@ -64,14 +64,14 @@ export const HelpGuide = () => (
       <header className="space-y-3">
         <h1 className="text-[34px] font-semibold leading-[40px] tracking-[-0.03em]">Help</h1>
         <p className="max-w-2xl text-[15px] leading-7 text-muted-foreground">
-          Netly is a personal finance app whose books stay on this computer. This page is the model behind Home,
+          Altair is a personal finance app whose books stay on this computer. This page is the model behind Home,
           Accounts, Transactions, and Budget: what each number is made of, and what to record so the picture stays true.
         </p>
       </header>
 
       <Section id="start" title="Start here">
         <ol className="list-decimal space-y-2 pl-5">
-          <li>Choose a passphrase on first launch and keep a copy somewhere you control. Netly cannot recover it.</li>
+          <li>Choose a passphrase on first launch and keep a copy somewhere you control. Altair cannot recover it.</li>
           <li>
             Add every account that belongs in your net worth. Pick the type that matches how you know the balance.
           </li>
@@ -90,7 +90,7 @@ export const HelpGuide = () => (
         </p>
       </Section>
 
-      <Section id="words" title="Words Netly uses">
+      <Section id="words" title="Words Altair uses">
         <dl>
           <Term title="Books">
             The encrypted ledger on this Mac. Accounts, transactions, transfers, budgets, and settings all live in the books.
@@ -99,10 +99,10 @@ export const HelpGuide = () => (
             The secret you type to open the books. An agent grant can keep a keychain copy for the books owner. The agent never receives the passphrase.
           </Term>
           <Term title="Books owner">
-            The one local process that holds the books open. The Netly window and the <span className="font-medium">netly</span> command both talk to it.
+            The one local process that holds the books open. The Altair window and the <span className="font-medium">altair</span> command both talk to it.
           </Term>
           <Term title="Agent grant">
-            Permission for this macOS user to use the netly command. There is one grant. It starts the books owner at login and leaves the books open for that login session.
+            Permission for this macOS user to use the altair command. There is one grant. It starts the books owner at login and leaves the books open for that login session.
           </Term>
           <Term title="Intent confirm">
             A macOS dialog you answer before the books are deleted, an account is deleted, or the books are exported. The program that asked cannot answer it for you.
@@ -115,10 +115,10 @@ export const HelpGuide = () => (
 
       <Section id="books" title="Books and the passphrase">
         <p>
-          The first screen asks for your name and a passphrase of at least 8 characters. That passphrase encrypts the books. There is no Netly account, and there is no recovery email. If you lose the passphrase, the books stay closed.
+          The first screen asks for your name and a passphrase of at least 8 characters. That passphrase encrypts the books. There is no Altair account, and there is no recovery email. If you lose the passphrase, the books stay closed.
         </p>
         <p>
-          Each later launch opens on the unlock screen. A wrong passphrase and a file that cannot be opened look the same: the books stay locked. If a stored key cannot open the file, Netly shows a recovery screen. From there you return to unlock, or you restore a backup you exported earlier.
+          Each later launch opens on the unlock screen. A wrong passphrase and a file that cannot be opened look the same: the books stay locked. If a stored key cannot open the file, Altair shows a recovery screen. From there you return to unlock, or you restore a backup you exported earlier.
         </p>
         <p>
           Lock, in the sidebar, closes the books in this window. While an agent grant is running, Lock stays hidden because the books owner is holding them open for the login session. Quitting the window does not close the books in that case. Stop or revoke the grant in{" "}
@@ -139,7 +139,7 @@ export const HelpGuide = () => (
         <p>The type is how the balance is known.</p>
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            <span className="font-medium text-foreground">Balance.</span> You write down the balance on a date. The current balance is the latest entry on or before today. With no entries yet, Netly uses the initial balance. Use this for a mortgage, a loan, a property, or cash you count occasionally.
+            <span className="font-medium text-foreground">Balance.</span> You write down the balance on a date. The current balance is the latest entry on or before today. With no entries yet, Altair uses the initial balance. Use this for a mortgage, a loan, a property, or cash you count occasionally.
           </li>
           <li>
             <span className="font-medium text-foreground">Transaction.</span> The balance is computed from a starting amount plus every debit, credit, and transfer. Use this for checking, savings you itemize, and credit cards.
@@ -231,7 +231,7 @@ export const HelpGuide = () => (
       </Section>
 
       <Section id="categories" title="Categories">
-        <p>Netly has two category lists, and they answer different questions.</p>
+        <p>Altair has two category lists, and they answer different questions.</p>
         <ul className="list-disc space-y-2 pl-5">
           <li>
             <span className="font-medium text-foreground">Account categories</span> describe the account: Checking, Credit Card, Mortgage, Real Estate.
@@ -250,7 +250,7 @@ export const HelpGuide = () => (
 
       <Section id="payees" title="Payees">
         <p>
-          A payee is the other party on a transaction. Netly folds names that match after trimming, lowercasing, and collapsing spaces into one payee, so &quot;FairPrice&quot; and &quot;fairprice&quot; share an icon and a filter.
+          A payee is the other party on a transaction. Altair folds names that match after trimming, lowercasing, and collapsing spaces into one payee, so &quot;FairPrice&quot; and &quot;fairprice&quot; share an icon and a filter.
         </p>
         <p>
           Set the icon or image when you create the payee, or later under{" "}
@@ -357,7 +357,7 @@ export const HelpGuide = () => (
 
       <Section id="currencies" title="Currencies">
         <p>
-          Accounts can use Hong Kong dollar, US dollar, Singapore dollar, euro, or British pound. Totals on Home and Budget are converted into the currency you are viewing. The rate table is based on the US dollar and is fetched from open.er-api.com when the saved rates are older than a day. If that fetch fails, Netly keeps using the last rates it saved.
+          Accounts can use Hong Kong dollar, US dollar, Singapore dollar, euro, or British pound. Totals on Home and Budget are converted into the currency you are viewing. The rate table is based on the US dollar and is fetched from open.er-api.com when the saved rates are older than a day. If that fetch fails, Altair keeps using the last rates it saved.
         </p>
         <p>
           A transfer across currencies stores the amount that left, the amount that arrived, and the rate on that transfer. Reports use the latest rate table, so a historical total can move slightly when rates update.
@@ -412,14 +412,14 @@ export const HelpGuide = () => (
 
       <Section id="agent" title="The agent">
         <p>
-          An agent grant lets the <span className="font-medium">netly</span> command read and change the books while you are logged in, including when the Netly window is closed. Any program you run on this Mac can use that command. The passphrase stays in the macOS keychain for the books owner. The command never receives it.
+          An agent grant lets the <span className="font-medium">altair</span> command read and change the books while you are logged in, including when the Altair window is closed. Any program you run on this Mac can use that command. The passphrase stays in the macOS keychain for the books owner. The command never receives it.
         </p>
         <p>
           The sidebar shows Agent as connected while the books owner is running, and disconnected when the grant is stopped or missing. The status opens{" "}
           <Link className="underline underline-offset-4" href="/settings#agent">Settings → Agent</Link>, where you create the grant, copy a prompt for an assistant on this Mac, stop the owner, or revoke the grant.
         </p>
         <p>
-          <span className="font-medium">netly help</span> prints the command list: accounts, transactions, transfers, budgets, categories, imports, dashboard figures, balance history, and export. Destructive commands still wait on the macOS dialog.
+          <span className="font-medium">altair help</span> prints the command list: accounts, transactions, transfers, budgets, categories, imports, dashboard figures, balance history, and export. Destructive commands still wait on the macOS dialog.
         </p>
       </Section>
 

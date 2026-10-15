@@ -1,6 +1,6 @@
 import { isSupportedCurrency, SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
 
-export const PROFILE_UPDATED_EVENT = "netly-profile-updated";
+export const PROFILE_UPDATED_EVENT = "altair-profile-updated";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const AVATAR_PATTERN = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;

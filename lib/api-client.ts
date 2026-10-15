@@ -1,7 +1,7 @@
-const SESSION_KEY = "netly_encryption_key";
+import { readSessionKey } from "@/lib/session-key";
 
 const getAuthHeaders = (): HeadersInit => {
-  const key = typeof window !== "undefined" ? sessionStorage.getItem(SESSION_KEY) : null;
+  const key = readSessionKey();
   return {
     "Content-Type": "application/json",
     ...(key ? { "X-Encryption-Key": key } : {}),

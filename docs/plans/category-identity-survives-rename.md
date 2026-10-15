@@ -169,7 +169,7 @@ No new network calls. Category rows, ledger rows, and the migration all read and
 `package.json` runs `tsx --test tests/*.test.ts`.
 
 - Add `tests/category-identity.test.ts` for `inferCatalogType`: all debit → debit, all credit → credit, mixed → null, empty → null.
-- Manual, on a copy of a real `netly.db`: rename "Food & Drink" and confirm an old transaction, a budget for that category, and the spending chart all show the new name and the same amounts.
+- Manual, on a copy of a real `altair.db`: rename "Food & Drink" and confirm an old transaction, a budget for that category, and the spending chart all show the new name and the same amounts.
 - Delete a category that has transactions, with no destination: 409, rows unchanged, budget spend unchanged.
 - Delete with a legal destination: rows and the budget point at the destination id; the old catalog row is gone.
 - Delete with a destination of the wrong type: 400 or 409, nothing written.

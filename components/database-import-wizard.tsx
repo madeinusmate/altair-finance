@@ -92,7 +92,7 @@ export const DatabaseImportWizard = ({ open, onOpenChange }: DatabaseImportWizar
         {
           category: "format",
           technical: `File type: ${selectedFile.type}, expected ZIP archive`,
-          userFriendly: "Please select a valid ZIP backup file exported from Netly.",
+          userFriendly: "Please select a valid ZIP backup file exported from Altair.",
         },
       ]);
       return;
@@ -122,7 +122,7 @@ export const DatabaseImportWizard = ({ open, onOpenChange }: DatabaseImportWizar
         {
           category: "format",
           technical: error instanceof Error ? error.message : String(error),
-          userFriendly: "Failed to validate the file. Please ensure it's a valid Netly backup.",
+          userFriendly: "Failed to validate the file. Please ensure it's a valid Altair backup.",
         },
       ]);
     } finally {
@@ -339,7 +339,7 @@ export const DatabaseImportWizard = ({ open, onOpenChange }: DatabaseImportWizar
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Select a ZIP file exported from Netly containing your database backup.
+                  Select a ZIP file exported from Altair containing your database backup.
                 </p>
               </div>
 

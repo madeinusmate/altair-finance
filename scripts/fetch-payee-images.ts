@@ -14,7 +14,7 @@ import { PAYEE_LOGOS } from "../lib/payees/logos";
 import { cleanPayee } from "../lib/payees/normalize";
 import { matchPayeeBrand, PAYEE_BRANDS, type PayeeBrand } from "./payee-image-brands";
 
-const USER_AGENT = "NetlyPayeeBundle/1.0";
+const USER_AGENT = "AltairPayeeBundle/1.0";
 const CACHE_PATH = path.join(process.cwd(), "scripts/.cache/payee-image-cache.json");
 const OUTPUT_PATH = path.join(process.cwd(), "lib/payees/images.ts");
 const SEPARATOR = /[\s\-*\/!?,.'’]/;

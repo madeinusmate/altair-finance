@@ -136,7 +136,7 @@ export const AppSidebar = () => {
             )}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{username || "Netly"}</p>
+            <p className="truncate text-sm font-medium">{username || "Altair"}</p>
             {email ? <p className="truncate text-xs text-muted-foreground">{email}</p> : null}
           </div>
         </div>

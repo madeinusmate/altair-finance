@@ -3,10 +3,10 @@ import { describe, it } from "node:test";
 import { author, isGitHubCreditUrl, libraryGroups, license, repository } from "../lib/credits";
 
 describe("credits", () => {
-  it("attributes the app to madeinusmate and the netly repository", () => {
+  it("attributes the app to madeinusmate and the altair repository", () => {
     assert.equal(author.name, "@madeinusmate");
     assert.equal(author.url, "https://github.com/madeinusmate");
-    assert.equal(repository.url, "https://github.com/madeinusmate/netly");
+    assert.equal(repository.url, "https://github.com/madeinusmate/altair");
     assert.equal(license.name, "MIT");
   });
 
@@ -25,9 +25,9 @@ describe("credits", () => {
   });
 
   it("rejects urls the desktop window must not open", () => {
-    assert.equal(isGitHubCreditUrl("http://github.com/madeinusmate/netly"), false);
-    assert.equal(isGitHubCreditUrl("https://github.com.evil/netly"), false);
-    assert.equal(isGitHubCreditUrl("https://user:pass@github.com/madeinusmate/netly"), false);
+    assert.equal(isGitHubCreditUrl("http://github.com/madeinusmate/altair"), false);
+    assert.equal(isGitHubCreditUrl("https://github.com.evil/altair"), false);
+    assert.equal(isGitHubCreditUrl("https://user:pass@github.com/madeinusmate/altair"), false);
     assert.equal(isGitHubCreditUrl("https://example.com"), false);
     assert.equal(isGitHubCreditUrl("not a url"), false);
   });

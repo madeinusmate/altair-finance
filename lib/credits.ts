@@ -15,13 +15,13 @@ export const author = {
 } as const;
 
 export const repository = {
-  name: "github.com/madeinusmate/netly",
-  url: "https://github.com/madeinusmate/netly",
+  name: "github.com/madeinusmate/altair",
+  url: "https://github.com/madeinusmate/altair",
 } as const;
 
 export const license = {
   name: "MIT",
-  url: "https://github.com/madeinusmate/netly/blob/main/LICENSE",
+  url: "https://github.com/madeinusmate/altair/blob/main/LICENSE",
 } as const;
 
 // Libraries the app imports or vendors. Unused packages in package.json stay off this list.

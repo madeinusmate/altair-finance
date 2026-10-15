@@ -4,7 +4,7 @@ import { isUnsafeUploadName } from "../lib/import-upload-path";
 
 describe("import upload names", () => {
   it("accepts a plain zip name", () => {
-    assert.equal(isUnsafeUploadName("netly-backup.zip"), false);
+    assert.equal(isUnsafeUploadName("altair-backup.zip"), false);
   });
 
   it("rejects traversal and path separators", () => {

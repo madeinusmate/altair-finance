@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const POST = async (): Promise<NextResponse> => {
   const userData = process.env.ELECTRON_USER_DATA ?? readHome()?.userData;
   if (!userData) {
-    return NextResponse.json({ error: "Open the Netly app to stop the agent grant" }, { status: 400 });
+    return NextResponse.json({ error: "Open the Altair app to stop the agent grant" }, { status: 400 });
   }
 
   const grant = readGrant(userData);

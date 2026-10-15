@@ -47,7 +47,7 @@ const SettingsPage = () => {
       const link = document.createElement("a");
       const dateStamp = new Date().toISOString().slice(0, 10);
       link.href = url;
-      link.download = `netly-backup-${dateStamp}.zip`;
+      link.download = `altair-backup-${dateStamp}.zip`;
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {
@@ -174,7 +174,7 @@ const SettingsPage = () => {
         <CardHeader>
           <CardTitle>Agent</CardTitle>
           <CardDescription>
-            Let a local command use your books while Netly is installed.
+            Let a local command use your books while Altair is installed.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -200,7 +200,7 @@ const SettingsPage = () => {
       <Card>
         <CardHeader>
           <CardTitle>Credits</CardTitle>
-          <CardDescription>Netly is made by @madeinusmate.</CardDescription>
+          <CardDescription>Altair is made by @madeinusmate.</CardDescription>
         </CardHeader>
         <CardContent>
           <Credits />

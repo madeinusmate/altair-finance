@@ -4,7 +4,7 @@
 # For an app you compiled locally, prefer signing it (see scripts/fix-app-signature.sh
 # and docs/macos-unsigned-builds.md) instead of handing this script to other people.
 
-APP_PATH="${1:-dist/mac-arm64/Netly.app}"
+APP_PATH="${1:-dist/mac-arm64/Altair.app}"
 
 if [ ! -d "$APP_PATH" ]; then
   echo "Error: App not found at $APP_PATH"

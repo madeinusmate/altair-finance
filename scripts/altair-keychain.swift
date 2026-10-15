@@ -3,7 +3,7 @@ import Security
 
 let args = CommandLine.arguments
 guard args.count >= 4 else {
-  fputs("usage: netly-keychain write|read|delete account service\n", stderr)
+  fputs("usage: altair-keychain write|read|delete account service\n", stderr)
   exit(2)
 }
 

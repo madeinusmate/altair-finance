@@ -568,7 +568,7 @@ const TransactionsPage = () => {
       </div>
 
       {unifiedItems.length === 0 ? (
-        <Card className="netly-fade-in">
+        <Card className="altair-fade-in">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <ArrowLeftRight className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No transactions yet</h3>

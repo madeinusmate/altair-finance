@@ -1,6 +1,6 @@
 <div align="center">
 
-# Netly
+# Altair
 
 ### Personal finance. The books stay on this computer.
 
@@ -12,14 +12,14 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16-000?style=flat-square&logo=nextdotjs&logoColor=white)](https://nextjs.org)
 [![React](https://img.shields.io/badge/React-19-087EA4?style=flat-square&logo=react&logoColor=white)](https://react.dev)
 [![Electron](https://img.shields.io/badge/Electron-40-47848F?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org)
-[![Tests](https://img.shields.io/badge/tests-CI-6E9F18?style=flat-square&logo=githubactions&logoColor=white)](https://github.com/madeinusmate/netly/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-CI-6E9F18?style=flat-square&logo=githubactions&logoColor=white)](https://github.com/madeinusmate/altair/actions/workflows/ci.yml)
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![SQLCipher](https://img.shields.io/badge/SQLCipher-encrypted%20SQLite-0F4C81?style=flat-square)](https://www.zetetic.net/sqlcipher/)
 [![Drizzle](https://img.shields.io/badge/Drizzle-ORM-C5F74F?style=flat-square&logo=drizzle&logoColor=black)](https://orm.drizzle.team)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 
-**[Issues](https://github.com/madeinusmate/netly/issues) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)**
+**[Issues](https://github.com/madeinusmate/altair/issues) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)**
 
 [Quick start](#quick-start) · [Features](#features) · [Desktop app](#desktop-app) · [FAQ](#faq) · [License](#license)
 
@@ -37,7 +37,7 @@
   <sub>Node 20 · pnpm · a C toolchain</sub>
 </td>
 <td align="center" width="360">
-  <a href="https://github.com/madeinusmate/netly/issues">
+  <a href="https://github.com/madeinusmate/altair/issues">
     <img src="https://cdn.simpleicons.org/github/181717" height="42" alt="" /><br />
     <strong>Open an issue</strong>
   </a><br />
@@ -52,7 +52,7 @@
 
 ---
 
-Netly is an Electron shell around a Next.js server that binds to `127.0.0.1`. Your books live in an encrypted SQLite file. The window and the `netly` command both talk to that one local server.
+Altair is an Electron shell around a Next.js server that binds to `127.0.0.1`. Your books live in an encrypted SQLite file. The window and the `altair` command both talk to that one local server.
 
 `pnpm dev` is the interface for development, on `http://127.0.0.1:8527`. The desktop app is `pnpm dev:electron`. Hosting this Next.js app as a public website is not a supported configuration.
 
@@ -88,9 +88,9 @@ pnpm build
 - **Payees.** A name, an icon, and a merge when two names are the same payee.
 - **Rules on this computer.** A missing category on import can be filled from a rule stored in the books, matched on the description. Changing a category remembers that description. Nothing is sent to a classifier.
 - **CSV.** Review the rows, then import. A file that was already imported is skipped.
-- **PDF statements.** Parsed on this computer. A checkbox can send that one file to OpenAI instead, and only if you set `OPENAI_API_KEY` yourself. Netly does not include a key.
+- **PDF statements.** Parsed on this computer. A checkbox can send that one file to OpenAI instead, and only if you set `OPENAI_API_KEY` yourself. Altair does not include a key.
 - **Backup.** Export is an encrypted zip of the books. Import replaces the open file with a backup. Deleting the books, deleting an account, or exporting asks the person at the Mac to confirm in a system dialog. The calling program cannot answer it.
-- **Agent grant.** On macOS, one grant lets the `netly` command use the books that are already open. The command never receives the passphrase.
+- **Agent grant.** On macOS, one grant lets the `altair` command use the books that are already open. The command never receives the passphrase.
 
 ## Desktop app
 
@@ -105,11 +105,13 @@ pnpm package:mac
 
 Electron generates a random token on each launch. Every `/api` request from the window must present it. The token is injected into the app window. The server stays on `127.0.0.1`. The desktop app binds a loopback port starting at `8528`.
 
-## The netly command
+## The altair command
 
-An agent grant installs `netly` and starts the books owner at login. Quitting the window leaves the owner running for that login session. The command talks to the same routes the window uses. It does not open the books file itself.
+An agent grant installs `altair` and starts the books owner at login. Quitting the window leaves the owner running for that login session. The command talks to the same routes the window uses. It does not open the books file itself.
 
-`netly status` prints JSON. `netly help` lists the commands: accounts, transactions, transfers, budgets, categories, imports, dashboard figures, and export. Delete, account delete, and export still raise the macOS confirm dialog.
+The command used to be `netly`. An existing install keeps its books: the app still opens `~/Library/Application Support/Netly` when that folder has the database or the agent grant and `Application Support/Altair` does not, and it still opens `netly.db` when `altair.db` is not there. The macOS keychain items and `NETLY_*` environment variables are read the same way. Reinstall the command so `/usr/local/bin/altair` points at this app, and remove `/usr/local/bin/netly`.
+
+`altair status` prints JSON. `altair help` lists the commands: accounts, transactions, transfers, budgets, categories, imports, dashboard figures, and export. Delete, account delete, and export still raise the macOS confirm dialog.
 
 The grant, the keychain copy of the passphrase, and the confirm dialog are macOS. The dev server itself runs wherever Node 20 and the native module build.
 
@@ -138,7 +140,7 @@ app/            Next.js pages and /api routes
 components/     Interface
 lib/            Books, insights, import, PDF parsing
 electron/       Desktop shell, keychain, books owner
-cli/            netly command
+cli/            altair command
 scripts/        Dev server, packaging, signature fix
 tests/          Node test runner
 docs/adr/       Decisions that should stay put
@@ -161,7 +163,7 @@ Settings lists the libraries the app ships with, and the same list is in `lib/cr
 
 <br />
 
-You need a passphrase for the books on this computer. Netly has no signup server and no cloud copy of the ledger.
+You need a passphrase for the books on this computer. Altair has no signup server and no cloud copy of the ledger.
 
 </details>
 
@@ -179,7 +181,7 @@ In an encrypted SQLite file on this Mac. A backup is an encrypted zip you downlo
 
 <br />
 
-Accounts and transactions come from entry, CSV, PDF, or a backup. Bank connect is not in this tree. See [docs/open-banking.md](docs/open-banking.md).
+Accounts are created by hand. Transactions come from entry, CSV, PDF, or a database backup. Bank connect is not in this tree.
 
 </details>
 
@@ -188,7 +190,7 @@ Accounts and transactions come from entry, CSV, PDF, or a backup. Bank connect i
 
 <br />
 
-The default parser runs locally. The upload checkbox sends that file to OpenAI, and only when `OPENAI_API_KEY` is set in `.env.local`. Netly does not ship a key.
+The default parser runs locally. The upload checkbox sends that file to OpenAI, and only when `OPENAI_API_KEY` is set in `.env.local`. Altair does not ship a key.
 
 </details>
 
@@ -221,17 +223,17 @@ Use a private advisory, described in [SECURITY.md](SECURITY.md). Leave passphras
 
 ## Star history
 
-<a href="https://www.star-history.com/?repos=madeinusmate%2Fnetly&amp;type=date">
+<a href="https://www.star-history.com/?repos=madeinusmate%2Faltair&amp;type=date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=madeinusmate/netly&amp;type=date&amp;theme=dark&amp;legend=top-left" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=madeinusmate/netly&amp;type=date" />
-    <img alt="GitHub star history for Netly" src="https://api.star-history.com/chart?repos=madeinusmate/netly&amp;type=date" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=madeinusmate/altair&amp;type=date&amp;theme=dark&amp;legend=top-left" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=madeinusmate/altair&amp;type=date" />
+    <img alt="GitHub star history for Altair" src="https://api.star-history.com/chart?repos=madeinusmate/altair&amp;type=date" />
   </picture>
 </a>
 
 ## Caveats
 
-The supported way to run Netly is the Electron app, with the server bound to `127.0.0.1`. Do not publish port `8527` or `8528`.
+The supported way to run Altair is the Electron app, with the server bound to `127.0.0.1`. Do not publish port `8527` or `8528`.
 
 A person who can use an unlocked session on this macOS account can use the open books. The passphrase rate limit applies to unlock, status, export, delete, and import. It does not protect an already unlocked window.
 
@@ -247,6 +249,6 @@ Third-party libraries keep their own licenses. Settings → Credits names the on
 
 ## Contributing
 
-[Open an issue](https://github.com/madeinusmate/netly/issues) to report a bug or suggest a change, or send a pull request.
+[Open an issue](https://github.com/madeinusmate/altair/issues) to report a bug or suggest a change, or send a pull request.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` run on every pull request. Report vulnerabilities through [SECURITY.md](SECURITY.md).

@@ -12,12 +12,12 @@ export type IntentDecision =
 
 export const intentDialogScript = (action: IntentAction): string => {
   if (action === "delete-books") {
-    return 'display dialog "Delete the books? This cannot be undone." buttons {"Cancel", "Delete the books"} default button "Cancel" cancel button "Cancel" with title "Netly"';
+    return 'display dialog "Delete the books? This cannot be undone." buttons {"Cancel", "Delete the books"} default button "Cancel" cancel button "Cancel" with title "Altair"';
   }
   if (action === "delete-account") {
-    return 'display dialog "Delete this account?" buttons {"Cancel", "Delete the account"} default button "Cancel" cancel button "Cancel" with title "Netly"';
+    return 'display dialog "Delete this account?" buttons {"Cancel", "Delete the account"} default button "Cancel" cancel button "Cancel" with title "Altair"';
   }
-  return 'display dialog "Export the books?" buttons {"Cancel", "Export"} default button "Cancel" cancel button "Cancel" with title "Netly"';
+  return 'display dialog "Export the books?" buttons {"Cancel", "Export"} default button "Cancel" cancel button "Cancel" with title "Altair"';
 };
 
 export const promptWithOsascript: IntentPrompt = (action, signal) => {

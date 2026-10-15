@@ -3,13 +3,19 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-export const KEYCHAIN_ACCOUNT = "netly";
-export const PASSPHRASE_SERVICE = "netly.passphrase";
-export const TOKEN_SERVICE = "netly.api-token";
-export const LAUNCH_AGENT_LABEL = "com.netly.books-owner";
+export const KEYCHAIN_ACCOUNT = "altair";
+export const LEGACY_KEYCHAIN_ACCOUNT = "netly";
+export const PASSPHRASE_SERVICE = "altair.passphrase";
+export const LEGACY_PASSPHRASE_SERVICE = "netly.passphrase";
+export const TOKEN_SERVICE = "altair.api-token";
+export const LEGACY_TOKEN_SERVICE = "netly.api-token";
+export const LAUNCH_AGENT_LABEL = "com.altair.books-owner";
+export const LEGACY_LAUNCH_AGENT_LABEL = "com.netly.books-owner";
+export const LAUNCH_AGENT_LABELS = [LAUNCH_AGENT_LABEL, LEGACY_LAUNCH_AGENT_LABEL] as const;
 export const GRANT_FILE_NAME = "agent-grant.json";
 export const PORT_FILE_NAME = "owner.json";
-export const KEYCHAIN_HELPER_NAME = "netly-keychain";
+export const KEYCHAIN_HELPER_NAME = "altair-keychain";
+export const LEGACY_KEYCHAIN_HELPER_NAME = "netly-keychain";
 
 export type AgentGrantRecord = {
   enabled: boolean;
@@ -34,20 +40,89 @@ export type CommandResult = {
 
 export type CommandRunner = (command: string, args: string[], stdin?: string) => Promise<CommandResult>;
 
+export type KeychainKind = "passphrase" | "token";
+
+export type KeychainTarget = {
+  account: string;
+  service: string;
+};
+
 export const keychainHelperArgs = (action: "write" | "read" | "delete", service: string): string[] => {
   return [action, KEYCHAIN_ACCOUNT, service];
 };
 
+// New grants are stored under Altair. An existing grant stays under Netly until it is replaced.
+export const keychainReadTargets = (kind: KeychainKind): KeychainTarget[] => {
+  if (kind === "passphrase") {
+    return [
+      { account: KEYCHAIN_ACCOUNT, service: PASSPHRASE_SERVICE },
+      { account: LEGACY_KEYCHAIN_ACCOUNT, service: LEGACY_PASSPHRASE_SERVICE },
+    ];
+  }
+  return [
+    { account: KEYCHAIN_ACCOUNT, service: TOKEN_SERVICE },
+    { account: LEGACY_KEYCHAIN_ACCOUNT, service: LEGACY_TOKEN_SERVICE },
+  ];
+};
+
 export const homePointerPath = (homeDirectory = os.homedir()): string => {
+  return path.join(homeDirectory, "Library", "Application Support", "Altair", "home.json");
+};
+
+export const legacyHomePointerPath = (homeDirectory = os.homedir()): string => {
   return path.join(homeDirectory, "Library", "Application Support", "Netly", "home.json");
 };
 
-export const launchAgentPlistPath = (homeDirectory = os.homedir()): string => {
-  return path.join(homeDirectory, "Library", "LaunchAgents", `${LAUNCH_AGENT_LABEL}.plist`);
+export const homePointerCandidates = (homeDirectory = os.homedir()): string[] => {
+  return [homePointerPath(homeDirectory), legacyHomePointerPath(homeDirectory)];
+};
+
+export const launchAgentPlistPath = (
+  homeDirectory = os.homedir(),
+  label: string = LAUNCH_AGENT_LABEL,
+): string => {
+  return path.join(homeDirectory, "Library", "LaunchAgents", `${label}.plist`);
+};
+
+export const legacyLaunchAgentPlistPath = (homeDirectory = os.homedir()): string => {
+  return launchAgentPlistPath(homeDirectory, LEGACY_LAUNCH_AGENT_LABEL);
+};
+
+export const launchdTargetFor = (uid: number, label: string): string => {
+  return `gui/${uid}/${label}`;
 };
 
 export const launchdTarget = (uid: number): string => {
-  return `gui/${uid}/${LAUNCH_AGENT_LABEL}`;
+  return launchdTargetFor(uid, LAUNCH_AGENT_LABEL);
+};
+
+const BOOKS_MARKERS = ["altair.db", "netly.db", "agent-grant.json"];
+
+export const directoryHasBooks = (
+  dir: string,
+  exists: (file: string) => boolean = fs.existsSync,
+): boolean => {
+  return BOOKS_MARKERS.some((name) => exists(path.join(dir, name)));
+};
+
+// Packaged Altair looks in Application Support/Altair. Keep using Netly when that
+// folder already holds the books or the agent grant and Altair's folder does not.
+export const resolveMacUserDataDir = (
+  homeDirectory = os.homedir(),
+  exists: (file: string) => boolean = fs.existsSync,
+): string => {
+  const nextDir = path.join(homeDirectory, "Library", "Application Support", "Altair");
+  const legacyDir = path.join(homeDirectory, "Library", "Application Support", "Netly");
+  if (directoryHasBooks(nextDir, exists)) return nextDir;
+  if (directoryHasBooks(legacyDir, exists)) return legacyDir;
+  return nextDir;
+};
+
+export const resolveKeychainHelper = (userData: string, helper?: string | null): string => {
+  if (helper && fs.existsSync(helper)) return helper;
+  const legacy = path.join(userData, LEGACY_KEYCHAIN_HELPER_NAME);
+  if (fs.existsSync(legacy)) return legacy;
+  return path.join(userData, KEYCHAIN_HELPER_NAME);
 };
 
 export const launchdDomain = (uid: number): string => {
@@ -106,12 +181,20 @@ export const writePortFile = (userData: string, record: OwnerPortRecord): void =
   fs.writeFileSync(portFilePath(userData), JSON.stringify(record), { mode: 0o600 });
 };
 
-export const readHome = (homeDirectory = os.homedir()): AgentHome | null => {
-  const home = readJsonFile<AgentHome>(homePointerPath(homeDirectory));
+const parseHome = (filePath: string): AgentHome | null => {
+  const home = readJsonFile<AgentHome>(filePath);
   if (!home || typeof home.userData !== "string" || typeof home.keychainHelper !== "string") {
     return null;
   }
   return home;
+};
+
+export const readHome = (homeDirectory = os.homedir()): AgentHome | null => {
+  for (const candidate of homePointerCandidates(homeDirectory)) {
+    const home = parseHome(candidate);
+    if (home) return home;
+  }
+  return null;
 };
 
 export const writeHome = (home: AgentHome, homeDirectory = os.homedir()): void => {
@@ -120,12 +203,18 @@ export const writeHome = (home: AgentHome, homeDirectory = os.homedir()): void =
   fs.writeFileSync(pointer, JSON.stringify(home), { mode: 0o600 });
 };
 
-export const removeHome = (homeDirectory = os.homedir()): void => {
+const unlinkIfPresent = (filePath: string): void => {
   try {
-    fs.unlinkSync(homePointerPath(homeDirectory));
+    fs.unlinkSync(filePath);
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code !== "ENOENT") throw error;
+  }
+};
+
+export const removeHome = (homeDirectory = os.homedir()): void => {
+  for (const candidate of homePointerCandidates(homeDirectory)) {
+    unlinkIfPresent(candidate);
   }
 };
 
@@ -174,11 +263,11 @@ export const buildLaunchAgentPlist = (options: {
 }): string => {
   const env = {
     ELECTRON_USER_DATA: options.userData,
-    NETLY_BOOKS_OWNER: "1",
-    NETLY_SERVER_PATH: options.serverPath,
-    NETLY_APP_ROOT: options.appRoot,
-    NETLY_NODE_PATH: options.nodePath,
-    NETLY_KEYCHAIN_HELPER: options.keychainHelper,
+    ALTAIR_BOOKS_OWNER: "1",
+    ALTAIR_SERVER_PATH: options.serverPath,
+    ALTAIR_APP_ROOT: options.appRoot,
+    ALTAIR_NODE_PATH: options.nodePath,
+    ALTAIR_KEYCHAIN_HELPER: options.keychainHelper,
   };
 
   const envXml = Object.entries(env)
@@ -248,6 +337,34 @@ export const runKeychain = async (
   return result.stdout;
 };
 
+export const readKeychainSecret = async (
+  helper: string,
+  kind: KeychainKind,
+  run: CommandRunner = spawnCommand,
+): Promise<string> => {
+  let lastError: Error | null = null;
+  for (const target of keychainReadTargets(kind)) {
+    try {
+      const result = await run(helper, ["read", target.account, target.service]);
+      if (result.code === 0 && result.stdout.length > 0) return result.stdout;
+      lastError = new Error("Keychain read failed");
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Keychain read failed");
+    }
+  }
+  throw lastError ?? new Error("Keychain read failed");
+};
+
+export const deleteKeychainSecrets = async (
+  helper: string,
+  run: CommandRunner = spawnCommand,
+): Promise<void> => {
+  const targets = [...keychainReadTargets("passphrase"), ...keychainReadTargets("token")];
+  for (const target of targets) {
+    await run(helper, ["delete", target.account, target.service]);
+  }
+};
+
 export const ensureKeychainHelper = async (
   userData: string,
   swiftSource: string,
@@ -269,7 +386,7 @@ export const ensureKeychainHelper = async (
 };
 
 export const readPlistAppRoot = (plist: string): string | null => {
-  const match = plist.match(/<key>NETLY_APP_ROOT<\/key>\s*<string>([^<]*)<\/string>/);
+  const match = plist.match(/<key>(?:ALTAIR|NETLY)_APP_ROOT<\/key>\s*<string>([^<]*)<\/string>/);
   if (!match) return null;
   return match[1]
     .replaceAll("&quot;", "\"")
@@ -282,16 +399,13 @@ export const installLaunchAgentPlist = (plist: string, homeDirectory = os.homedi
   const destination = launchAgentPlistPath(homeDirectory);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   fs.writeFileSync(destination, plist, { mode: 0o644 });
+  unlinkIfPresent(legacyLaunchAgentPlistPath(homeDirectory));
   return destination;
 };
 
 export const removeLaunchAgentPlist = (homeDirectory = os.homedir()): void => {
-  try {
-    fs.unlinkSync(launchAgentPlistPath(homeDirectory));
-  } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError.code !== "ENOENT") throw error;
-  }
+  unlinkIfPresent(launchAgentPlistPath(homeDirectory));
+  unlinkIfPresent(legacyLaunchAgentPlistPath(homeDirectory));
 };
 
 export const runLaunchctl = async (args: string[], run: CommandRunner = spawnCommand): Promise<void> => {

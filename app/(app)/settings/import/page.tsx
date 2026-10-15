@@ -262,7 +262,7 @@ const ImportWizardPage = () => {
         <Card>
           <CardHeader>
             <CardTitle>Select file</CardTitle>
-            <CardDescription>Upload a Netly CSV file to continue.</CardDescription>
+            <CardDescription>Upload an Altair CSV file to continue.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <CsvUpload

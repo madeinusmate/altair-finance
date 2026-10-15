@@ -1,10 +1,10 @@
 #!/usr/bin/env tsx
 
-import { initializeDb } from "../lib/db/index";
+import { databaseFilesIn, initializeDb } from "../lib/db/index";
 import * as fs from "fs";
 import * as path from "path";
 
-const DB_PATH = path.join(process.cwd(), "data", "netly.db");
+const DB_FILES = databaseFilesIn(path.join(process.cwd(), "data"));
 
 // Get encryption key from environment or argument, or use default
 const encryptionKey = process.env.ENCRYPTION_KEY || process.argv[2] || "reset-key-min-8-chars-12345";
@@ -20,25 +20,12 @@ if (encryptionKey.length < 8) {
 
 console.log("🗑️  Resetting database...\n");
 
-// Delete existing database files
+// Delete the current database and a database left under the previous name.
 try {
-  if (fs.existsSync(DB_PATH)) {
-    fs.unlinkSync(DB_PATH);
-    console.log("✓ Deleted existing database file");
-  }
-  
-  // Also delete WAL and SHM files if they exist
-  const walPath = `${DB_PATH}-wal`;
-  const shmPath = `${DB_PATH}-shm`;
-  
-  if (fs.existsSync(walPath)) {
-    fs.unlinkSync(walPath);
-    console.log("✓ Deleted WAL file");
-  }
-  
-  if (fs.existsSync(shmPath)) {
-    fs.unlinkSync(shmPath);
-    console.log("✓ Deleted SHM file");
+  for (const filePath of DB_FILES) {
+    if (!fs.existsSync(filePath)) continue;
+    fs.unlinkSync(filePath);
+    console.log(`✓ Deleted ${path.basename(filePath)}`);
   }
 } catch (error) {
   console.error("❌ Error deleting database files:", error);

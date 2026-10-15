@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Netly - Personal Finance Tracker",
+  title: "Altair - Personal Finance Tracker",
   description: "Local-first, encrypted personal finance app",
 };
 

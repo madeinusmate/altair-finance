@@ -169,7 +169,7 @@ Fingerprints are hashes of ledger fields and stay in the local SQLCipher file. N
 - Within one file, the second identical row is skipped unless overridden, even when the ledger did not have the first yet.
 - Client-supplied `fileHash` can be omitted or lied about. That only affects the informational flag.
 - A crashed import no longer leaves a partial ledger, because of the SQLite transaction.
-- Transfers are not matched against a pair of debit and credit transactions. Netly stores transfers in `transfers`. Do not try to pair them in this change.
+- Transfers are not matched against a pair of debit and credit transactions. Altair stores transfers in `transfers`. Do not try to pair them in this change.
 - Timezone: keep using the `YYYY-MM-DD` string from the CSV or PDF row. Backfill uses UTC on the stored unix seconds, which matches `new Date("YYYY-MM-DD")` in the import routes.
 - Large histories: one query of fingerprints for the involved accounts, then an in-memory `Set`. Do not call `GET /api/transactions` for the whole ledger as the enforcement mechanism. The client may still prefetch for the preview; the server result is what counts. If the preview and the server disagree, show `skippedDuplicates`.
 
