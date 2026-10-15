@@ -34,7 +34,7 @@ pnpm dev:electron
 
 `pnpm package:mac` builds a macOS app. An unsigned local build needs an ad-hoc signature. Read [docs/macos-unsigned-builds.md](docs/macos-unsigned-builds.md) before using the signing scripts. Those scripts are for an app you just built. They are not a way to run somebody else's unsigned app.
 
-Accounts are created by hand. Transactions can be typed in, or brought in from a CSV, a PDF statement, or a database backup. Open banking is not part of this version. See [docs/open-banking.md](docs/open-banking.md) if you need to bring that integration back from git history.
+Accounts are created by hand. Transactions come from entry, CSV, PDF, or a database backup. Open banking is not part of this version.
 
 ## License
 

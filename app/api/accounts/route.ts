@@ -34,7 +34,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { name, type, nature, category, currency, initialBalance = 0, metadata } = body;
+    const { name, type, nature, category, currency, initialBalance = 0 } = body;
 
     if (!name || !type || !nature || !category || !currency) {
       return NextResponse.json(
@@ -89,7 +89,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       category: category,
       currency,
       initialBalance: effectiveInitialBalance,
-      metadata: metadata || null,
+      metadata: null,
       createdAt: now,
       updatedAt: now,
     };
