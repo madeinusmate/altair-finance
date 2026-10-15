@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bot,
+  CircleHelp,
   LayoutDashboard,
   Wallet,
   ArrowLeftRight,
@@ -183,6 +184,19 @@ export const AppSidebar = () => {
             </Link>
           </Button>
         ) : null}
+        <Button
+          variant="ghost"
+          className={cn(
+            "w-full justify-start rounded-full",
+            pathname === "/help" && "bg-sidebar-accent text-sidebar-accent-foreground",
+          )}
+          asChild
+        >
+          <Link href="/help" aria-current={pathname === "/help" ? "page" : undefined}>
+            <CircleHelp className="h-4 w-4" />
+            <span>Help</span>
+          </Link>
+        </Button>
         <Button variant="ghost" className="w-full justify-start rounded-full" asChild>
           <Link href="/settings">
             <Settings className="h-4 w-4" />

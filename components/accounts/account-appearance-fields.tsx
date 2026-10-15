@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { readAvatarFile } from "@/lib/read-avatar-file";
+import { dialogSelectClassName } from "@/components/form-section";
 
 type AccountAppearanceFieldsProps = {
   name: string;
@@ -64,7 +65,7 @@ export const AccountAppearanceFields = ({
             onValueChange={(next) => onIconChange(next === "__none__" ? "" : next)}
             disabled={disabled}
           >
-            <SelectTrigger id="account-icon" className="w-full">
+            <SelectTrigger id="account-icon" className={dialogSelectClassName}>
               {icon && getIconComponent(icon) ? (
                 <div className="flex items-center gap-2">
                   {getIconComponent(icon)}

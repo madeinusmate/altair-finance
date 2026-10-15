@@ -26,6 +26,15 @@ import { PayeeIconSelect } from "@/components/payees/payee-icon-select";
 import { PayeeImageField } from "@/components/payees/payee-image-field";
 import { PayeeMark } from "@/components/payees/payee-mark";
 import { cleanPayee } from "@/lib/payees/normalize";
+import {
+  dialogFormBodyClassName,
+  dialogFormFooterClassName,
+  dialogSelectClassName,
+  FormRow,
+  FormSection,
+} from "@/components/form-section";
+import { DialogFooter } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 
 type PayeeOption = {
   id: string;
@@ -40,6 +49,7 @@ interface TransactionFormProps {
   currency?: string;
   accounts?: Account[];
   onSuccess: () => void;
+  onCancel?: () => void;
   transaction?: Transaction & { payeeName?: string | null };
   mode?: "create" | "edit";
 }
@@ -49,6 +59,7 @@ export const TransactionForm = ({
   currency: providedCurrency,
   accounts,
   onSuccess,
+  onCancel,
   transaction,
   mode = "create",
 }: TransactionFormProps) => {
@@ -255,159 +266,190 @@ export const TransactionForm = ({
     }
   };
 
+  const showAccountPicker =
+    !providedAccountId && mode === "create" && accounts && transactionAccounts.length > 0;
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-col overflow-hidden">
+      <div className={dialogFormBodyClassName}>
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-      {/* Account selector - only show when accountId is not provided and not editing */}
-      {!providedAccountId && mode === "create" && accounts && transactionAccounts.length > 0 && (
-        <div className="space-y-2">
-          <Label htmlFor="account">Account</Label>
-          <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
-            <SelectTrigger id="account">
-              <SelectValue placeholder="Select an account" />
-            </SelectTrigger>
-            <SelectContent>
-              {transactionAccounts.map((account) => (
-                <SelectItem key={account.id} value={account.id}>
-                  {account.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="type">Type</Label>
-          <Select value={type} onValueChange={(v) => handleTypeChange(v as "debit" | "credit")}>
-            <SelectTrigger id="type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="debit">Debit</SelectItem>
-              <SelectItem value="credit">Credit</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="category">Category</Label>
-          {categoriesLoading ? (
-            <Skeleton className="h-9 w-full" />
-          ) : (
-            <Select value={categoryId} onValueChange={setCategoryId} disabled={categoriesLoading || categories.length === 0}>
-              <SelectTrigger id="category">
-                {categoryId && getIconComponent(categoryMap.get(Number(categoryId))?.icon) && (
-                  <span className="mr-2">{getIconComponent(categoryMap.get(Number(categoryId))?.icon)}</span>
-                )}
-                <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select category"} />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((cat) => {
-                  const catData = categoryMap.get(cat.id);
-                  const iconComponent = getIconComponent(catData?.icon);
-                  return (
-                    <SelectItem key={cat.id} value={String(cat.id)}>
-                      {iconComponent}
-                      <span>{cat.name}</span>
+        <FormSection title="Entry">
+          {showAccountPicker ? (
+            <div className="space-y-2">
+              <Label htmlFor="account">Account</Label>
+              <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                <SelectTrigger id="account" className={dialogSelectClassName}>
+                  <SelectValue placeholder="Select an account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {transactionAccounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}
                     </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-      </div>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="amount">Amount ({currency})</Label>
-          <Input
-            id="amount"
-            type="number"
-            step="0.01"
-            min="0"
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            disabled={isLoading}
-            required
-          />
-        </div>
+          <FormRow>
+            <div className="space-y-2">
+              <Label htmlFor="amount">Amount ({currency})</Label>
+              <Input
+                id="amount"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                disabled={isLoading}
+                required
+              />
+            </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="date">Date</Label>
-          <Input
-            id="date"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            disabled={isLoading}
-            required
-          />
-        </div>
-      </div>
+            <div className="space-y-2">
+              <Label htmlFor="date">Date</Label>
+              <Input
+                id="date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                disabled={isLoading}
+                required
+              />
+            </div>
+          </FormRow>
 
-      <div className="space-y-2">
-        <Label htmlFor="payee">Payee</Label>
-        <PayeeCombobox
-          id="payee"
-          value={payeeName}
-          payees={payees}
-          onChange={setPayeeName}
-          disabled={isLoading}
-        />
-        {matchedPayee ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <PayeeMark image={matchedPayee.iconImage} icon={matchedPayee.icon} fallback="" />
-            <span>
-              {matchedPayee.iconImage || matchedPayee.icon
-                ? `Using the icon saved for ${matchedPayee.name}`
-                : `${matchedPayee.name} has no icon yet. Set one under Settings → Payees.`}
-            </span>
-          </p>
-        ) : cleanPayee(payeeName) ? (
-          <>
-            <PayeeIconSelect id="payee-icon" value={payeeIcon} onChange={setPayeeIcon} disabled={isLoading} />
-            <PayeeImageField
-              id="payee-image"
-              value={payeeIconImage}
-              onChange={setPayeeIconImage}
+          <FormRow>
+            <div className="space-y-2">
+              <Label htmlFor="type">Type</Label>
+              <Select value={type} onValueChange={(v) => handleTypeChange(v as "debit" | "credit")}>
+                <SelectTrigger id="type" className={dialogSelectClassName}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="debit">Debit</SelectItem>
+                  <SelectItem value="credit">Credit</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              {categoriesLoading ? (
+                <Skeleton className="h-10 w-full rounded-full" />
+              ) : (
+                <Select value={categoryId} onValueChange={setCategoryId} disabled={categoriesLoading || categories.length === 0}>
+                  <SelectTrigger id="category" className={dialogSelectClassName}>
+                    {categoryId && getIconComponent(categoryMap.get(Number(categoryId))?.icon) && (
+                      <span className="mr-2">{getIconComponent(categoryMap.get(Number(categoryId))?.icon)}</span>
+                    )}
+                    <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select category"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => {
+                      const catData = categoryMap.get(cat.id);
+                      const iconComponent = getIconComponent(catData?.icon);
+                      return (
+                        <SelectItem key={cat.id} value={String(cat.id)}>
+                          {iconComponent}
+                          <span>{cat.name}</span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </FormRow>
+        </FormSection>
+
+        <Separator />
+
+        <FormSection title="Payee">
+          <div className="space-y-2">
+            <Label htmlFor="payee">Name</Label>
+            <PayeeCombobox
+              id="payee"
+              value={payeeName}
+              payees={payees}
+              onChange={setPayeeName}
               disabled={isLoading}
             />
-          </>
+            {matchedPayee ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <PayeeMark image={matchedPayee.iconImage} icon={matchedPayee.icon} fallback="" />
+                <span>
+                  {matchedPayee.iconImage || matchedPayee.icon
+                    ? `Using the icon saved for ${matchedPayee.name}`
+                    : `${matchedPayee.name} has no icon yet. Set one under Settings → Payees.`}
+                </span>
+              </p>
+            ) : null}
+          </div>
+
+          {!matchedPayee && cleanPayee(payeeName) ? (
+            <div className="space-y-3 rounded-2xl border bg-muted/40 p-3">
+              <p className="text-sm font-medium">New payee</p>
+              <div className="space-y-2">
+                <Label htmlFor="payee-icon">Icon</Label>
+                <PayeeIconSelect id="payee-icon" value={payeeIcon} onChange={setPayeeIcon} disabled={isLoading} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="payee-image">Photo</Label>
+                <PayeeImageField
+                  id="payee-image"
+                  value={payeeIconImage}
+                  onChange={setPayeeIconImage}
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+          ) : null}
+        </FormSection>
+
+        <Separator />
+
+        <FormSection title="Notes">
+          <div className="space-y-2">
+            <Label htmlFor="description">Statement line (optional)</Label>
+            <Textarea
+              id="description"
+              className="rounded-2xl px-4"
+              placeholder="Original statement text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              disabled={isLoading}
+              rows={2}
+            />
+          </div>
+        </FormSection>
+      </div>
+
+      <DialogFooter className={dialogFormFooterClassName}>
+        {onCancel ? (
+          <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+            Cancel
+          </Button>
         ) : null}
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="description">Statement line (optional)</Label>
-        <Textarea
-          id="description"
-          placeholder="Original statement text"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          disabled={isLoading}
-          rows={2}
-        />
-      </div>
-
-      <Button type="submit" className="w-full" disabled={isLoading || !amount || !currentAccountId || !categoryId}>
-        {isLoading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            {mode === "edit" ? "Updating..." : "Adding..."}
-          </>
-        ) : (
-          mode === "edit" ? "Update Transaction" : "Add Transaction"
-        )}
-      </Button>
+        <Button type="submit" disabled={isLoading || !amount || !currentAccountId || !categoryId}>
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {mode === "edit" ? "Updating..." : "Adding..."}
+            </>
+          ) : (
+            mode === "edit" ? "Update Transaction" : "Add Transaction"
+          )}
+        </Button>
+      </DialogFooter>
     </form>
   );
 };

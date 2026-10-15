@@ -33,6 +33,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TransactionForm } from "@/components/transaction-form";
+import { dialogFormContentClassName, dialogFormHeaderClassName } from "@/components/form-section";
 import { TransferForm } from "@/components/transfer-form";
 import { BulkRecategorizeBar, type BulkCategory } from "@/components/ledger/bulk-recategorize-bar";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
@@ -550,14 +551,15 @@ const TransactionsPage = () => {
                   Add Transaction
                 </Button>
               </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
+              <DialogContent className={dialogFormContentClassName}>
+                <DialogHeader className={dialogFormHeaderClassName}>
                   <DialogTitle>Add Transaction</DialogTitle>
-                  <DialogDescription>Create a new transaction</DialogDescription>
+                  <DialogDescription>Record the amount, category, and payee.</DialogDescription>
                 </DialogHeader>
                 <TransactionForm
                   accounts={transactionAccounts}
                   onSuccess={handleTransactionCreated}
+                  onCancel={() => setIsCreateTransactionDialogOpen(false)}
                 />
               </DialogContent>
             </Dialog>
@@ -1032,10 +1034,10 @@ const TransactionsPage = () => {
       {/* Edit Transaction Dialog */}
       {editingTransaction && (
         <Dialog open={isEditTransactionDialogOpen} onOpenChange={setIsEditTransactionDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
+          <DialogContent className={dialogFormContentClassName}>
+            <DialogHeader className={dialogFormHeaderClassName}>
               <DialogTitle>Edit Transaction</DialogTitle>
-              <DialogDescription>Update transaction details</DialogDescription>
+              <DialogDescription>Update the amount, category, and payee.</DialogDescription>
             </DialogHeader>
             <TransactionForm
               accountId={editingTransaction.accountId}
@@ -1043,6 +1045,7 @@ const TransactionsPage = () => {
               transaction={editingTransaction}
               mode="edit"
               onSuccess={handleTransactionUpdated}
+              onCancel={() => setIsEditTransactionDialogOpen(false)}
             />
           </DialogContent>
         </Dialog>

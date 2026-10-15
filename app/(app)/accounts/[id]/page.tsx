@@ -69,6 +69,7 @@ import { TransferForm } from "@/components/transfer-form";
 import { BalanceUpdateForm } from "@/components/balance-update-form";
 import { InvestmentBalanceForm } from "@/components/investment-balance-form";
 import { AccountEditForm } from "@/components/account-edit-form";
+import { dialogFormContentClassName, dialogFormHeaderClassName } from "@/components/form-section";
 import { AccountMark } from "@/components/accounts/account-mark";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
@@ -557,10 +558,10 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                 Edit
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
+            <DialogContent className={dialogFormContentClassName}>
+              <DialogHeader className={dialogFormHeaderClassName}>
                 <DialogTitle>Edit {account.name}</DialogTitle>
-                <DialogDescription>Update account details</DialogDescription>
+                <DialogDescription>Update the name, classification, and opening balance.</DialogDescription>
               </DialogHeader>
               <AccountEditForm
                 key={account.id}
@@ -568,6 +569,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                 transactions={transactions}
                 balanceHistory={balanceHistory}
                 onSuccess={handleAccountUpdated}
+                onCancel={() => setIsEditAccountDialogOpen(false)}
               />
             </DialogContent>
           </Dialog>
@@ -668,10 +670,10 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
       {/* Edit Transaction Dialog */}
       {account.type === "transaction" && editingTransaction && (
         <Dialog open={isEditTransactionDialogOpen} onOpenChange={setIsEditTransactionDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
+          <DialogContent className={dialogFormContentClassName}>
+            <DialogHeader className={dialogFormHeaderClassName}>
               <DialogTitle>Edit Transaction</DialogTitle>
-              <DialogDescription>Update transaction details</DialogDescription>
+              <DialogDescription>Update the amount, category, and payee.</DialogDescription>
             </DialogHeader>
             <TransactionForm
               accountId={id}
@@ -679,6 +681,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
               transaction={editingTransaction}
               mode="edit"
               onSuccess={handleTransactionUpdated}
+              onCancel={() => setIsEditTransactionDialogOpen(false)}
             />
           </DialogContent>
         </Dialog>
@@ -694,17 +697,18 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                   Add Transaction
                 </Button>
               </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
+              <DialogContent className={dialogFormContentClassName}>
+                <DialogHeader className={dialogFormHeaderClassName}>
                   <DialogTitle>Add Transaction</DialogTitle>
                   <DialogDescription>
-                    Add a new transaction to {account.name}
+                    Record a transaction on {account.name}.
                   </DialogDescription>
                 </DialogHeader>
                 <TransactionForm
                   accountId={id}
                   currency={account.currency}
                   onSuccess={handleTransactionCreated}
+                  onCancel={() => setIsTransactionDialogOpen(false)}
                 />
               </DialogContent>
             </Dialog>

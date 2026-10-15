@@ -27,6 +27,17 @@ import { DEFAULT_ACCOUNT_CURRENCY, SUPPORTED_CURRENCIES, type SupportedCurrency 
 import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AccountAppearanceFields } from "@/components/accounts/account-appearance-fields";
+import {
+  dialogFormBodyClassName,
+  dialogFormContentClassName,
+  dialogFormFooterClassName,
+  dialogFormHeaderClassName,
+  dialogLockedClassName,
+  dialogSelectClassName,
+  FormRow,
+  FormSection,
+} from "@/components/form-section";
+import { Separator } from "@/components/ui/separator";
 
 interface AccountCreateDialogProps {
   open: boolean;
@@ -130,169 +141,186 @@ export const AccountCreateDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className={dialogFormContentClassName}>
+        <DialogHeader className={dialogFormHeaderClassName}>
           <DialogTitle>Create Account</DialogTitle>
           <DialogDescription>
-            Enter the details for your new account. Choose between a balance account (tracks
-            balance changes), a transaction account (tracks individual transactions), or an
-            investment account (tracks contributions and market value).
+            Set the name, classification, and opening balance.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="name">Account Name</Label>
-            <Input
-              id="name"
-              placeholder="e.g., Savings Account, Credit Card"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={isLoading}
-              required
-            />
-          </div>
-
-          <AccountAppearanceFields
-            name={name}
-            icon={icon}
-            iconImage={iconImage}
-            onIconChange={setIcon}
-            onIconImageChange={setIconImage}
-            disabled={isLoading}
-          />
-
-          <div className="grid gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="type">Account Type</Label>
-              <Select value={type} onValueChange={(v) => setType(v as "balance" | "transaction" | "investment")}>
-                <SelectTrigger id="type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="balance">
-                    <div className="flex flex-col items-start">
-                      <span>Balance Account</span>
-                      <span className="text-xs text-muted-foreground">
-                        Track balance changes over time
-                      </span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="transaction">
-                    <div className="flex flex-col items-start">
-                      <span>Transaction Account</span>
-                      <span className="text-xs text-muted-foreground">
-                        Track individual transactions
-                      </span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="investment">
-                    <div className="flex flex-col items-start">
-                      <span>Investment Account</span>
-                      <span className="text-xs text-muted-foreground">
-                        Track contributions and profit/loss
-                      </span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="nature">Account Nature</Label>
-              {isInvestment ? (
-                <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
-                  Asset (investment accounts are always assets)
-                </div>
-              ) : (
-                <Select value={nature} onValueChange={(v) => setNature(v as "asset" | "liability")}>
-                  <SelectTrigger id="nature">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="asset">
-                      <div className="flex flex-col items-start">
-                        <span>Asset</span>
-                        <span className="text-xs text-muted-foreground">
-                          Increases your net worth
-                        </span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="liability">
-                      <div className="flex flex-col items-start">
-                        <span>Liability</span>
-                        <span className="text-xs text-muted-foreground">
-                          Decreases your net worth
-                        </span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="category">Category</Label>
-            {categoriesLoading ? (
-              <Skeleton className="h-9 w-full" />
-            ) : (
-              <Select value={category} onValueChange={setCategory} disabled={categoriesLoading || categories.length === 0}>
-                <SelectTrigger id="category">
-                  <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select a category"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.identifier} value={cat.identifier}>
-                      {cat.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-col overflow-hidden">
+          <div className={dialogFormBodyClassName}>
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
-          </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="currency">Currency</Label>
-              <Select value={currency} onValueChange={(v) => setCurrency(v as SupportedCurrency)}>
-                <SelectTrigger id="currency">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SUPPORTED_CURRENCIES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {!isInvestment && (
+            <FormSection title="Details">
               <div className="space-y-2">
-                <Label htmlFor="initialBalance">Initial Balance</Label>
+                <Label htmlFor="name">Account Name</Label>
                 <Input
-                  id="initialBalance"
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={initialBalance}
-                  onChange={(e) => setInitialBalance(e.target.value)}
+                  id="name"
+                  placeholder="e.g., Savings Account, Credit Card"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   disabled={isLoading}
+                  required
                 />
               </div>
-            )}
+
+              <FormRow>
+                <div className="space-y-2">
+                  <Label htmlFor="type">Account Type</Label>
+                  <Select value={type} onValueChange={(v) => setType(v as "balance" | "transaction" | "investment")}>
+                    <SelectTrigger id="type" className={dialogSelectClassName}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="balance">
+                        <div className="flex flex-col items-start">
+                          <span>Balance Account</span>
+                          <span className="text-xs text-muted-foreground">
+                            Track balance changes over time
+                          </span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="transaction">
+                        <div className="flex flex-col items-start">
+                          <span>Transaction Account</span>
+                          <span className="text-xs text-muted-foreground">
+                            Track individual transactions
+                          </span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="investment">
+                        <div className="flex flex-col items-start">
+                          <span>Investment Account</span>
+                          <span className="text-xs text-muted-foreground">
+                            Track contributions and profit/loss
+                          </span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="nature">Account Nature</Label>
+                  {isInvestment ? (
+                    <div id="nature" className={dialogLockedClassName}>
+                      Asset
+                    </div>
+                  ) : (
+                    <Select value={nature} onValueChange={(v) => setNature(v as "asset" | "liability")}>
+                      <SelectTrigger id="nature" className={dialogSelectClassName}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="asset">
+                          <div className="flex flex-col items-start">
+                            <span>Asset</span>
+                            <span className="text-xs text-muted-foreground">
+                              Increases your net worth
+                            </span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="liability">
+                          <div className="flex flex-col items-start">
+                            <span>Liability</span>
+                            <span className="text-xs text-muted-foreground">
+                              Decreases your net worth
+                            </span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {isInvestment ? (
+                    <p className="text-xs text-muted-foreground">Investment accounts are assets.</p>
+                  ) : null}
+                </div>
+              </FormRow>
+
+              <div className="space-y-2">
+                <Label htmlFor="category">Category</Label>
+                {categoriesLoading ? (
+                  <Skeleton className="h-10 w-full rounded-full" />
+                ) : (
+                  <Select value={category} onValueChange={setCategory} disabled={categoriesLoading || categories.length === 0}>
+                    <SelectTrigger id="category" className={dialogSelectClassName}>
+                      <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select a category"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.identifier} value={cat.identifier}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </FormSection>
+
+            <Separator />
+
+            <FormSection title="Opening balance">
+              <FormRow>
+                <div className="space-y-2">
+                  <Label htmlFor="currency">Currency</Label>
+                  <Select value={currency} onValueChange={(v) => setCurrency(v as SupportedCurrency)}>
+                    <SelectTrigger id="currency" className={dialogSelectClassName}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUPPORTED_CURRENCIES.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="initialBalance">Initial Balance</Label>
+                  {isInvestment ? (
+                    <div id="initialBalance" className={dialogLockedClassName}>
+                      <span className="text-muted-foreground">Starts at zero</span>
+                    </div>
+                  ) : (
+                    <Input
+                      id="initialBalance"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={initialBalance}
+                      onChange={(e) => setInitialBalance(e.target.value)}
+                      disabled={isLoading}
+                    />
+                  )}
+                </div>
+              </FormRow>
+            </FormSection>
+
+            <Separator />
+
+            <FormSection title="Appearance">
+              <AccountAppearanceFields
+                name={name}
+                icon={icon}
+                iconImage={iconImage}
+                onIconChange={setIcon}
+                onIconImageChange={setIconImage}
+                disabled={isLoading}
+              />
+            </FormSection>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className={dialogFormFooterClassName}>
             <Button
               type="button"
               variant="outline"
