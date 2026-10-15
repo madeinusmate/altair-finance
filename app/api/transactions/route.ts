@@ -4,6 +4,7 @@ import { eq, desc } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { isValidTransactionCategory, isValidTransactionCategoryForType } from "@/lib/db/category-helpers";
+import { resolvePayeeId } from "@/lib/payees/assign";
 
 // GET all transactions or by account
 export const GET = async (request: NextRequest): Promise<NextResponse> => {
@@ -50,7 +51,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { accountId, type, category, amount, description, date } = body;
+    const { accountId, type, category, amount, description, date, payeeName } = body;
 
     if (!accountId || !type || !category || amount === undefined || !date) {
       return NextResponse.json(
@@ -103,6 +104,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       category,
       amount: Number(amount),
       description: description || null,
+      payeeId: resolvePayeeId(db, typeof payeeName === "string" ? payeeName : null),
       date: new Date(date),
       createdAt: now,
     };
@@ -125,7 +127,7 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { id, type, category, amount, description, date } = body;
+    const { id, type, category, amount, description, date, payeeName } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Transaction ID is required" }, { status: 400 });
@@ -176,13 +178,23 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
-    const updates = {
+    const updates: {
+      type: "debit" | "credit";
+      category: string;
+      amount: number;
+      description: string | null;
+      date: Date;
+      payeeId?: string | null;
+    } = {
       type: type as "debit" | "credit",
       category,
       amount: amountValue,
       description: description || null,
       date: new Date(date),
     };
+    if (typeof payeeName === "string" || payeeName === null) {
+      updates.payeeId = resolvePayeeId(db, payeeName);
+    }
 
     db.update(schema.transactions).set(updates).where(eq(schema.transactions.id, id)).run();
 

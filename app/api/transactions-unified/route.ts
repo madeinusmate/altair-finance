@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, or, desc } from "drizzle-orm";
+import { getTableColumns } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 
@@ -19,20 +20,20 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     // Fetch transactions and transfers in parallel
     const [transactions, transfers] = await Promise.all([
       (async () => {
+        const query = db
+          .select({
+            ...getTableColumns(schema.transactions),
+            payeeName: schema.payees.name,
+          })
+          .from(schema.transactions)
+          .leftJoin(schema.payees, eq(schema.transactions.payeeId, schema.payees.id));
         if (accountId) {
-          return db
-            .select()
-            .from(schema.transactions)
+          return query
             .where(eq(schema.transactions.accountId, accountId))
             .orderBy(desc(schema.transactions.date))
             .all();
-        } else {
-          return db
-            .select()
-            .from(schema.transactions)
-            .orderBy(desc(schema.transactions.date))
-            .all();
         }
+        return query.orderBy(desc(schema.transactions.date)).all();
       })(),
       (async () => {
         if (accountId) {

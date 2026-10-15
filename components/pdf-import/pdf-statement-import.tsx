@@ -25,6 +25,7 @@ import {
 import { ParsedTransaction } from "@/lib/pdf/openai-client";
 import { calculatePdfHash } from "@/lib/pdf/file-hash";
 import { validateTransactionRows } from "@/lib/csv/import-validators";
+import { cleanPayee } from "@/lib/payees/normalize";
 import { buildAccountNameMap } from "@/lib/csv/import-validators";
 
 const normalizeAccountName = (name: string) => name.trim().toLowerCase();
@@ -76,6 +77,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
   const [importError, setImportError] = useState<string | null>(null);
   const [existingTransactions, setExistingTransactions] = useState<Transaction[]>([]);
   const [existingTransfers, setExistingTransfers] = useState<Transfer[]>([]);
+  const [payees, setPayees] = useState<Array<{ id: string; name: string }>>([]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const accountMap = useMemo(() => buildAccountNameMap(accounts), [accounts]);
@@ -144,12 +146,14 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
       if (!key && !usesBooksOwner) return;
 
       try {
-        const [accountsData, categoriesData] = await Promise.all([
+        const [accountsData, categoriesData, payeesData] = await Promise.all([
           apiClient.get<Account[]>("/api/accounts"),
           apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
+          apiClient.get<{ payees: Array<{ id: string; name: string }> }>("/api/payees"),
         ]);
         setAccounts(accountsData);
         setTransactionCategories(categoriesData.categories.map((c) => c.name));
+        setPayees(payeesData.payees || []);
       } catch (error) {
         console.error(error);
       }
@@ -275,6 +279,8 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
         id: `pdf-${index}`,
         date: row.date,
         description: row.description,
+        payeeName: cleanPayee(row.description)?.displayName ?? "",
+        payeeEdited: false,
         amount: parseFloat(row.amount) || 0,
         category: row.category,
         type: row.type as "debit" | "credit",
@@ -304,6 +310,9 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
         const updatedRow = { ...row, ...updates };
 
         // Re-validate if needed
+        if (updates.description && !row.payeeEdited && !updatedRow.isTransfer) {
+          updatedRow.payeeName = cleanPayee(updates.description)?.displayName ?? "";
+        }
         if (updates.date || updates.amount || updates.description || updates.category || updates.type) {
           const accountId = updatedRow.isTransfer
             ? updatedRow.fromAccountId || selectedAccountId
@@ -368,6 +377,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
           category: row.category,
           amount: row.amount,
           description: row.description || null,
+          payeeName: row.excluded || row.duplicate ? null : row.payeeName || null,
           date: row.date,
         };
       });
@@ -444,6 +454,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
             <PdfReviewTable
               rows={rows}
               accounts={accounts}
+              payees={payees}
               transactionCategories={transactionCategories}
               onRowChange={handleRowChange}
               onToggleExclude={handleToggleExclude}

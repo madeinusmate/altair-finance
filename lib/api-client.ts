@@ -34,6 +34,19 @@ export const apiClient = {
     return response.json();
   },
 
+  patch: async <T>(url: string, data: unknown): Promise<T> => {
+    const response = await fetch(url, {
+      method: "PATCH",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Request failed");
+    }
+    return response.json();
+  },
+
   put: async <T>(url: string, data: unknown): Promise<T> => {
     const response = await fetch(url, {
       method: "PUT",

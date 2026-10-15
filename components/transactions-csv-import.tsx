@@ -20,8 +20,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { PayeeCombobox } from "@/components/payee-combobox";
+import { cleanPayee } from "@/lib/payees/normalize";
 
-type TransactionRow = ParsedTransactionRow & { duplicate?: boolean };
+type TransactionRow = ParsedTransactionRow & {
+  duplicate?: boolean;
+  payeeName?: string;
+  payeeEdited?: boolean;
+};
+
+type PayeeOption = { id: string; name: string };
+
+const withSuggestedPayee = (row: TransactionRow): TransactionRow => {
+  if (row.type === "transfer" || row.payeeEdited) return row;
+  return { ...row, payeeName: cleanPayee(row.description)?.displayName ?? "" };
+};
 
 const normalizeAccountName = (name: string) => name.trim().toLowerCase();
 
@@ -59,6 +72,7 @@ export const TransactionsCsvImport = () => {
   const [importError, setImportError] = useState<string | null>(null);
   const [existingTransactions, setExistingTransactions] = useState<Transaction[]>([]);
   const [existingTransfers, setExistingTransfers] = useState<Transfer[]>([]);
+  const [payees, setPayees] = useState<PayeeOption[]>([]);
 
   const accountMap = useMemo(() => buildAccountNameMap(accounts), [accounts]);
 
@@ -126,12 +140,14 @@ export const TransactionsCsvImport = () => {
       if (!key && !usesBooksOwner) return;
 
       try {
-        const [accountsData, categoriesData] = await Promise.all([
+        const [accountsData, categoriesData, payeesData] = await Promise.all([
           apiClient.get<Account[]>("/api/accounts"),
           apiClient.get<{ categories: Array<{ name: string }> }>("/api/transaction-categories"),
+          apiClient.get<{ payees: PayeeOption[] }>("/api/payees"),
         ]);
         setAccounts(accountsData);
         setTransactionCategories(categoriesData.categories.map((c) => c.name));
+        setPayees(payeesData.payees || []);
       } catch (error) {
         console.error(error);
       }
@@ -205,7 +221,7 @@ export const TransactionsCsvImport = () => {
       }
 
       const validated = validateTransactionRows(result.data, accounts, transactionCategories);
-      setRows(validated);
+      setRows(validated.map((row) => withSuggestedPayee(row)));
     } catch (error) {
       setParseErrors([error instanceof Error ? error.message : "Failed to parse CSV file"]);
     }
@@ -230,11 +246,13 @@ export const TransactionsCsvImport = () => {
           transfer_account: updatedRow.transferAccount,
         };
         const [validated] = validateTransactionRows([rawRow], accounts, transactionCategories);
-        const updated = {
+        const updated = withSuggestedPayee({
           ...validated,
           id: row.id,
           rowNumber: row.rowNumber,
-        };
+          payeeName: key === "payeeName" ? value : row.payeeName,
+          payeeEdited: key === "payeeName" ? true : row.payeeEdited,
+        });
         return applyDuplicateFlag(updated);
       });
 
@@ -281,6 +299,7 @@ export const TransactionsCsvImport = () => {
           category: row.category || "Other",
           amount: Number(row.amount),
           description: row.description || null,
+          payeeName: row.duplicate ? null : row.payeeName || null,
           date: row.date,
         };
       });
@@ -361,6 +380,21 @@ export const TransactionsCsvImport = () => {
                   ),
                 },
                 { key: "description", label: "Description" },
+                {
+                  key: "payeeName",
+                  label: "Payee",
+                  render: (row, onChange) =>
+                    row.type === "transfer" ? (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    ) : (
+                      <PayeeCombobox
+                        id={`payee-${row.id}`}
+                        value={row.payeeName || ""}
+                        payees={payees}
+                        onChange={onChange}
+                      />
+                    ),
+                },
                 { key: "amount", label: "Amount", inputType: "number" },
                 {
                   key: "category",

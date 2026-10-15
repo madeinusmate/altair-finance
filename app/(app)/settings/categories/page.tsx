@@ -12,6 +12,7 @@ import { AccountCategoriesTable } from "@/components/category-management/account
 import { CategoryEditDialog } from "@/components/category-management/category-edit-dialog";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import { PayeesSettings } from "@/components/payees/payees-settings";
 
 interface TransactionCategory {
   id: number;
@@ -143,6 +144,8 @@ const CategoriesPage = () => {
           )}
         </CardContent>
       </Card>
+
+      <PayeesSettings />
 
       <CategoryEditDialog
         open={showCreateTransaction}

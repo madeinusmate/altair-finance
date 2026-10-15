@@ -38,6 +38,7 @@ import { CategoryBadge } from "@/components/category-management/category-badge";
 import { toast } from "sonner";
 import { Search, ArrowLeftRight, Pencil, Trash2, Plus } from "lucide-react";
 import { Transaction, Account, Transfer } from "@/lib/db/schema";
+import { transactionSubtitle, transactionTitle } from "@/lib/payees/display";
 import { format } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -50,8 +51,10 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 
+type LedgerTransaction = Transaction & { payeeName?: string | null };
+
 type UnifiedItem = 
-  | { type: "transaction"; data: Transaction }
+  | { type: "transaction"; data: LedgerTransaction }
   | { type: "transfer"; data: Transfer };
 
 const DELETE_UNDO_MS = 5000;
@@ -67,7 +70,9 @@ const formatCurrency = (amount: number, currency: string): string => {
 
 const TransactionsPage = () => {
   const { getKey, usesBooksOwner } = useAuth();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<LedgerTransaction[]>([]);
+  const [payees, setPayees] = useState<Array<{ id: string; name: string }>>([]);
+  const [payeeFilter, setPayeeFilter] = useState<string>("all");
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
@@ -83,13 +88,13 @@ const TransactionsPage = () => {
   const [isCreateTransactionDialogOpen, setIsCreateTransactionDialogOpen] = useState(false);
   const [isCreateTransferDialogOpen, setIsCreateTransferDialogOpen] = useState(false);
   const [isEditTransferDialogOpen, setIsEditTransferDialogOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<LedgerTransaction | null>(null);
   const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const pendingDeletesRef = useRef<Map<string, number>>(new Map());
 
-  const replaceUnified = (unifiedData: { transactions: Transaction[]; transfers: Transfer[] }) => {
+  const replaceUnified = (unifiedData: { transactions: LedgerTransaction[]; transfers: Transfer[] }) => {
     setTransactions(unifiedData.transactions.filter((item) => !pendingDeletesRef.current.has(item.id)));
     setTransfers(unifiedData.transfers.filter((item) => !pendingDeletesRef.current.has(item.id)));
   };
@@ -103,13 +108,15 @@ const TransactionsPage = () => {
       }
 
       try {
-        const [unifiedData, accountsData, categoriesData] = await Promise.all([
-          apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>("/api/transactions-unified"),
+        const [unifiedData, accountsData, categoriesData, payeesData] = await Promise.all([
+          apiClient.get<{ transactions: LedgerTransaction[]; transfers: Transfer[] }>("/api/transactions-unified"),
           apiClient.get<Account[]>("/api/accounts"),
           apiClient.get<{ categories: Array<{ name: string; color?: string | null; icon?: string | null }> }>("/api/transaction-categories"),
+          apiClient.get<{ payees: Array<{ id: string; name: string }> }>("/api/payees"),
         ]);
         replaceUnified(unifiedData);
         setAccounts(accountsData);
+        setPayees(payeesData.payees || []);
         setTransactionCategories(categoriesData.categories.map((c) => c.name));
         // Create a map of category name to category metadata
         const catMap = new Map<string, { color?: string | null; icon?: string | null }>();
@@ -284,11 +291,16 @@ const TransactionsPage = () => {
         if (searchQuery) {
           const query = searchQuery.toLowerCase();
           const matchesDescription = t.description?.toLowerCase().includes(query);
+          const matchesPayee = t.payeeName?.toLowerCase().includes(query);
           const matchesCategory = t.category.toLowerCase().includes(query);
           const matchesAccount = account?.name.toLowerCase().includes(query);
-          if (!matchesDescription && !matchesCategory && !matchesAccount) {
+          if (!matchesDescription && !matchesPayee && !matchesCategory && !matchesAccount) {
             return false;
           }
+        }
+
+        if (payeeFilter !== "all" && t.payeeId !== payeeFilter) {
+          return false;
         }
 
         if (categoryFilter !== "all" && t.category !== categoryFilter) {
@@ -337,6 +349,10 @@ const TransactionsPage = () => {
           return false; // Only show transfers where fromAccount matches (per user requirement)
         }
 
+        if (payeeFilter !== "all") {
+          return false;
+        }
+
         return true;
       }
     }).sort((a, b) => {
@@ -345,7 +361,17 @@ const TransactionsPage = () => {
       const dateB = new Date(b.data.date).getTime();
       return dateB - dateA;
     });
-  }, [unifiedItems, searchQuery, categoryFilter, typeFilter, accountFilter, accountMap]);
+  }, [unifiedItems, searchQuery, categoryFilter, typeFilter, accountFilter, payeeFilter, accountMap]);
+
+  const debitTotals = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const item of filteredItems) {
+      if (item.type !== "transaction" || item.data.type !== "debit") continue;
+      const currency = accountMap.get(item.data.accountId)?.currency || "USD";
+      totals.set(currency, (totals.get(currency) ?? 0) + item.data.amount);
+    }
+    return [...totals.entries()];
+  }, [filteredItems, accountMap]);
 
   // Pagination logic
   const totalItems = filteredItems.length;
@@ -357,7 +383,7 @@ const TransactionsPage = () => {
   // Reset to page 1 when filters or items per page change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, categoryFilter, typeFilter, accountFilter, itemsPerPage]);
+  }, [searchQuery, categoryFilter, typeFilter, accountFilter, payeeFilter, itemsPerPage]);
 
   if (isLoading) {
     return (
@@ -544,6 +570,19 @@ const TransactionsPage = () => {
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={payeeFilter} onValueChange={setPayeeFilter}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Payee" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Payees</SelectItem>
+                  {payees.map((payee) => (
+                    <SelectItem key={payee.id} value={payee.id}>
+                      {payee.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Select value={typeFilter} onValueChange={setTypeFilter}>
                 <SelectTrigger className="w-full sm:w-[130px]">
                   <SelectValue placeholder="Type" />
@@ -566,7 +605,7 @@ const TransactionsPage = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Description</TableHead>
+                      <TableHead>Payee</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Account</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
@@ -584,6 +623,8 @@ const TransactionsPage = () => {
                           const transaction = item.data;
                           const account = accountMap.get(transaction.accountId);
                           const isCredit = transaction.type === "credit";
+                          const title = transactionTitle(transaction.payeeName, transaction.description, transaction.category);
+                          const subtitle = transactionSubtitle(transaction.payeeName, transaction.description);
                           return (
                             <Fragment key={`transaction-${transaction.id}`}>
                               {showDay && (
@@ -597,9 +638,14 @@ const TransactionsPage = () => {
                                 <TableCell className="max-w-[240px] font-medium">
                                   <div className="flex items-center gap-3">
                                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm">
-                                      {(transaction.description?.trim() || transaction.category).charAt(0).toUpperCase()}
+                                      {title.charAt(0).toUpperCase()}
                                     </div>
-                                    <span className="truncate">{transaction.description?.trim() || transaction.category}</span>
+                                    <div className="min-w-0">
+                                      <span className="block truncate">{title}</span>
+                                      {subtitle ? (
+                                        <span className="block truncate text-xs font-normal text-muted-foreground">{subtitle}</span>
+                                      ) : null}
+                                    </div>
                                   </div>
                                 </TableCell>
                                 <TableCell>
@@ -747,6 +793,12 @@ const TransactionsPage = () => {
                     </TooltipProvider>
                   </TableBody>
                 </Table>
+                {debitTotals.length > 0 && (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Debit total:{" "}
+                    {debitTotals.map(([currency, amount]) => formatCurrency(amount, currency)).join(" · ")}
+                  </p>
+                )}
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between mt-4">
                     <div className="text-sm text-muted-foreground w-full" >

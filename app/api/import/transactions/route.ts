@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { isValidTransactionCategory, isValidTransactionCategoryForType } from "@/lib/db/category-helpers";
+import { resolvePayeeId } from "@/lib/payees/assign";
 
 type ImportTransactionRow =
   | {
@@ -12,6 +13,7 @@ type ImportTransactionRow =
       category: string;
       amount: number;
       description?: string | null;
+      payeeName?: string | null;
       date: string;
     }
   | {
@@ -179,6 +181,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
             category: row.category,
             amount: Number(row.amount),
             description: row.description || null,
+            payeeId: resolvePayeeId(db, row.payeeName),
             date: parsedDate,
             createdAt: now,
             importId: importId || null,

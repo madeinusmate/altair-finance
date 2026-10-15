@@ -20,13 +20,14 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import * as LucideIcons from "lucide-react";
+import { PayeeCombobox } from "@/components/payee-combobox";
 
 interface TransactionFormProps {
   accountId?: string;
   currency?: string;
   accounts?: Account[];
   onSuccess: () => void;
-  transaction?: Transaction;
+  transaction?: Transaction & { payeeName?: string | null };
   mode?: "create" | "edit";
 }
 
@@ -75,6 +76,8 @@ export const TransactionForm = ({
     transaction?.amount.toString() || ""
   );
   const [description, setDescription] = useState(transaction?.description || "");
+  const [payeeName, setPayeeName] = useState(transaction?.payeeName || "");
+  const [payees, setPayees] = useState<Array<{ id: string; name: string }>>([]);
   const [date, setDate] = useState(
     transaction ? new Date(transaction.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
   );
@@ -124,6 +127,20 @@ export const TransactionForm = ({
     fetchCategories();
   }, [getKey, type, transaction]);
 
+  useEffect(() => {
+    const fetchPayees = async () => {
+      const key = getKey();
+      if (!key && !usesBooksOwner) return;
+      try {
+        const data = await apiClient.get<{ payees: Array<{ id: string; name: string }> }>("/api/payees");
+        setPayees(data.payees || []);
+      } catch (error) {
+        console.error("Error fetching payees:", error);
+      }
+    };
+    fetchPayees();
+  }, [getKey, usesBooksOwner]);
+
   // Update selected account when accounts change
   useEffect(() => {
     if (!providedAccountId && transactionAccounts.length > 0 && !transactionAccounts.find(a => a.id === selectedAccountId)) {
@@ -149,6 +166,7 @@ export const TransactionForm = ({
       setCategory(transaction.category);
       setAmount(transaction.amount.toString());
       setDescription(transaction.description || "");
+      setPayeeName(transaction.payeeName || "");
       setDate(new Date(transaction.date).toISOString().split("T")[0]);
     }
   }, [transaction]);
@@ -166,6 +184,7 @@ export const TransactionForm = ({
           category,
           amount: parseFloat(amount),
           description: description || null,
+          payeeName: payeeName.trim() || null,
           date,
         });
         toast.success("Transaction updated successfully");
@@ -179,6 +198,7 @@ export const TransactionForm = ({
           category,
           amount: parseFloat(amount),
           description: description || null,
+          payeeName: payeeName.trim() || null,
           date,
         });
         toast.success("Transaction added");
@@ -299,10 +319,21 @@ export const TransactionForm = ({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="description">Description (optional)</Label>
+        <Label htmlFor="payee">Payee</Label>
+        <PayeeCombobox
+          id="payee"
+          value={payeeName}
+          payees={payees}
+          onChange={setPayeeName}
+          disabled={isLoading}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="description">Statement line (optional)</Label>
         <Textarea
           id="description"
-          placeholder="What was this transaction for?"
+          placeholder="Original statement text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           disabled={isLoading}
