@@ -17,6 +17,7 @@ import { SpendingChart } from "@/components/dashboard/spending-chart";
 import { InvestmentPerformanceChart } from "@/components/dashboard/investment-performance-chart";
 import { NetCashChart } from "@/components/dashboard/net-cash-chart";
 import { BudgetTile } from "@/components/dashboard/budget-tile";
+import { SavingsRunwayCard, type SavingsRunwayData } from "@/components/dashboard/savings-runway-card";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { NetWorthCard } from "@/components/dashboard/net-worth-card";
 import { AccountCreateDialog } from "@/components/account-create-dialog";
@@ -153,6 +154,7 @@ const DashboardPage = () => {
   const [spendingData, setSpendingData] = useState<SpendingData | null>(null);
   const [investmentData, setInvestmentData] = useState<InvestmentPerformanceData | null>(null);
   const [monthlyIncomeExpenses, setMonthlyIncomeExpenses] = useState<MonthlyIncomeExpenses[] | null>(null);
+  const [savingsData, setSavingsData] = useState<SavingsRunwayData | null>(null);
   const [investmentAccounts, setInvestmentAccounts] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedInvestmentAccount, setSelectedInvestmentAccount] = useState<string | undefined>(undefined);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
@@ -201,7 +203,7 @@ const DashboardPage = () => {
         const endDateStr = format(dateRange.endDate, "yyyy-MM-dd");
 
         // Fetch all dashboard data in parallel
-        const [cashFlowSankeyRes, spendingRes, investmentRes, monthlyIncomeExpensesRes] = await Promise.all([
+        const [cashFlowSankeyRes, spendingRes, investmentRes, monthlyIncomeExpensesRes, savingsRes] = await Promise.all([
           apiClient.get<CashFlowSankeyData>(
             `/api/dashboard/cash-flow-sankey?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}`
           ).catch(() => null),
@@ -213,6 +215,9 @@ const DashboardPage = () => {
           ).catch(() => null) as Promise<InvestmentPerformanceData | null>,
           apiClient.get<MonthlyIncomeExpenses[]>(
             `/api/dashboard/monthly-income-expenses?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}`
+          ).catch(() => null),
+          apiClient.get<SavingsRunwayData>(
+            `/api/dashboard/savings?startDate=${startDateStr}&endDate=${endDateStr}&currency=${selectedCurrency}`
           ).catch(() => null),
         ]);
 
@@ -230,6 +235,10 @@ const DashboardPage = () => {
 
         if (monthlyIncomeExpensesRes) {
           setMonthlyIncomeExpenses(monthlyIncomeExpensesRes);
+        }
+
+        if (savingsRes) {
+          setSavingsData(savingsRes);
         }
 
         // Get investment accounts
@@ -250,6 +259,7 @@ const DashboardPage = () => {
 
 
   const hasData = data && data.accounts.length > 0;
+  const savingsCard = <SavingsRunwayCard data={savingsData} isLoading={isLoadingDashboard} />;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const greetingLine = profileName ? `${greeting}, ${profileName}` : greeting;
@@ -376,17 +386,21 @@ const DashboardPage = () => {
           )}
 
           {data?.hasUnsupportedCurrencies || !netWorthSummary ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                  Set a supported currency for every account to view net worth totals.
-                </div>
-              </CardContent>
-            </Card>
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{savingsCard}</div>
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                    Set a supported currency for every account to view net worth totals.
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           ) : (
             <>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <BudgetTile currency={selectedCurrency} />
+              {savingsCard}
               <Card className="h-full border-transparent shadow-none">
                 <CardContent className="px-4 py-4">
                   <p className="text-[13px] text-muted-foreground">Investment P/L</p>

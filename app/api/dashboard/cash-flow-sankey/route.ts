@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, gte, lte } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getEncryptionKey } from "@/lib/api-utils";
 import { type SupportedCurrency } from "@/lib/currencies";
-import { convertAmount, getFxSnapshot } from "@/lib/fx";
+import { getFxSnapshot } from "@/lib/fx";
+import { computeRangeFlows, toSankeyNodes } from "@/lib/insights/flows";
 
 interface CashFlowSankeyData {
   income: number;
@@ -32,129 +33,42 @@ export const GET = async (request: NextRequest): Promise<NextResponse> => {
     const startDate = new Date(startDateParam);
     const endDate = new Date(endDateParam);
 
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
       return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
     }
 
     const db = getDb(key);
     const fxSnapshot = await getFxSnapshot(db);
 
-    // Get all accounts for currency mapping
     const accounts = db.select().from(schema.accounts).all();
-    const accountCurrencyMap = new Map(accounts.map((acc) => [acc.id, acc.currency]));
-    const accountTypeMap = new Map(accounts.map((acc) => [acc.id, acc.type]));
-
-    // Calculate Income: Sum of all credit transactions on transaction accounts
-    const incomeTransactions = db
+    const transactions = db
       .select()
       .from(schema.transactions)
-      .where(
-        and(
-          eq(schema.transactions.type, "credit"),
-          gte(schema.transactions.date, startDate),
-          lte(schema.transactions.date, endDate)
-        )
-      )
+      .where(and(gte(schema.transactions.date, startDate), lte(schema.transactions.date, endDate)))
       .all();
-
-    let totalIncome = 0;
-    incomeTransactions.forEach((transaction) => {
-      const accountType = accountTypeMap.get(transaction.accountId);
-      // Only count credits on transaction accounts
-      if (accountType === "transaction") {
-        const accountCurrency = accountCurrencyMap.get(transaction.accountId);
-        const convertedAmount = convertAmount(
-          transaction.amount,
-          accountCurrency as SupportedCurrency,
-          currency,
-          fxSnapshot.rates
-        );
-        totalIncome += convertedAmount;
-      }
-    });
-
-    // Calculate Expenses: Sum of all debit transactions on transaction accounts
-    const expenseTransactions = db
-      .select()
-      .from(schema.transactions)
-      .where(
-        and(
-          eq(schema.transactions.type, "debit"),
-          gte(schema.transactions.date, startDate),
-          lte(schema.transactions.date, endDate)
-        )
-      )
-      .all();
-
-    let totalExpenses = 0;
-    expenseTransactions.forEach((transaction) => {
-      const accountType = accountTypeMap.get(transaction.accountId);
-      // Only count debits on transaction accounts
-      if (accountType === "transaction") {
-        const accountCurrency = accountCurrencyMap.get(transaction.accountId);
-        const convertedAmount = convertAmount(
-          transaction.amount,
-          accountCurrency as SupportedCurrency,
-          currency,
-          fxSnapshot.rates
-        );
-        totalExpenses += convertedAmount;
-      }
-    });
-
-    // Calculate Investment: Sum of toAmount from transfers where destination is an investment account
     const transfers = db
       .select()
       .from(schema.transfers)
-      .where(
-        and(
-          gte(schema.transfers.date, startDate),
-          lte(schema.transfers.date, endDate)
-        )
-      )
+      .where(and(gte(schema.transfers.date, startDate), lte(schema.transfers.date, endDate)))
       .all();
 
-    let totalInvestmentIn = 0;
-    let totalInvestmentOut = 0;
-
-    transfers.forEach((transfer) => {
-      const fromAccountType = accountTypeMap.get(transfer.fromAccountId);
-      const toAccountType = accountTypeMap.get(transfer.toAccountId);
-
-      if (toAccountType === "investment" && fromAccountType === "transaction") {
-        // Money flowing INTO investment from a transaction account
-        const toAccountCurrency = accountCurrencyMap.get(transfer.toAccountId);
-        const convertedAmount = convertAmount(
-          transfer.toAmount ?? transfer.amount,
-          toAccountCurrency as SupportedCurrency,
-          currency,
-          fxSnapshot.rates
-        );
-        totalInvestmentIn += convertedAmount;
-      } else if (fromAccountType === "investment" && toAccountType === "transaction") {
-        // Money flowing OUT of investment back to a transaction account (withdrawal)
-        const fromAccountCurrency = accountCurrencyMap.get(transfer.fromAccountId);
-        const convertedAmount = convertAmount(
-          transfer.fromAmount ?? transfer.amount,
-          fromAccountCurrency as SupportedCurrency,
-          currency,
-          fxSnapshot.rates
-        );
-        totalInvestmentOut += convertedAmount;
-      }
-      // Transfers between two investment accounts are ignored (rebalancing, not new investment)
+    const flows = computeRangeFlows({
+      accounts,
+      transactions,
+      transfers,
+      start: startDate,
+      end: endDate,
+      currency,
+      rates: fxSnapshot.rates,
+      unsupported: "throw",
     });
-
-    const totalInvestment = Math.max(0, totalInvestmentIn - totalInvestmentOut);
-
-    // Calculate Savings: Income - Investment - Expenses (can be negative)
-    const totalSavings = totalIncome - totalInvestment - totalExpenses;
+    const nodes = toSankeyNodes(flows);
 
     const result: CashFlowSankeyData = {
-      income: Math.max(0, totalIncome), // Ensure non-negative
-      investment: Math.max(0, totalInvestment), // Ensure non-negative
-      savings: totalSavings, // Can be negative
-      expenses: Math.max(0, totalExpenses), // Ensure non-negative
+      income: nodes.income,
+      investment: nodes.investment,
+      savings: nodes.savings,
+      expenses: nodes.expenses,
       currency,
     };
 
