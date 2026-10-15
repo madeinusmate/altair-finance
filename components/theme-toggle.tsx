@@ -1,42 +1,43 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Moon, Sun } from "lucide-react";
+import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
+const themes = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
+] as const;
+
 export const ThemeToggle = () => {
-  const { resolvedTheme, setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const value = mounted && resolvedTheme === "dark" ? "dark" : "light";
-
   return (
     <ToggleGroup
       type="single"
       variant="outline"
       spacing={1}
-      value={mounted ? value : ""}
+      value={mounted && theme ? theme : ""}
       onValueChange={(next) => {
-        if (next === "light" || next === "dark") {
+        if (next === "light" || next === "dark" || next === "system") {
           setTheme(next);
         }
       }}
       aria-label="Color theme"
-      className="grid w-full grid-cols-2"
     >
-      <ToggleGroupItem value="light" aria-label="Light mode" className="w-full rounded-full">
-        <Sun />
-        Light
-      </ToggleGroupItem>
-      <ToggleGroupItem value="dark" aria-label="Dark mode" className="w-full rounded-full">
-        <Moon />
-        Dark
-      </ToggleGroupItem>
+      {themes.map((item) => (
+        <ToggleGroupItem key={item.value} value={item.value} aria-label={`${item.label} mode`} className="rounded-full">
+          <item.icon />
+          {item.label}
+        </ToggleGroupItem>
+      ))}
     </ToggleGroup>
   );
 };

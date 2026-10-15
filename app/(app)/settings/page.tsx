@@ -13,6 +13,7 @@ import { Credits } from "@/components/settings/credits";
 import { EnabledCurrencies } from "@/components/settings/enabled-currencies";
 import { ProfileForm } from "@/components/settings/profile-form";
 import { AgentGrantCard } from "@/components/settings/agent-grant-card";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const SettingsPage = () => {
   const [isExporting, setIsExporting] = useState(false);
@@ -69,6 +70,16 @@ const SettingsPage = () => {
         </CardHeader>
         <CardContent>
           <ProfileForm />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Appearance</CardTitle>
+          <CardDescription>Choose light, dark, or match your system.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ThemeToggle />
         </CardContent>
       </Card>
 

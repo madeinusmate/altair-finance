@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Bot,
   LayoutDashboard,
   Wallet,
   ArrowLeftRight,
@@ -27,7 +28,6 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -169,20 +169,20 @@ export const AppSidebar = () => {
               href="/settings#agent"
               aria-label={agentConnected ? "Agent connected. Open settings" : "Agent disconnected. Open settings"}
             >
-              <span
-                className={cn(
-                  "size-2 shrink-0 rounded-full",
-                  agentConnected ? "bg-connected" : "bg-disconnected",
-                )}
-              />
+              <Bot className="h-4 w-4" />
               <span>Agent</span>
-              <span className="ml-auto text-xs text-muted-foreground">
+              <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                <span
+                  className={cn(
+                    "size-2 shrink-0 rounded-full",
+                    agentConnected ? "bg-connected" : "bg-disconnected",
+                  )}
+                />
                 {agentConnected ? "Connected" : "Disconnected"}
               </span>
             </Link>
           </Button>
         ) : null}
-        <ThemeToggle />
         <Button variant="ghost" className="w-full justify-start rounded-full" asChild>
           <Link href="/settings">
             <Settings className="h-4 w-4" />
