@@ -140,6 +140,18 @@ export const budgets = sqliteTable("budgets", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// category_name is the display name, same string transactions.category uses.
+// The unique index on (pattern, ifnull(transaction_type, '')) is created in lib/db/index.ts.
+export const categorizationRules = sqliteTable("categorization_rules", {
+  id: text("id").primaryKey(),
+  pattern: text("pattern").notNull(),
+  matchType: text("match_type").notNull().default("exact"),
+  categoryName: text("category_name").notNull(),
+  transactionType: text("transaction_type"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 export const userSettings = sqliteTable("user_settings", {
   id: text("id").primaryKey().default("user"),
   username: text("username").notNull(),
@@ -178,5 +190,7 @@ export type OpenBankingToken = typeof openBankingTokens.$inferSelect;
 export type NewOpenBankingToken = typeof openBankingTokens.$inferInsert;
 export type Budget = typeof budgets.$inferSelect;
 export type NewBudget = typeof budgets.$inferInsert;
+export type CategorizationRuleRecord = typeof categorizationRules.$inferSelect;
+export type NewCategorizationRuleRecord = typeof categorizationRules.$inferInsert;
 export type UserSettings = typeof userSettings.$inferSelect;
 export type NewUserSettings = typeof userSettings.$inferInsert;

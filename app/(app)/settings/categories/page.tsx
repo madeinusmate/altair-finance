@@ -10,12 +10,14 @@ import { ArrowLeft, Plus } from "lucide-react";
 import { TransactionCategoriesTable } from "@/components/category-management/transaction-categories-table";
 import { AccountCategoriesTable } from "@/components/category-management/account-categories-table";
 import { CategoryEditDialog } from "@/components/category-management/category-edit-dialog";
+import { DescriptionRule, DescriptionRulesCard } from "@/components/category-management/description-rules-card";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 
 interface TransactionCategory {
   id: number;
   name: string;
+  transactionType?: "debit" | "credit" | null;
   color?: string | null;
   icon?: string | null;
   createdAt: Date;
@@ -36,6 +38,7 @@ const CategoriesPage = () => {
   const { getKey, usesBooksOwner } = useAuth();
   const [transactionCategories, setTransactionCategories] = useState<TransactionCategory[]>([]);
   const [accountCategories, setAccountCategories] = useState<AccountCategory[]>([]);
+  const [descriptionRules, setDescriptionRules] = useState<DescriptionRule[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateTransaction, setShowCreateTransaction] = useState(false);
   const [showCreateAccount, setShowCreateAccount] = useState(false);
@@ -49,13 +52,15 @@ const CategoriesPage = () => {
 
     try {
       setIsLoading(true);
-      const [txData, acctData] = await Promise.all([
+      const [txData, acctData, rulesData] = await Promise.all([
         apiClient.get<{ categories: TransactionCategory[] }>("/api/transaction-categories"),
         apiClient.get<{ categories: AccountCategory[] }>("/api/account-categories"),
+        apiClient.get<{ rules: DescriptionRule[] }>("/api/categorization-rules").catch(() => ({ rules: [] })),
       ]);
 
       setTransactionCategories(txData.categories || []);
       setAccountCategories(acctData.categories || []);
+      setDescriptionRules(rulesData.rules || []);
     } catch (error) {
       console.error("Error fetching categories:", error);
       toast.error("Failed to load categories");
@@ -143,6 +148,27 @@ const CategoriesPage = () => {
           )}
         </CardContent>
       </Card>
+
+      {isLoading ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Description rules</CardTitle>
+            <CardDescription>
+              An exact description match fills this category during import review. Rules stay on this device.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </CardContent>
+        </Card>
+      ) : (
+        <DescriptionRulesCard
+          rules={descriptionRules}
+          categories={transactionCategories}
+          onChanged={fetchCategories}
+        />
+      )}
 
       <CategoryEditDialog
         open={showCreateTransaction}

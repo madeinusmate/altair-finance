@@ -47,6 +47,22 @@ const openSqlite = (encryptionKey: string): DatabaseInstance => {
   return sqlite;
 };
 
+const ensureCategorizationRulesTable = (sqlite: DatabaseInstance): void => {
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS categorization_rules (
+      id TEXT PRIMARY KEY,
+      pattern TEXT NOT NULL,
+      match_type TEXT NOT NULL DEFAULT 'exact',
+      category_name TEXT NOT NULL,
+      transaction_type TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_categorization_rules_pattern_type
+      ON categorization_rules(pattern, ifnull(transaction_type, ''));
+  `);
+};
+
 const ensureUserSettingsColumns = (sqlite: DatabaseInstance): void => {
   const table = sqlite
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'user_settings'")
@@ -75,6 +91,7 @@ const ensureUserSettingsColumns = (sqlite: DatabaseInstance): void => {
 
 export const runMigrations = (sqlite: DatabaseInstance): void => {
   try {
+    ensureCategorizationRulesTable(sqlite);
     ensureUserSettingsColumns(sqlite);
 
     // Migration: Create imports table if it doesn't exist
@@ -487,6 +504,18 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     CREATE INDEX IF NOT EXISTS idx_budgets_category_name ON budgets(category_name);
     CREATE INDEX IF NOT EXISTS idx_transactions_category_date_type ON transactions(category, date, type);
 
+    CREATE TABLE IF NOT EXISTS categorization_rules (
+      id TEXT PRIMARY KEY,
+      pattern TEXT NOT NULL,
+      match_type TEXT NOT NULL DEFAULT 'exact',
+      category_name TEXT NOT NULL,
+      transaction_type TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_categorization_rules_pattern_type
+      ON categorization_rules(pattern, ifnull(transaction_type, ''));
+
     INSERT INTO meta (id, schema_version, created_at)
     SELECT '${META_ID}', ${SCHEMA_VERSION}, strftime('%s','now')
     WHERE NOT EXISTS (SELECT 1 FROM meta WHERE id = '${META_ID}');
@@ -697,6 +726,12 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       ensureUserSettingsColumns(sqlite);
     } catch (error) {
       console.warn("[DB Migration] Could not create user_settings table:", error);
+    }
+
+    try {
+      ensureCategorizationRulesTable(sqlite);
+    } catch (error) {
+      console.warn("[DB Migration] Could not create categorization_rules table:", error);
     }
     
     console.log("[DB Init] Migrations completed");
