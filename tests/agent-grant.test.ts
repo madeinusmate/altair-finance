@@ -8,6 +8,7 @@ import {
   PASSPHRASE_SERVICE,
   buildLaunchAgentPlist,
   keychainHelperArgs,
+  readPlistAppRoot,
   readGrant,
   writeGrant,
   writePortFile,
@@ -54,5 +55,9 @@ describe("launch agent plist", () => {
     assert.match(plist, /NETLY_BOOKS_OWNER/);
     assert.equal(plist.includes("PRAGMA"), false);
     assert.equal(plist.includes("passphrase"), false);
+    assert.equal(
+      readPlistAppRoot(plist),
+      "/Applications/Netly.app/Contents/Resources/app.asar.unpacked",
+    );
   });
 });

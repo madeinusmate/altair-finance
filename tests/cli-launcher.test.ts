@@ -1,0 +1,38 @@
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { describe, it } from "node:test";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+
+describe("packaged netly launcher", () => {
+  it("follows the /usr/local/bin symlink to the bundled node and script", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "netly-launcher-"));
+    const resources = path.join(root, "Resources");
+    const bin = path.join(root, "bin");
+    const nodeDir = path.join(resources, "node", "arm64");
+    fs.mkdirSync(nodeDir, { recursive: true });
+    fs.mkdirSync(bin);
+    fs.copyFileSync(path.join(process.cwd(), "cli", "netly-packaged"), path.join(resources, "netly"));
+    fs.chmodSync(path.join(resources, "netly"), 0o755);
+    fs.writeFileSync(path.join(resources, "netly.mjs"), "process.stdout.write('books')\n");
+    fs.writeFileSync(
+      path.join(nodeDir, "node"),
+      "#!/bin/sh\nprintf '%s\\n' \"$1\"\n",
+    );
+    fs.chmodSync(path.join(nodeDir, "node"), 0o755);
+    fs.symlinkSync(path.join(resources, "netly"), path.join(bin, "netly"));
+
+    const linked = await execFileAsync(path.join(bin, "netly"), [], { cwd: root });
+    assert.equal(linked.stdout, `${path.join(resources, "netly.mjs")}\n`);
+
+    const fromPath = await execFileAsync("netly", [], {
+      cwd: root,
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` },
+    });
+    assert.equal(fromPath.stdout, `${path.join(resources, "netly.mjs")}\n`);
+  });
+});

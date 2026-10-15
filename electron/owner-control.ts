@@ -268,6 +268,16 @@ export const ensureKeychainHelper = async (
   return destination;
 };
 
+export const readPlistAppRoot = (plist: string): string | null => {
+  const match = plist.match(/<key>NETLY_APP_ROOT<\/key>\s*<string>([^<]*)<\/string>/);
+  if (!match) return null;
+  return match[1]
+    .replaceAll("&quot;", "\"")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&amp;", "&");
+};
+
 export const installLaunchAgentPlist = (plist: string, homeDirectory = os.homedir()): string => {
   const destination = launchAgentPlistPath(homeDirectory);
   fs.mkdirSync(path.dirname(destination), { recursive: true });

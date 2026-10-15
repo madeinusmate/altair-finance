@@ -17,6 +17,9 @@ export const loadBooksOwner = async (): Promise<void> => {
     }
     process.env.NETLY_API_TOKEN = token;
     setOwnerPassphrase(passphrase);
+    // Keep the write in this function. The production bundler drops a call
+    // whose only effect is a variable in another module.
+    (globalThis as typeof globalThis & { "netly.ownerPassphrase"?: string | null })["netly.ownerPassphrase"] = passphrase;
   } catch {
     console.error("[Books owner] Could not open the books");
   }

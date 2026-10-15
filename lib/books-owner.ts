@@ -1,11 +1,19 @@
-let ownerPassphrase: string | null = null;
+// The books owner starts in one server bundle and the API routes run in
+// another. The passphrase has to live on the process so both bundles see it.
+const ownerPassphraseKey = "netly.ownerPassphrase";
+
+type OwnerGlobal = typeof globalThis & {
+  [ownerPassphraseKey]?: string | null;
+};
+
+const ownerGlobal = globalThis as OwnerGlobal;
 
 export const getOwnerPassphrase = (): string | null => {
-  return ownerPassphrase;
+  return ownerGlobal[ownerPassphraseKey] ?? null;
 };
 
 export const setOwnerPassphrase = (passphrase: string | null): void => {
-  ownerPassphrase = passphrase;
+  ownerGlobal[ownerPassphraseKey] = passphrase;
 };
 
 export const booksOwnerEnabled = (): boolean => {

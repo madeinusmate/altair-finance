@@ -7,14 +7,18 @@ import findFreePort from "find-free-port";
 import waitOn from "wait-on";
 import { createMenu } from "./menu";
 import {
+  KEYCHAIN_HELPER_NAME,
   TOKEN_SERVICE,
+  buildLaunchAgentPlist,
   currentUid,
+  installLaunchAgentPlist,
   launchAgentPlistPath,
   launchdDomain,
   launchdTarget,
   pidIsRunning,
   readGrant,
   readHome,
+  readPlistAppRoot,
   readPortFile,
   runKeychain,
   runLaunchctl,
@@ -593,6 +597,58 @@ const bootstrapOwner = async (): Promise<number> => {
   return waitForOwner(userData, token);
 };
 
+const thisAppOwnerPaths = (): {
+  nodePath: string;
+  scriptPath: string;
+  serverPath: string;
+  appRoot: string;
+  userData: string;
+} => {
+  const userData = app.getPath("userData");
+  if (app.isPackaged) {
+    const appRoot = path.join(process.resourcesPath, "app.asar.unpacked");
+    return {
+      userData,
+      appRoot,
+      nodePath: getBundledNodePath() ?? "node",
+      serverPath: path.join(appRoot, "node_modules", "next", "dist", "bin", "next"),
+      scriptPath: path.join(process.resourcesPath, "books-owner.mjs"),
+    };
+  }
+  const repoRoot = path.join(__dirname, "..", "..");
+  return {
+    userData,
+    appRoot: repoRoot,
+    nodePath: execFileSync("which", ["node"], { encoding: "utf8" }).trim(),
+    serverPath: path.join(repoRoot, "node_modules", "next", "dist", "bin", "next"),
+    scriptPath: path.join(repoRoot, "scripts", "books-owner.mjs"),
+  };
+};
+
+const ownerPlistMatchesThisApp = (): boolean => {
+  const appRoot = thisAppOwnerPaths().appRoot;
+  if (!fs.existsSync(appRoot)) return false;
+  try {
+    return readPlistAppRoot(fs.readFileSync(launchAgentPlistPath(), "utf8")) === appRoot;
+  } catch {
+    return false;
+  }
+};
+
+const retargetOwnerToThisApp = (): void => {
+  const paths = thisAppOwnerPaths();
+  const helper = readHome()?.keychainHelper ?? path.join(paths.userData, KEYCHAIN_HELPER_NAME);
+  installLaunchAgentPlist(buildLaunchAgentPlist({
+    nodePath: paths.nodePath,
+    scriptPath: paths.scriptPath,
+    userData: paths.userData,
+    serverPath: paths.serverPath,
+    appRoot: paths.appRoot,
+    keychainHelper: helper,
+    logPath: path.join(paths.userData, "books-owner.log"),
+  }));
+};
+
 const attachToOwner = async (): Promise<boolean> => {
   const userData = app.getPath("userData");
   const grant = readGrant(userData);
@@ -601,6 +657,12 @@ const attachToOwner = async (): Promise<boolean> => {
   if (!token) return false;
   apiToken = token;
   serverOwnedByElectron = false;
+  if (!ownerPlistMatchesThisApp()) {
+    retargetOwnerToThisApp();
+    await bootoutOwner();
+    serverPort = await bootstrapOwner();
+    return true;
+  }
   const existing = readPortFile(userData);
   if (existing && (await ownerHealthy(existing.port, token))) {
     serverPort = existing.port;

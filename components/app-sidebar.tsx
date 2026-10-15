@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { cn } from "@/lib/utils";
 
 const navItems = [
   {
@@ -99,7 +100,7 @@ export const AppSidebar = () => {
         const status = await apiClient.get<{ enabled: boolean; stopped: boolean; running: boolean }>("/api/agent/status");
         if (!cancelled) setAgent(status);
       } catch {
-        if (!cancelled) setAgent(null);
+        if (!cancelled) setAgent({ enabled: false, stopped: false, running: false });
       }
     };
     void load();
@@ -117,22 +118,8 @@ export const AppSidebar = () => {
     window.location.href = "/unlock";
   };
 
-  const stopAgent = async () => {
-    await apiClient.post("/api/agent/stop", {});
-    await window.electron?.stopOwner?.();
-  };
-
-  const enableAgent = async () => {
-    await apiClient.post("/api/agent/enable", {});
-    await window.electron?.activateOwner?.();
-  };
-
-  const revokeAgent = async () => {
-    await apiClient.delete("/api/agent/grant");
-    await window.electron?.revokeOwner?.();
-  };
-
   const initial = username?.trim().charAt(0).toUpperCase() || "N";
+  const agentConnected = agent?.running === true;
 
   return (
     <Sidebar className="border-r-0">
@@ -176,28 +163,26 @@ export const AppSidebar = () => {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <ThemeToggle />
-        {agent?.enabled ? (
-          <div className="space-y-1 px-2">
-            <p className="text-xs text-muted-foreground">
-              Agent {agent.running ? "running" : "stopped"}
-            </p>
-            <div className="flex gap-1">
-              {agent.stopped ? (
-                <Button variant="ghost" size="sm" className="rounded-full" onClick={() => void enableAgent()}>
-                  Enable
-                </Button>
-              ) : (
-                <Button variant="ghost" size="sm" className="rounded-full" onClick={() => void stopAgent()}>
-                  Stop
-                </Button>
-              )}
-              <Button variant="ghost" size="sm" className="rounded-full" onClick={() => void revokeAgent()}>
-                Revoke
-              </Button>
-            </div>
-          </div>
+        {agent ? (
+          <Button variant="ghost" className="w-full justify-start rounded-full" asChild>
+            <Link
+              href="/settings#agent"
+              aria-label={agentConnected ? "Agent connected. Open settings" : "Agent disconnected. Open settings"}
+            >
+              <span
+                className={cn(
+                  "size-2 shrink-0 rounded-full",
+                  agentConnected ? "bg-connected" : "bg-disconnected",
+                )}
+              />
+              <span>Agent</span>
+              <span className="ml-auto text-xs text-muted-foreground">
+                {agentConnected ? "Connected" : "Disconnected"}
+              </span>
+            </Link>
+          </Button>
         ) : null}
+        <ThemeToggle />
         <Button variant="ghost" className="w-full justify-start rounded-full" asChild>
           <Link href="/settings">
             <Settings className="h-4 w-4" />

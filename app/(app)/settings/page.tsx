@@ -72,7 +72,7 @@ const SettingsPage = () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="agent">
         <CardHeader>
           <CardTitle>Agent</CardTitle>
           <CardDescription>
