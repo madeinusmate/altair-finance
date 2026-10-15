@@ -158,9 +158,6 @@ dependencies:
   react-hook-form:
     specifier: ^7.71.1
     version: 7.71.1(react@19.2.3)
-  react-plaid-link:
-    specifier: 4.1.1
-    version: 4.1.1(react-dom@19.2.3)(react@19.2.3)
   react-resizable-panels:
     specifier: ^4.4.2
     version: 4.4.2(react-dom@19.2.3)(react@19.2.3)
@@ -8206,17 +8203,6 @@ packages:
 
   /react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
-    dev: false
-
-  /react-plaid-link@4.1.1(react-dom@19.2.3)(react@19.2.3):
-    resolution: {integrity: sha512-xzAYWQIT/gk+u6lwFAMEZ20f9+AUsCwVyfm64/iudMsyuWANta4wm3Jb7N+APSwuKIR9VUlTkYDhPjLamIGcPA==}
-    peerDependencies:
-      react: ^16.8.0 || ^17 || ^18 || ^19
-      react-dom: ^16.8.0 || ^17 || ^18 || ^19
-    dependencies:
-      prop-types: 15.8.1
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
     dev: false
 
   /react-remove-scroll-bar@2.3.8(@types/react@19.2.9)(react@19.2.3):

@@ -47,6 +47,17 @@ const openSqlite = (encryptionKey: string): DatabaseInstance => {
   return sqlite;
 };
 
+const dropOpenBankingTokenTables = (sqlite: DatabaseInstance): void => {
+  try {
+    sqlite.exec(`
+      DROP TABLE IF EXISTS open_banking_tokens;
+      DROP TABLE IF EXISTS open_banking_client_tokens;
+    `);
+  } catch (error) {
+    console.warn("[DB Migration] Could not drop open banking token tables:", error);
+  }
+};
+
 const ensureUserSettingsColumns = (sqlite: DatabaseInstance): void => {
   const table = sqlite
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'user_settings'")
@@ -75,6 +86,9 @@ const ensureUserSettingsColumns = (sqlite: DatabaseInstance): void => {
 
 export const runMigrations = (sqlite: DatabaseInstance): void => {
   try {
+    // Drop before the transfers early-return below so an old file that lacks
+    // transfers still loses provider access tokens and refresh tokens on open.
+    dropOpenBankingTokenTables(sqlite);
     ensureUserSettingsColumns(sqlite);
 
     // Migration: Create imports table if it doesn't exist
@@ -256,45 +270,6 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
       console.warn("[DB Migration] Could not create budgets table:", error);
     }
 
-    // Open banking tables stay in place. Account rows they once fed remain
-    // ordinary records. The app does not read these tables.
-    // Migration: Create open banking tables
-    try {
-      const clientTokensTableCheck = sqlite.prepare(`
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name='open_banking_client_tokens'
-      `).get();
-      
-      if (!clientTokensTableCheck) {
-        sqlite.exec(`
-          CREATE TABLE open_banking_client_tokens (
-            id TEXT PRIMARY KEY DEFAULT 'client_credentials',
-            access_token TEXT NOT NULL,
-            expires_at INTEGER NOT NULL,
-            created_at INTEGER NOT NULL
-          );
-        `);
-      }
-
-      const tokensTableCheck = sqlite.prepare(`
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name='open_banking_tokens'
-      `).get();
-      
-      if (!tokensTableCheck) {
-        sqlite.exec(`
-          CREATE TABLE open_banking_tokens (
-            login_identity_id TEXT PRIMARY KEY,
-            access_token TEXT NOT NULL,
-            refresh_token TEXT NOT NULL,
-            connected_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-          );
-        `);
-      }
-    } catch (error) {
-      console.warn("[DB Migration] Could not create open banking tables:", error);
-    }
   } catch (error) {
     // Ignore migration errors - they might occur if table structure is unexpected
     console.warn("[DB Migration] Could not run migrations:", error);
@@ -447,21 +422,6 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     CREATE INDEX IF NOT EXISTS idx_imports_type ON imports(type);
     CREATE INDEX IF NOT EXISTS idx_imports_created_at ON imports(created_at);
     CREATE INDEX IF NOT EXISTS idx_imports_file_hash ON imports(file_hash);
-
-    CREATE TABLE IF NOT EXISTS open_banking_client_tokens (
-      id TEXT PRIMARY KEY DEFAULT 'client_credentials',
-      access_token TEXT NOT NULL,
-      expires_at INTEGER NOT NULL,
-      created_at INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS open_banking_tokens (
-      login_identity_id TEXT PRIMARY KEY,
-      access_token TEXT NOT NULL,
-      refresh_token TEXT NOT NULL,
-      connected_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
 
     CREATE TABLE IF NOT EXISTS budgets (
       id TEXT PRIMARY KEY,
@@ -632,45 +592,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       console.warn("[DB Migration] Could not add metadata columns:", error);
     }
 
-    // Open banking tables stay in place. Account rows they once fed remain
-    // ordinary records. The app does not read these tables.
-    // Migration: Create open banking tables
-    try {
-      const clientTokensTableCheck = sqlite.prepare(`
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name='open_banking_client_tokens'
-      `).get();
-      
-      if (!clientTokensTableCheck) {
-        sqlite.exec(`
-          CREATE TABLE open_banking_client_tokens (
-            id TEXT PRIMARY KEY DEFAULT 'client_credentials',
-            access_token TEXT NOT NULL,
-            expires_at INTEGER NOT NULL,
-            created_at INTEGER NOT NULL
-          );
-        `);
-      }
-
-      const tokensTableCheck = sqlite.prepare(`
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name='open_banking_tokens'
-      `).get();
-      
-      if (!tokensTableCheck) {
-        sqlite.exec(`
-          CREATE TABLE open_banking_tokens (
-            login_identity_id TEXT PRIMARY KEY,
-            access_token TEXT NOT NULL,
-            refresh_token TEXT NOT NULL,
-            connected_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-          );
-        `);
-      }
-    } catch (error) {
-      console.warn("[DB Migration] Could not create open banking tables:", error);
-    }
+    dropOpenBankingTokenTables(sqlite);
 
     // Migration: Create user_settings table
     try {
@@ -722,12 +644,6 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
         INSERT INTO user_settings (id, username, created_at, updated_at)
         VALUES ('user', ?, ?, ?)
       `).run(username, now, now);
-    }
-    const installRow = sqlite
-      .prepare("SELECT install_id FROM user_settings WHERE id = 'user'")
-      .get() as { install_id: string | null } | undefined;
-    if (installRow && !installRow.install_id) {
-      sqlite.prepare("UPDATE user_settings SET install_id = ? WHERE id = 'user'").run(crypto.randomUUID());
     }
   } catch (error) {
     console.warn("[DB Init] Could not store username:", error);

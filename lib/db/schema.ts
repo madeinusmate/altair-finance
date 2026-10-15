@@ -113,24 +113,6 @@ export const meta = sqliteTable("meta", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
-// Kept so existing databases still open. Netly no longer reads or writes these
-// tables. Account rows that were linked through a provider stay in `accounts`
-// and are edited like any other account. Their metadata JSON is left as-is.
-export const openBankingClientTokens = sqliteTable("open_banking_client_tokens", {
-  id: text("id").primaryKey().default("client_credentials"),
-  accessToken: text("access_token").notNull(),
-  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-});
-
-export const openBankingTokens = sqliteTable("open_banking_tokens", {
-  loginIdentityId: text("login_identity_id").primaryKey(),
-  accessToken: text("access_token").notNull(),
-  refreshToken: text("refresh_token").notNull(),
-  connectedAt: integer("connected_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-});
-
 export const budgets = sqliteTable("budgets", {
   id: text("id").primaryKey(),
   categoryName: text("category_name").notNull(),
@@ -147,6 +129,7 @@ export const userSettings = sqliteTable("user_settings", {
   avatar: text("avatar"),
   preferredCurrency: text("preferred_currency"),
   enabledCurrencies: text("enabled_currencies"),
+  // Present on old files. Not assigned, read, or sent.
   installId: text("install_id"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
@@ -172,10 +155,6 @@ export type ExchangeRate = typeof exchangeRates.$inferSelect;
 export type NewExchangeRate = typeof exchangeRates.$inferInsert;
 export type Meta = typeof meta.$inferSelect;
 export type NewMeta = typeof meta.$inferInsert;
-export type OpenBankingClientToken = typeof openBankingClientTokens.$inferSelect;
-export type NewOpenBankingClientToken = typeof openBankingClientTokens.$inferInsert;
-export type OpenBankingToken = typeof openBankingTokens.$inferSelect;
-export type NewOpenBankingToken = typeof openBankingTokens.$inferInsert;
 export type Budget = typeof budgets.$inferSelect;
 export type NewBudget = typeof budgets.$inferInsert;
 export type UserSettings = typeof userSettings.$inferSelect;
