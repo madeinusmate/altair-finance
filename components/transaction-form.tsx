@@ -21,13 +21,26 @@ import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import * as LucideIcons from "lucide-react";
 import { saveCategorizationRule } from "@/lib/categorization/client";
+import { PayeeCombobox } from "@/components/payee-combobox";
+import { PayeeIconSelect } from "@/components/payees/payee-icon-select";
+import { PayeeImageField } from "@/components/payees/payee-image-field";
+import { PayeeMark } from "@/components/payees/payee-mark";
+import { cleanPayee } from "@/lib/payees/normalize";
+
+type PayeeOption = {
+  id: string;
+  name: string;
+  normalizedName: string;
+  icon?: string | null;
+  iconImage?: string | null;
+};
 
 interface TransactionFormProps {
   accountId?: string;
   currency?: string;
   accounts?: Account[];
   onSuccess: () => void;
-  transaction?: Transaction;
+  transaction?: Transaction & { payeeName?: string | null };
   mode?: "create" | "edit";
 }
 
@@ -76,6 +89,10 @@ export const TransactionForm = ({
     transaction?.amount.toString() || ""
   );
   const [description, setDescription] = useState(transaction?.description || "");
+  const [payeeName, setPayeeName] = useState(transaction?.payeeName || "");
+  const [payeeIcon, setPayeeIcon] = useState("");
+  const [payeeIconImage, setPayeeIconImage] = useState("");
+  const [payees, setPayees] = useState<PayeeOption[]>([]);
   const [date, setDate] = useState(
     transaction ? new Date(transaction.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
   );
@@ -122,6 +139,20 @@ export const TransactionForm = ({
     fetchCategories();
   }, [getKey, type, transaction]);
 
+  useEffect(() => {
+    const fetchPayees = async () => {
+      const key = getKey();
+      if (!key && !usesBooksOwner) return;
+      try {
+        const data = await apiClient.get<{ payees: PayeeOption[] }>("/api/payees");
+        setPayees(data.payees || []);
+      } catch (error) {
+        console.error("Error fetching payees:", error);
+      }
+    };
+    fetchPayees();
+  }, [getKey, usesBooksOwner]);
+
   // Update selected account when accounts change
   useEffect(() => {
     if (!providedAccountId && transactionAccounts.length > 0 && !transactionAccounts.find(a => a.id === selectedAccountId)) {
@@ -147,9 +178,21 @@ export const TransactionForm = ({
       setCategoryId(transaction.categoryId != null ? String(transaction.categoryId) : "");
       setAmount(transaction.amount.toString());
       setDescription(transaction.description || "");
+      setPayeeName(transaction.payeeName || "");
       setDate(new Date(transaction.date).toISOString().split("T")[0]);
     }
   }, [transaction]);
+
+  const matchedPayee = (() => {
+    const cleaned = cleanPayee(payeeName);
+    if (!cleaned) return undefined;
+    return payees.find((payee) => payee.normalizedName === cleaned.normalizedName);
+  })();
+
+  const payeePayload = {
+    payeeName: payeeName.trim() || null,
+    ...(matchedPayee ? {} : { payeeIcon: payeeIcon || null, payeeIconImage: payeeIconImage || null }),
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,6 +207,7 @@ export const TransactionForm = ({
           categoryId: Number(categoryId),
           amount: parseFloat(amount),
           description: description || null,
+          ...payeePayload,
           date,
         });
         toast.success("Transaction updated successfully");
@@ -177,6 +221,7 @@ export const TransactionForm = ({
           categoryId: Number(categoryId),
           amount: parseFloat(amount),
           description: description || null,
+          ...payeePayload,
           date,
         });
         toast.success("Transaction added");
@@ -310,10 +355,41 @@ export const TransactionForm = ({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="description">Description (optional)</Label>
+        <Label htmlFor="payee">Payee</Label>
+        <PayeeCombobox
+          id="payee"
+          value={payeeName}
+          payees={payees}
+          onChange={setPayeeName}
+          disabled={isLoading}
+        />
+        {matchedPayee ? (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <PayeeMark image={matchedPayee.iconImage} icon={matchedPayee.icon} fallback="" />
+            <span>
+              {matchedPayee.iconImage || matchedPayee.icon
+                ? `Using the icon saved for ${matchedPayee.name}`
+                : `${matchedPayee.name} has no icon yet. Set one in settings.`}
+            </span>
+          </p>
+        ) : cleanPayee(payeeName) ? (
+          <>
+            <PayeeIconSelect id="payee-icon" value={payeeIcon} onChange={setPayeeIcon} disabled={isLoading} />
+            <PayeeImageField
+              id="payee-image"
+              value={payeeIconImage}
+              onChange={setPayeeIconImage}
+              disabled={isLoading}
+            />
+          </>
+        ) : null}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="description">Statement line (optional)</Label>
         <Textarea
           id="description"
-          placeholder="What was this transaction for?"
+          placeholder="Original statement text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           disabled={isLoading}

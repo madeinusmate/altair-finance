@@ -42,6 +42,16 @@ export const imports = sqliteTable("imports", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+export const payees = sqliteTable("payees", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  normalizedName: text("normalized_name").notNull().unique(),
+  icon: text("icon"),
+  iconImage: text("icon_image"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 export const transactions = sqliteTable("transactions", {
   id: text("id").primaryKey(),
   accountId: text("account_id")
@@ -54,6 +64,7 @@ export const transactions = sqliteTable("transactions", {
   categoryId: integer("category_id").references(() => transactionCategories.id, { onDelete: "restrict" }),
   amount: real("amount").notNull(),
   description: text("description"),
+  payeeId: text("payee_id").references(() => payees.id, { onDelete: "set null" }),
   date: integer("date", { mode: "timestamp" }).notNull(),
   metadata: text("metadata"), // optional JSON; leftover provider payloads stay as stored
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
@@ -173,6 +184,8 @@ export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
 export type Import = typeof imports.$inferSelect;
 export type NewImport = typeof imports.$inferInsert;
+export type Payee = typeof payees.$inferSelect;
+export type NewPayee = typeof payees.$inferInsert;
 export type Transaction = typeof transactions.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
 export type Transfer = typeof transfers.$inferSelect;

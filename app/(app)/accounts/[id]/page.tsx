@@ -62,6 +62,8 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Account, Transaction, Transfer, BalanceHistory, InvestmentHistory } from "@/lib/db/schema";
+import { transactionSubtitle, transactionTitle } from "@/lib/payees/display";
+import { PayeeMark } from "@/components/payees/payee-mark";
 import { TransactionForm } from "@/components/transaction-form";
 import { TransferForm } from "@/components/transfer-form";
 import { BalanceUpdateForm } from "@/components/balance-update-form";
@@ -92,8 +94,10 @@ import {
   type LedgerSelectionEntry,
 } from "@/lib/ledger/selection";
 
+type LedgerTransaction = Transaction & { payeeName?: string | null; payeeIcon?: string | null };
+
 type UnifiedItem = 
-  | { type: "transaction"; data: Transaction }
+  | { type: "transaction"; data: LedgerTransaction }
   | { type: "transfer"; data: Transfer };
 
 const formatCurrency = (amount: number, currency: string): string => {
@@ -109,7 +113,10 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   const { id } = use(params);
   const router = useRouter();
   const [account, setAccount] = useState<Account | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<LedgerTransaction[]>([]);
+  const [payees, setPayees] = useState<Array<{ id: string; name: string; icon?: string | null; iconImage?: string | null }>>([]);
+  const payeeById = useMemo(() => new Map(payees.map((payee) => [payee.id, payee])), [payees]);
+  const [payeeFilter, setPayeeFilter] = useState("all");
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [balanceHistory, setBalanceHistory] = useState<BalanceHistory[]>([]);
   const [investmentHistory, setInvestmentHistory] = useState<InvestmentHistory[]>([]);
@@ -122,7 +129,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   const [isInvestmentBalanceDialogOpen, setIsInvestmentBalanceDialogOpen] = useState(false);
   const [isEditAccountDialogOpen, setIsEditAccountDialogOpen] = useState(false);
   const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<LedgerTransaction | null>(null);
   const [isEditTransferDialogOpen, setIsEditTransferDialogOpen] = useState(false);
   const [editingTransfer, setEditingTransfer] = useState<Transfer | null>(null);
   const [isPdfImportDialogOpen, setIsPdfImportDialogOpen] = useState(false);
@@ -193,18 +200,20 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
 
   const fetchData = async () => {
     try {
-      const [accountData, unifiedData, balanceData, investmentData, allAccounts, categoriesData] =
+      const [accountData, unifiedData, balanceData, investmentData, allAccounts, categoriesData, payeesData] =
         await Promise.all([
           apiClient.get<Account>(`/api/accounts/${id}`),
-          apiClient.get<{ transactions: Transaction[]; transfers: Transfer[] }>(`/api/transactions-unified?accountId=${id}`),
+          apiClient.get<{ transactions: LedgerTransaction[]; transfers: Transfer[] }>(`/api/transactions-unified?accountId=${id}`),
           apiClient.get<BalanceHistory[]>(`/api/balance-history?accountId=${id}`),
           apiClient.get<InvestmentHistory[]>(`/api/investment-history?accountId=${id}`),
           apiClient.get<Account[]>("/api/accounts"),
           apiClient.get<{ categories: BulkCategory[] }>("/api/transaction-categories"),
+          apiClient.get<{ payees: Array<{ id: string; name: string }> }>("/api/payees"),
         ]);
 
       setAccount(accountData);
       setTransactions(unifiedData.transactions);
+      setPayees(payeesData.payees || []);
       setTransfers(unifiedData.transfers);
       setBalanceHistory(balanceData);
       setInvestmentHistory(investmentData);
@@ -413,12 +422,11 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   // Reset to page 1 when items per page or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [itemsPerPage, searchQuery, categoryFilter, typeFilter, ledgerDateFilter]);
+  }, [itemsPerPage, searchQuery, categoryFilter, typeFilter, ledgerDateFilter, payeeFilter]);
 
-  // This register has no date filter. Reset when the filters that exist today change.
   useEffect(() => {
     setSelectedRows(new Map());
-  }, [id, itemsPerPage, searchQuery, categoryFilter, typeFilter]);
+  }, [id, itemsPerPage, searchQuery, categoryFilter, typeFilter, ledgerDateFilter, payeeFilter]);
 
   if (isLoading) {
     return (
@@ -833,10 +841,15 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
             if (searchQuery) {
               const query = searchQuery.toLowerCase();
               const matchesDescription = t.description?.toLowerCase().includes(query);
+              const matchesPayee = t.payeeName?.toLowerCase().includes(query);
               const matchesCategory = (t.category ?? "").toLowerCase().includes(query);
-              if (!matchesDescription && !matchesCategory) {
+              if (!matchesDescription && !matchesPayee && !matchesCategory) {
                 return false;
               }
+            }
+
+            if (payeeFilter !== "all" && t.payeeId !== payeeFilter) {
+              return false;
             }
 
             // Category filter
@@ -880,6 +893,10 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
             // Type filter
             if (typeFilter !== "all" && typeFilter !== "transfer") {
               return false; // Hide transfers when filtering for debit/credit
+            }
+
+            if (payeeFilter !== "all") {
+              return false;
             }
 
             return true;
@@ -974,6 +991,19 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                         ))}
                       </SelectContent>
                     </Select>
+                    <Select value={payeeFilter} onValueChange={setPayeeFilter}>
+                      <SelectTrigger className="w-full sm:w-[180px]">
+                        <SelectValue placeholder="Payee" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Payees</SelectItem>
+                        {payees.map((payee) => (
+                          <SelectItem key={payee.id} value={payee.id}>
+                            {payee.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Select value={typeFilter} onValueChange={setTypeFilter}>
                       <SelectTrigger className="w-full sm:w-[130px]">
                         <SelectValue placeholder="Type" />
@@ -1022,7 +1052,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                         <TableHead>Date</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Category</TableHead>
-                        <TableHead>Description</TableHead>
+                        <TableHead>Payee</TableHead>
                         <TableHead className="text-right">Amount</TableHead>
                         <TableHead></TableHead>
                       </TableRow>
@@ -1061,7 +1091,21 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                                   icon={categoryById.get(transaction.categoryId ?? -1)?.icon}
                                 />
                               </TableCell>
-                              <TableCell>{transaction.description || "-"}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2 font-medium">
+                                  <PayeeMark
+                                    image={transaction.payeeId ? payeeById.get(transaction.payeeId)?.iconImage : null}
+                                    icon={transaction.payeeId ? payeeById.get(transaction.payeeId)?.icon ?? transaction.payeeIcon : transaction.payeeIcon}
+                                    fallback=""
+                                  />
+                                  {transactionTitle(transaction.payeeName, transaction.description, transaction.category)}
+                                </div>
+                                {transactionSubtitle(transaction.payeeName, transaction.description) ? (
+                                  <div className="text-xs text-muted-foreground">
+                                    {transactionSubtitle(transaction.payeeName, transaction.description)}
+                                  </div>
+                                ) : null}
+                              </TableCell>
                               <TableCell
                                 className={`text-right font-medium ${
                                   transaction.type === "credit" ? "text-foreground" : "text-foreground"
@@ -1188,6 +1232,16 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                       </TooltipProvider>
                     </TableBody>
                   </Table>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Debit total:{" "}
+                    {formatCurrency(
+                      filteredItems.reduce((sum, item) => {
+                        if (item.type !== "transaction" || item.data.type !== "debit") return sum;
+                        return sum + item.data.amount;
+                      }, 0),
+                      account.currency
+                    )}
+                  </p>
                   </>
                   )}
                   {totalPages > 1 && (

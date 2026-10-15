@@ -6,6 +6,8 @@ import { getEncryptionKey } from "@/lib/api-utils";
 import { isValidCategoryIdForType, parseCategoryId } from "@/lib/db/category-helpers";
 import { listTransactions, readTransaction } from "@/lib/db/category-rows";
 import { transactionFingerprint } from "@/lib/import/fingerprint";
+import { resolvePayeeId } from "@/lib/payees/assign";
+import { normalizePayeeIconImage, PayeeIconImageError } from "@/lib/payees/icon-image";
 
 const invalidCategoryResponse = (
   db: ReturnType<typeof getDb>,
@@ -50,7 +52,17 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { accountId, type, categoryId: categoryIdValue, amount, description, date } = body;
+    const {
+      accountId,
+      type,
+      categoryId: categoryIdValue,
+      amount,
+      description,
+      date,
+      payeeName,
+      payeeIcon,
+      payeeIconImage,
+    } = body;
     const categoryId = parseCategoryId(categoryIdValue);
 
     if (!accountId || !type || categoryId === null || amount === undefined || !date) {
@@ -93,6 +105,12 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
 
     const now = new Date();
     const id = uuidv4();
+    const payeeId = resolvePayeeId(
+      db,
+      typeof payeeName === "string" ? payeeName : null,
+      typeof payeeIcon === "string" ? payeeIcon : null,
+      normalizePayeeIconImage(payeeIconImage)
+    );
     const fingerprint = await transactionFingerprint({
       accountId,
       type: type as "debit" | "credit",
@@ -110,6 +128,7 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
         categoryId,
         amount: Number(amount),
         description: description || null,
+        payeeId,
         date: new Date(date),
         createdAt: now,
         fingerprint,
@@ -119,6 +138,9 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
     const created = readTransaction(db, id);
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
+    if (error instanceof PayeeIconImageError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Error creating transaction:", error);
     return NextResponse.json({ error: "Failed to create transaction" }, { status: 500 });
   }
@@ -133,7 +155,17 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
 
   try {
     const body = await request.json();
-    const { id, type, categoryId: categoryIdValue, amount, description, date } = body;
+    const {
+      id,
+      type,
+      categoryId: categoryIdValue,
+      amount,
+      description,
+      date,
+      payeeName,
+      payeeIcon,
+      payeeIconImage,
+    } = body;
     const categoryId = parseCategoryId(categoryIdValue);
 
     if (!id) {
@@ -180,6 +212,15 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
       description: description || null,
       date,
     });
+    const nextPayeeId =
+      typeof payeeName === "string" || payeeName === null
+        ? resolvePayeeId(
+            db,
+            payeeName,
+            typeof payeeIcon === "string" ? payeeIcon : null,
+            normalizePayeeIconImage(payeeIconImage)
+          )
+        : undefined;
 
     db.update(schema.transactions)
       .set({
@@ -189,12 +230,16 @@ export const PUT = async (request: NextRequest): Promise<NextResponse> => {
         description: description || null,
         date: new Date(date),
         fingerprint,
+        ...(nextPayeeId !== undefined ? { payeeId: nextPayeeId } : {}),
       })
       .where(eq(schema.transactions.id, id))
       .run();
 
     return NextResponse.json(readTransaction(db, id));
   } catch (error) {
+    if (error instanceof PayeeIconImageError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Error updating transaction:", error);
     return NextResponse.json({ error: "Failed to update transaction" }, { status: 500 });
   }

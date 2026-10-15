@@ -17,9 +17,12 @@ import { Account } from "@/lib/db/schema";
 import { ParsedTransaction } from "@/lib/pdf/types";
 import { ArrowLeftRight } from "lucide-react";
 import { CategoryAllowance } from "@/lib/categorization/rules";
+import { PayeeCombobox } from "@/components/payee-combobox";
 
 export type TransactionRow = ParsedTransaction & {
   id: string;
+  payeeName?: string;
+  payeeEdited?: boolean;
   errors: string[];
   warnings: string[];
   duplicate?: boolean;
@@ -38,6 +41,7 @@ export type TransactionRow = ParsedTransaction & {
 interface PdfReviewTableProps {
   rows: TransactionRow[];
   accounts: Account[];
+  payees: Array<{ id: string; name: string }>;
   transactionCategories: CategoryAllowance[];
   onRowChange: (rowId: string, updates: Partial<TransactionRow>) => void;
   onToggleExclude: (rowId: string) => void;
@@ -46,6 +50,7 @@ interface PdfReviewTableProps {
 export const PdfReviewTable = ({
   rows,
   accounts,
+  payees,
   transactionCategories,
   onRowChange,
   onToggleExclude,
@@ -119,6 +124,7 @@ export const PdfReviewTable = ({
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Description</TableHead>
+              <TableHead>Payee</TableHead>
               {rows.some((r) => r.isTransfer) ? (
                 <>
                   <TableHead>From Amount</TableHead>
@@ -156,6 +162,18 @@ export const PdfReviewTable = ({
                     onChange={(e) => onRowChange(row.id, { description: e.target.value })}
                     className="min-w-[200px]"
                   />
+                </TableCell>
+                <TableCell>
+                  {row.isTransfer ? (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  ) : (
+                    <PayeeCombobox
+                      id={`pdf-payee-${row.id}`}
+                      value={row.payeeName || ""}
+                      payees={payees}
+                      onChange={(value) => onRowChange(row.id, { payeeName: value, payeeEdited: true })}
+                    />
+                  )}
                 </TableCell>
                 {row.isTransfer ? (
                   <>

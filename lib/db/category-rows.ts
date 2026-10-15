@@ -13,6 +13,10 @@ const transactionColumns = {
   icon: schema.transactionCategories.icon,
   amount: schema.transactions.amount,
   description: schema.transactions.description,
+  payeeId: schema.transactions.payeeId,
+  payeeName: schema.payees.name,
+  payeeIcon: schema.payees.icon,
+  payeeIconImage: schema.payees.iconImage,
   date: schema.transactions.date,
   metadata: schema.transactions.metadata,
   createdAt: schema.transactions.createdAt,
@@ -44,7 +48,8 @@ export const listTransactions = (db: Db, accountId?: string | null) => {
     .innerJoin(
       schema.transactionCategories,
       eq(schema.transactions.categoryId, schema.transactionCategories.id)
-    );
+    )
+    .leftJoin(schema.payees, eq(schema.transactions.payeeId, schema.payees.id));
   if (accountId) {
     return query.where(eq(schema.transactions.accountId, accountId)).orderBy(desc(schema.transactions.date)).all();
   }
@@ -59,6 +64,7 @@ export const readTransaction = (db: Db, id: string) => {
       schema.transactionCategories,
       eq(schema.transactions.categoryId, schema.transactionCategories.id)
     )
+    .leftJoin(schema.payees, eq(schema.transactions.payeeId, schema.payees.id))
     .where(eq(schema.transactions.id, id))
     .get();
 };

@@ -3,6 +3,7 @@ import { drizzle, BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 import { ensureBudgetMonths } from "./ensure-budget-months";
 import { ensureCategoryIds } from "./category-ids";
+import { ensurePayeesSchema } from "@/lib/payees/backfill";
 import * as crypto from "crypto";
 import path from "path";
 import fs from "fs";
@@ -491,6 +492,17 @@ export const runMigrations = (sqlite: DatabaseInstance): void => {
     // Ignore migration errors - they might occur if table structure is unexpected
     console.warn("[DB Migration] Could not run migrations:", error);
   }
+
+  try {
+    const transactionsTable = sqlite
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'transactions'")
+      .get();
+    if (transactionsTable) {
+      ensurePayeesSchema(sqlite);
+    }
+  } catch (error) {
+    console.warn("[DB Migration] Could not ensure payees:", error);
+  }
 };
 
 export const getDb = (encryptionKey: string): BetterSQLite3Database<typeof schema> => {
@@ -564,6 +576,16 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       updated_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS payees (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      normalized_name TEXT NOT NULL UNIQUE,
+      icon TEXT,
+      icon_image TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS transactions (
       id TEXT PRIMARY KEY,
       account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
@@ -572,6 +594,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
       category_id INTEGER REFERENCES transaction_categories(id) ON DELETE RESTRICT,
       amount REAL NOT NULL,
       description TEXT,
+      payee_id TEXT REFERENCES payees(id) ON DELETE SET NULL,
       date INTEGER NOT NULL,
       metadata TEXT,
       created_at INTEGER NOT NULL,
@@ -641,6 +664,7 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     );
 
     CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
+    CREATE INDEX IF NOT EXISTS idx_transactions_payee_id ON transactions(payee_id);
     CREATE INDEX IF NOT EXISTS idx_transfers_from_account_id ON transfers(from_account_id);
     CREATE INDEX IF NOT EXISTS idx_transfers_to_account_id ON transfers(to_account_id);
     CREATE INDEX IF NOT EXISTS idx_balance_history_account_id ON balance_history(account_id);
@@ -891,6 +915,12 @@ export const initializeDb = (encryptionKey: string, username: string): void => {
     console.log("[DB Init] Migrations completed");
   } else {
     console.log("[DB Init] Fresh database - skipping migrations (schema already correct)");
+  }
+
+  try {
+    ensurePayeesSchema(sqlite);
+  } catch (error) {
+    console.warn("[DB Init] Could not ensure payees:", error);
   }
 
   // Seed default categories if tables are empty

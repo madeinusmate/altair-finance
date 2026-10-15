@@ -7,6 +7,7 @@ import { isValidCategoryIdForType, isValidTransferCategoryId } from "@/lib/db/ca
 import { transactionFingerprint, transferFingerprint } from "@/lib/import/fingerprint";
 import { loadTransactionFingerprints, loadTransferFingerprints } from "@/lib/import/load-fingerprints";
 import { planImportRows } from "@/lib/import/plan-import-rows";
+import { resolvePayeeId } from "@/lib/payees/assign";
 
 type LedgerDb = ReturnType<typeof getDb>;
 
@@ -16,6 +17,7 @@ type TransactionImportRow = {
   category: string;
   amount: number;
   description?: string | null;
+  payeeName?: string | null;
   date: string;
   overrideDuplicate?: boolean;
 };
@@ -230,6 +232,7 @@ export const commitTransactionImport = async (
               categoryId: category.id,
               amount,
               description: row.description || null,
+              payeeId: resolvePayeeId(txDb, row.payeeName),
               date: parsedDate,
               createdAt: now,
               fingerprint: decision.fingerprint,

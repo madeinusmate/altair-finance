@@ -13,6 +13,7 @@ import { CategoryEditDialog } from "@/components/category-management/category-ed
 import { DescriptionRule, DescriptionRulesCard } from "@/components/category-management/description-rules-card";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import { PayeesSettings } from "@/components/payees/payees-settings";
 
 interface TransactionCategory {
   id: number;
@@ -169,6 +170,8 @@ const CategoriesPage = () => {
           onChanged={fetchCategories}
         />
       )}
+
+      <PayeesSettings />
 
       <CategoryEditDialog
         open={showCreateTransaction}

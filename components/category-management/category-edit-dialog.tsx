@@ -27,7 +27,7 @@ import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 
 // Curated list of popular Lucide icons for categories
-const POPULAR_ICONS = [
+export const POPULAR_ICONS = [
   "ShoppingCart",
   "UtensilsCrossed",
   "Coffee",
@@ -190,7 +190,7 @@ const POPULAR_ICONS = [
 
 // Helper function to get icon component
 // Handles both PascalCase (ShoppingCart) and kebab-case (shopping-cart) formats
-const getIconComponent = (iconName: string | null | undefined) => {
+export const getIconComponent = (iconName: string | null | undefined, className = "h-4 w-4") => {
   if (!iconName) return null;
   
   // Try PascalCase first (direct match)
@@ -205,7 +205,7 @@ const getIconComponent = (iconName: string | null | undefined) => {
     IconComponent = (LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[pascalCase];
   }
   
-  return IconComponent ? <IconComponent className="h-4 w-4" /> : null;
+  return IconComponent ? <IconComponent className={className} /> : null;
 };
 
 interface CategoryEditDialogProps {

@@ -39,6 +39,7 @@ import {
 } from "@/lib/categorization/rules";
 import { transactionFingerprint, transferFingerprint } from "@/lib/import/fingerprint";
 import { applyReviewDuplicates } from "@/lib/import/review-duplicates";
+import { cleanPayee } from "@/lib/payees/normalize";
 
 const PDF_IDENTITY_FIELDS = [
   "date",
@@ -88,6 +89,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
   const [importError, setImportError] = useState<string | null>(null);
   const [existingTransactions, setExistingTransactions] = useState<Transaction[]>([]);
   const [existingTransfers, setExistingTransfers] = useState<Transfer[]>([]);
+  const [payees, setPayees] = useState<Array<{ id: string; name: string }>>([]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [useCloudParser, setUseCloudParser] = useState(false);
 
@@ -204,7 +206,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
       if (!key && !usesBooksOwner) return;
 
       try {
-        const [accountsData, categoriesData, rulesData] = await Promise.all([
+        const [accountsData, categoriesData, rulesData, payeesData] = await Promise.all([
           apiClient.get<Account[]>("/api/accounts"),
           apiClient.get<{ categories: Array<{ name: string; transactionType?: string | null }> }>(
             "/api/transaction-categories"
@@ -220,10 +222,12 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
               }>;
             }>("/api/categorization-rules")
             .catch(() => ({ rules: [] })),
+          apiClient.get<{ payees: Array<{ id: string; name: string }> }>("/api/payees"),
         ]);
         setAccounts(accountsData);
         setTransactionCategories(toCategoryAllowances(categoriesData.categories));
         setCategorizationRules(toCategorizationRules(rulesData.rules));
+        setPayees(payeesData.payees || []);
       } catch (error) {
         console.error(error);
       }
@@ -349,6 +353,8 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
           id: `pdf-${index}`,
           date: row.date,
           description: row.description,
+          payeeName: cleanPayee(row.description)?.displayName ?? "",
+          payeeEdited: false,
           amount: parseFloat(row.amount) || 0,
           category: row.category,
           type: row.type === "credit" ? "credit" : "debit",
@@ -415,6 +421,12 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
             categorizationRules,
             transactionCategories
           ),
+        };
+      }
+      if (updates.description && !row.payeeEdited && !nextRow.isTransfer) {
+        nextRow = {
+          ...nextRow,
+          payeeName: cleanPayee(updates.description)?.displayName ?? "",
         };
       }
 
@@ -487,6 +499,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
           category: row.category,
           amount: row.amount,
           description: row.description || null,
+          payeeName: row.excluded || row.duplicate ? null : row.payeeName || null,
           date: row.date,
           ...(row.duplicate ? { overrideDuplicate: true } : {}),
         };
@@ -593,6 +606,7 @@ export const PdfStatementImport = ({ accountId: initialAccountId, onSuccess }: P
             <PdfReviewTable
               rows={rows}
               accounts={accounts}
+              payees={payees}
               transactionCategories={transactionCategories}
               onRowChange={handleRowChange}
               onToggleExclude={handleToggleExclude}
