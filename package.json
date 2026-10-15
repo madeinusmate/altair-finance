@@ -11,7 +11,7 @@
     "start": "next start -H 127.0.0.1 -p 8528",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test --experimental-test-module-mocks tests/*.test.ts",
     "reset-db": "tsx scripts/reset-db.ts",
     "extract-statements": "tsx scripts/extract-statements.ts",
     "combine-csvs": "tsx scripts/combine-csvs.ts",

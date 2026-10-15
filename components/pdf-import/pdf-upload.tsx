@@ -7,13 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, X } from "lucide-react";
 import { Account } from "@/lib/db/schema";
-import { validatePdfFile } from "@/lib/pdf/openai-client";
+import { validatePdfFile } from "@/lib/pdf/types";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface PdfUploadProps {
   accounts: Account[];
   selectedAccountId?: string;
   fileName?: string;
   disabled?: boolean;
+  useCloudParser: boolean;
+  onUseCloudParserChange: (value: boolean) => void;
   onAccountChange: (accountId: string) => void;
   onFileSelected: (file: File) => void;
   onClear?: () => void;
@@ -24,6 +27,8 @@ export const PdfUpload = ({
   selectedAccountId,
   fileName,
   disabled,
+  useCloudParser,
+  onUseCloudParserChange,
   onAccountChange,
   onFileSelected,
   onClear,
@@ -127,8 +132,21 @@ export const PdfUpload = ({
           <p className="text-xs text-destructive">{fileError}</p>
         )}
         <p className="text-xs text-muted-foreground">
-          Upload a PDF bank or credit card statement (max 50MB)
+          Statements are read on this computer. The file is not sent anywhere unless you turn on cloud parsing.
         </p>
+        <p className="text-xs text-muted-foreground">PDF only, up to 50MB.</p>
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="pdf-cloud-parser"
+            className="mt-0.5"
+            checked={useCloudParser}
+            onCheckedChange={(checked) => onUseCloudParserChange(checked === true)}
+            disabled={disabled}
+          />
+          <label htmlFor="pdf-cloud-parser" className="text-sm leading-snug">
+            Send this PDF to OpenAI for parsing. The file leaves this device. Netly does not include an API key. Cloud parsing works only if you set OPENAI_API_KEY yourself.
+          </label>
+        </div>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["better-sqlite3", "better-sqlite3-multiple-ciphers"],
+  serverExternalPackages: ["better-sqlite3", "better-sqlite3-multiple-ciphers", "canvas", "pdfjs-dist"],
   // Empty turbopack config to silence the warning when using --webpack flag
   turbopack: {},
   webpack: (config, { isServer }) => {
