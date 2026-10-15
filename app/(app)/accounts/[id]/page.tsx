@@ -80,6 +80,8 @@ import { PdfStatementImport } from "@/components/pdf-import/pdf-statement-import
 import { FileText } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { CategoryBadge } from "@/components/category-management/category-badge";
+import { LedgerDateFilter } from "@/components/ledger/ledger-date-filter";
+import { isInLedgerDateFilter, type LedgerDateFilter as LedgerDateFilterValue } from "@/lib/ledger/date-filter";
 
 type UnifiedItem = 
   | { type: "transaction"; data: Transaction }
@@ -124,6 +126,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all"); // "all" | "debit" | "credit" | "transfer"
+  const [ledgerDateFilter, setLedgerDateFilter] = useState<LedgerDateFilterValue>({ kind: "all" });
   const [transactionCategories, setTransactionCategories] = useState<string[]>([]);
   const [categoryMap, setCategoryMap] = useState<Map<string, { color?: string | null; icon?: string | null }>>(new Map());
   
@@ -383,7 +386,7 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
   // Reset to page 1 when items per page or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [itemsPerPage, searchQuery, categoryFilter, typeFilter]);
+  }, [itemsPerPage, searchQuery, categoryFilter, typeFilter, ledgerDateFilter]);
 
   if (isLoading) {
     return (
@@ -787,6 +790,10 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
 
         // Apply filters
         const filteredItems = unifiedItems.filter((item) => {
+          if (!isInLedgerDateFilter(item.data.date, ledgerDateFilter)) {
+            return false;
+          }
+
           if (item.type === "transaction") {
             const t = item.data;
 
@@ -896,8 +903,8 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                 <p className="text-muted-foreground text-center py-8">No transactions or transfers yet</p>
               ) : (
                 <>
-                  <div className="mb-4 flex flex-col gap-4 sm:flex-row">
-                    <div className="relative flex-1">
+                  <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
+                    <div className="relative min-w-48 flex-1">
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         placeholder="Search transactions..."
@@ -930,6 +937,11 @@ const AccountDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
                         <SelectItem value="transfer">Transfer</SelectItem>
                       </SelectContent>
                     </Select>
+                    <LedgerDateFilter
+                      value={ledgerDateFilter}
+                      onChange={setLedgerDateFilter}
+                      className="sm:shrink-0"
+                    />
                   </div>
 
                   {totalItems === 0 ? (

@@ -40,6 +40,8 @@ import { Search, ArrowLeftRight, Pencil, Trash2, Plus } from "lucide-react";
 import { Transaction, Account, Transfer } from "@/lib/db/schema";
 import { format } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
+import { LedgerDateFilter } from "@/components/ledger/ledger-date-filter";
+import { isInLedgerDateFilter, type LedgerDateFilter as LedgerDateFilterValue } from "@/lib/ledger/date-filter";
 import {
   Pagination,
   PaginationContent,
@@ -79,6 +81,7 @@ const TransactionsPage = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all"); // "all" | "debit" | "credit" | "transfer"
   const [accountFilter, setAccountFilter] = useState<string>("all");
+  const [ledgerDateFilter, setLedgerDateFilter] = useState<LedgerDateFilterValue>({ kind: "all" });
   const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
   const [isCreateTransactionDialogOpen, setIsCreateTransactionDialogOpen] = useState(false);
   const [isCreateTransferDialogOpen, setIsCreateTransferDialogOpen] = useState(false);
@@ -277,6 +280,10 @@ const TransactionsPage = () => {
   // Unified filtering logic
   const filteredItems = useMemo(() => {
     return unifiedItems.filter((item) => {
+      if (!isInLedgerDateFilter(item.data.date, ledgerDateFilter)) {
+        return false;
+      }
+
       if (item.type === "transaction") {
         const t = item.data;
         const account = accountMap.get(t.accountId);
@@ -345,7 +352,7 @@ const TransactionsPage = () => {
       const dateB = new Date(b.data.date).getTime();
       return dateB - dateA;
     });
-  }, [unifiedItems, searchQuery, categoryFilter, typeFilter, accountFilter, accountMap]);
+  }, [unifiedItems, searchQuery, categoryFilter, typeFilter, accountFilter, accountMap, ledgerDateFilter]);
 
   // Pagination logic
   const totalItems = filteredItems.length;
@@ -357,7 +364,7 @@ const TransactionsPage = () => {
   // Reset to page 1 when filters or items per page change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, categoryFilter, typeFilter, accountFilter, itemsPerPage]);
+  }, [searchQuery, categoryFilter, typeFilter, accountFilter, itemsPerPage, ledgerDateFilter]);
 
   if (isLoading) {
     return (
@@ -506,8 +513,8 @@ const TransactionsPage = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="mb-4 flex flex-col gap-4 sm:flex-row">
-              <div className="relative flex-1">
+            <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
+              <div className="relative min-w-48 flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search transactions..."
@@ -555,6 +562,11 @@ const TransactionsPage = () => {
                   <SelectItem value="transfer">Transfer</SelectItem>
                 </SelectContent>
               </Select>
+              <LedgerDateFilter
+                value={ledgerDateFilter}
+                onChange={setLedgerDateFilter}
+                className="sm:shrink-0"
+              />
             </div>
 
             {totalItems === 0 ? (
