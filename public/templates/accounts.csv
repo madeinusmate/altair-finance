@@ -1,0 +1,6 @@
+name,type,nature,category,currency,initial_balance
+Savings,balance,asset,savings,USD,5000.00
+Checking,transaction,asset,checking,USD,2500.00
+Credit Card,transaction,liability,credit_card,USD,-500.00
+Brokerage,investment,asset,brokerage,USD,0
+Mortgage,balance,liability,mortgage,USD,-250000.00

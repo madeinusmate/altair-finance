@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Altair</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: #ffffff;
+      color: #252525;
+      overflow: hidden;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: #252525;
+        color: #fafafa;
+      }
+
+      .loading-text {
+        opacity: 0.7;
+      }
+    }
+
+    .mark {
+      display: block;
+      width: 88px;
+      height: 88px;
+      margin-bottom: 20px;
+      animation: spin 4.8s linear infinite;
+    }
+
+    .logo {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.04em;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .loading-text {
+      margin-top: 16px;
+      font-size: 14px;
+      opacity: 0.6;
+      font-weight: 400;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .mark {
+        animation: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <svg class="mark" viewBox="96 96 320 320" fill="none" aria-hidden="true">
+    <path fill="currentColor" d="M408 408C291 300 221 300 104 408C212 291 212 221 104 104C221 212 291 212 408 104C300 221 300 291 408 408Z"/>
+  </svg>
+  <div class="logo">Altair</div>
+  <div class="loading-text">Starting application...</div>
+</body>
+</html>

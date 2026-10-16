@@ -1,0 +1,18 @@
+export const helpSections = [
+  { id: "start", title: "Start here" },
+  { id: "words", title: "Words Altair uses" },
+  { id: "books", title: "Books and the passphrase" },
+  { id: "accounts", title: "Accounts" },
+  { id: "transactions", title: "Transactions" },
+  { id: "transfers", title: "Transfers" },
+  { id: "categories", title: "Categories" },
+  { id: "payees", title: "Payees" },
+  { id: "rules", title: "Description rules" },
+  { id: "budgets", title: "Budgets" },
+  { id: "home", title: "Home" },
+  { id: "currencies", title: "Currencies" },
+  { id: "import", title: "Getting numbers in" },
+  { id: "backups", title: "Backups and deletion" },
+  { id: "agent", title: "The agent" },
+  { id: "example", title: "A month on paper" },
+] as const;

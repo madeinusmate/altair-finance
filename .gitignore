@@ -1,0 +1,71 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+oauth-relay/
+
+# local Remotion studio (not part of the app)
+/remotion/
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# testing
+/coverage
+
+# statements
+/statements/
+
+# regenerated payee-image fetch cache
+/scripts/.cache/
+
+# next.js
+/.next/
+/.next-fresh/
+/.next-electron/
+/out/
+
+
+
+# editor
+.cursor/
+.vscode/*
+.idea
+
+# npm lock; this repo uses pnpm
+package-lock.json
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files
+.env
+.env.*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# database
+/data/
+*.db
+*.db-wal
+*.db-shm
+
+# electron
+/dist/
+/electron/dist/
+/node-bin/
+
+certificates

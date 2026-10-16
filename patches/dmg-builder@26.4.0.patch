@@ -1,0 +1,19 @@
+diff --git a/vendor/dmgbuild/core.py b/vendor/dmgbuild/core.py
+index 47dfd9dfd025dbc67a1a8a3da6bea803d2f149c5..d58142f20d8d502a20de3cc112ac582880925426 100644
+--- a/vendor/dmgbuild/core.py
++++ b/vendor/dmgbuild/core.py
+@@ -442,8 +442,12 @@ def build_dmg(  # noqa; C901
+         # Start with a size of 128MB - this way we don't need to calculate the
+         # size of the background image, volume icon, and .DS_Store file (and
+         # 128 MB should be well sufficient for even the most outlandish image
+-        # sizes, like an uncompressed 5K multi-resolution TIFF)
+-        total_size = 128 * 1024 * 1024
++        # sizes, like an uncompressed 5K multi-resolution TIFF).
++        # hdiutil -size is the whole disk image, including the GPT map and EFI
++        # partition (about 300MB). That overhead is larger than 128MB, so the
++        # mounted volume is smaller than the app and the copy fails with
++        # "No space left on device". The extra 512MB covers that partition.
++        total_size = (128 + 512) * 1024 * 1024
+ 
+         def roundup(x, n):
+             return x if x % n == 0 else x + n - x % n

@@ -1,0 +1,197 @@
+{
+  "name": "altair",
+  "version": "1.0.0",
+  "private": true,
+  "main": "electron/dist/main.js",
+  "description": "Personal finance for macOS. The books stay on this computer, encrypted with a passphrase you choose.",
+  "author": "@madeinusmate",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/madeinusmate/altair-finance.git"
+  },
+  "bugs": {
+    "url": "https://github.com/madeinusmate/altair-finance/issues"
+  },
+  "homepage": "https://github.com/madeinusmate/altair-finance#readme",
+  "scripts": {
+    "dev": "next dev --turbopack -H 127.0.0.1 -p 8527",
+    "dev:fresh": "tsx scripts/dev-fresh.ts",
+    "build": "next build --webpack",
+    "start": "next start -H 127.0.0.1 -p 8528",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test --experimental-test-module-mocks tests/*.test.ts",
+    "reset-db": "tsx scripts/reset-db.ts",
+    "combine-csvs": "tsx scripts/combine-csvs.ts",
+    "compress-pdf": "tsx scripts/compress-pdf.ts",
+    "fetch-payee-images": "tsx scripts/fetch-payee-images.ts",
+    "dev:electron": "tsx scripts/dev-electron.ts",
+    "build:electron": "pnpm build && pnpm build:electron-files && node scripts/prepare-electron-build.js && node scripts/download-node.js && pnpm exec electron-builder install-app-deps && pnpm exec electron-builder && pnpm postbuild:electron",
+    "build:electron-files": "tsc -p electron/tsconfig.json",
+    "package:mac": "pnpm build && pnpm build:electron-files && node scripts/prepare-electron-build.js && node scripts/download-node.js && pnpm exec electron-builder install-app-deps && pnpm exec electron-builder --mac && pnpm postbuild:electron",
+    "postbuild:electron": "bash scripts/fix-app-signature.sh",
+    "postinstall": "tsx scripts/rebuild-electron.ts"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@nivo/sankey": "^0.99.0",
+    "@radix-ui/react-accordion": "^1.2.12",
+    "@radix-ui/react-alert-dialog": "^1.1.15",
+    "@radix-ui/react-aspect-ratio": "^1.1.8",
+    "@radix-ui/react-avatar": "^1.1.11",
+    "@radix-ui/react-checkbox": "^1.3.3",
+    "@radix-ui/react-collapsible": "^1.1.12",
+    "@radix-ui/react-context-menu": "^2.2.16",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-hover-card": "^1.1.15",
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-menubar": "^1.1.16",
+    "@radix-ui/react-navigation-menu": "^1.2.14",
+    "@radix-ui/react-popover": "^1.1.15",
+    "@radix-ui/react-progress": "^1.1.8",
+    "@radix-ui/react-radio-group": "^1.3.8",
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-separator": "^1.1.8",
+    "@radix-ui/react-slider": "^1.3.6",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-switch": "^1.2.6",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-toggle": "^1.1.10",
+    "@radix-ui/react-toggle-group": "^1.1.11",
+    "@radix-ui/react-tooltip": "^1.2.8",
+    "@types/yauzl": "^2.10.3",
+    "archiver": "^7.0.1",
+    "better-sqlite3": "^12.6.2",
+    "better-sqlite3-multiple-ciphers": "^12.6.2",
+    "canvas": "^3.2.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "date-fns": "^4.1.0",
+    "drizzle-orm": "^0.45.1",
+    "embla-carousel-react": "^8.6.0",
+    "find-free-port": "^2.0.0",
+    "input-otp": "^1.4.2",
+    "lucide-react": "^0.563.0",
+    "next": "16.1.4",
+    "next-themes": "^0.4.6",
+    "papaparse": "^5.5.3",
+    "pdfjs-dist": "^5.4.530",
+    "react": "19.2.3",
+    "react-day-picker": "^9.13.0",
+    "react-dom": "19.2.3",
+    "react-hook-form": "^7.71.1",
+    "react-resizable-panels": "^4.4.2",
+    "recharts": "2.15.4",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.4.0",
+    "three": "^0.186.1",
+    "uuid": "^13.0.0",
+    "vaul": "^1.1.2",
+    "wait-on": "^9.0.3",
+    "yauzl": "^3.2.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/archiver": "^7.0.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/three": "^0.186.0",
+    "@types/uuid": "^11.0.0",
+    "@types/wait-on": "^5.3.4",
+    "drizzle-kit": "^0.31.8",
+    "electron": "^40.0.0",
+    "electron-builder": "^26.4.0",
+    "electron-rebuild": "^3.2.9",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.4",
+    "sharp": "^0.35.5",
+    "tailwindcss": "^4",
+    "tsx": "^4.21.0",
+    "tw-animate-css": "^1.4.0",
+    "typescript": "^5"
+  },
+  "packageManager": "pnpm@8.15.9+sha512.499434c9d8fdd1a2794ebf4552b3b25c0a633abcee5bb15e7b5de90f32f47b513aca98cd5cfd001c31f0db454bc3804edccd578501e4ca293a6816166bbd9f81",
+  "build": {
+    "appId": "com.altair.app",
+    "productName": "Altair",
+    "icon": "build/icon.png",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/dist/**/*",
+      "electron/splash.html",
+      ".next/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "nodeGypRebuild": false,
+    "asarUnpack": [
+      "**/node_modules/**/*",
+      "**/.next/**/*",
+      "**/public/**/*"
+    ],
+    "extraMetadata": {
+      "main": "electron/dist/main.js"
+    },
+    "extraResources": [
+      {
+        "from": "node-bin/darwin/arm64/node",
+        "to": "node/arm64/node",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "scripts/books-owner.mjs",
+        "to": "books-owner.mjs"
+      },
+      {
+        "from": "scripts/altair-keychain.swift",
+        "to": "altair-keychain.swift"
+      },
+      {
+        "from": "cli/altair.mjs",
+        "to": "altair.mjs"
+      },
+      {
+        "from": "cli/altair-packaged",
+        "to": "altair"
+      }
+    ],
+    "publish": null,
+    "mac": {
+      "category": "public.app-category.finance",
+      "icon": "build/icon.icns",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "entitlements": null,
+      "entitlementsInherit": null,
+      "type": "distribution",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    }
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "dmg-builder@26.4.0": "patches/dmg-builder@26.4.0.patch"
+    }
+  }
+}
