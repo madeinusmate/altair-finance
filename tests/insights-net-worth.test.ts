@@ -21,6 +21,7 @@ const rates: Record<SupportedCurrency, number> = {
   SGD: 1.25,
   EUR: 2,
   GBP: 0.8,
+  CHF: 0.9,
 };
 
 const janStart = new Date(2026, 0, 1, 0, 0, 0, 0);
@@ -425,13 +426,13 @@ describe("net worth over time", () => {
       accounts: [
         account({ id: "ok", type: "balance", initialBalance: 100 }),
         account({ id: "bad", type: "balance", currency: "JPY", initialBalance: 5 }),
-        account({ id: "also-bad", type: "transaction", currency: "CHF", initialBalance: 8 }),
+        account({ id: "also-bad", type: "transaction", currency: "AUD", initialBalance: 8 }),
       ],
     });
 
     assert.deepEqual(result.points, []);
     assert.equal(result.hasUnsupportedCurrencies, true);
-    assert.deepEqual(result.unsupportedCurrencies, ["JPY", "CHF"]);
+    assert.deepEqual(result.unsupportedCurrencies, ["JPY", "AUD"]);
   });
 
   it("uses the dashboard default range of three months ending today", () => {

@@ -26,6 +26,7 @@ const rates: Record<SupportedCurrency, number> = {
   SGD: 1.35,
   EUR: 0.9,
   GBP: 0.78,
+  CHF: 0.88,
 };
 
 const checking: SpendingAccount = { id: "checking", type: "transaction", currency: "USD" };
@@ -403,6 +404,7 @@ describe("spending versus last period", () => {
       USD: rates.USD,
       SGD: rates.SGD,
       EUR: rates.EUR,
+      CHF: rates.CHF,
     } as Record<SupportedCurrency, number>;
     const missingRate = compare(
       [

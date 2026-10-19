@@ -1,4 +1,4 @@
-export const SUPPORTED_CURRENCIES = ["HKD", "USD", "SGD", "EUR", "GBP"] as const;
+export const SUPPORTED_CURRENCIES = ["HKD", "USD", "SGD", "EUR", "GBP", "CHF"] as const;
 
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
 
@@ -11,6 +11,7 @@ export const CURRENCY_LABELS: Record<SupportedCurrency, string> = {
   SGD: "Singapore dollar",
   EUR: "Euro",
   GBP: "British pound",
+  CHF: "Swiss franc",
 };
 
 export const isSupportedCurrency = (currency: string): currency is SupportedCurrency => {

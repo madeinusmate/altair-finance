@@ -18,7 +18,7 @@ describe("parseProfileInput", () => {
         email: null,
         preferredCurrency: null,
         avatar: null,
-        enabledCurrencies: ["HKD", "USD", "SGD", "EUR", "GBP"],
+        enabledCurrencies: ["HKD", "USD", "SGD", "EUR", "GBP", "CHF"],
       });
     }
   });

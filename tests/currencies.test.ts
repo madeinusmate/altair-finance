@@ -10,11 +10,11 @@ import {
 
 describe("enabled currencies", () => {
   it("keeps supported currencies in catalog order", () => {
-    const result = parseEnabledCurrencies(["gbp", "USD", "sgd"]);
+    const result = parseEnabledCurrencies(["gbp", "USD", "sgd", "chf"]);
 
     assert.equal(result.ok, true);
     if (result.ok) {
-      assert.deepEqual(result.currencies, ["USD", "SGD", "GBP"]);
+      assert.deepEqual(result.currencies, ["USD", "SGD", "GBP", "CHF"]);
     }
   });
 
@@ -24,9 +24,9 @@ describe("enabled currencies", () => {
   });
 
   it("reads a stored list and falls back when the value is missing", () => {
-    assert.deepEqual(readEnabledCurrencies(null), ["HKD", "USD", "SGD", "EUR", "GBP"]);
+    assert.deepEqual(readEnabledCurrencies(null), ["HKD", "USD", "SGD", "EUR", "GBP", "CHF"]);
     assert.deepEqual(readEnabledCurrencies('["EUR","HKD"]'), ["HKD", "EUR"]);
-    assert.deepEqual(readEnabledCurrencies("not-json"), ["HKD", "USD", "SGD", "EUR", "GBP"]);
+    assert.deepEqual(readEnabledCurrencies("not-json"), ["HKD", "USD", "SGD", "EUR", "GBP", "CHF"]);
   });
 
   it("keeps the home currency enabled and uses it as the default view", () => {
@@ -36,12 +36,13 @@ describe("enabled currencies", () => {
   });
 
   it("puts the default currency first and leaves the rest in catalog order", () => {
-    assert.deepEqual(orderWithDefault(["HKD", "USD", "SGD", "EUR", "GBP"], "SGD"), [
+    assert.deepEqual(orderWithDefault(["HKD", "USD", "SGD", "EUR", "GBP", "CHF"], "SGD"), [
       "SGD",
       "HKD",
       "USD",
       "EUR",
       "GBP",
+      "CHF",
     ]);
     assert.deepEqual(orderWithDefault(["HKD", "USD", "EUR"], "EUR"), ["EUR", "HKD", "USD"]);
     assert.deepEqual(orderWithDefault(["USD", "EUR"], null), ["USD", "EUR"]);

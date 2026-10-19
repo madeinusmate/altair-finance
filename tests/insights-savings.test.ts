@@ -32,6 +32,7 @@ const rates: Record<SupportedCurrency, number> = {
   SGD: 1.25,
   HKD: 8,
   GBP: 0.75,
+  CHF: 0.9,
 };
 
 const rangeStart = new Date(2026, 7, 1, 0, 0, 0, 0);
