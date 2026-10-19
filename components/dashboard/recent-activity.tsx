@@ -11,6 +11,7 @@ import { PayeeMark } from "@/components/payees/payee-mark";
 import type { Transaction, Transfer } from "@/lib/db/schema";
 import { payeeLogoSlug } from "@/lib/payees/catalog";
 import { transactionSubtitle, transactionTitle } from "@/lib/payees/display";
+import { currencyFractionDigits } from "@/lib/currencies";
 
 interface ActivityAccount {
   id: string;
@@ -36,8 +37,8 @@ const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: currencyFractionDigits(currency),
+    maximumFractionDigits: currencyFractionDigits(currency),
   }).format(amount);
 };
 

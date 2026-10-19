@@ -4,6 +4,7 @@ import { useId } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ReferenceLine } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { BalancePoint, formatCurrencySmart } from "@/lib/chart-data-aggregation";
+import { currencyFractionDigits } from "@/lib/currencies";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from "date-fns";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
@@ -24,8 +25,8 @@ const formatMoney = (amount: number, currency: string, sign: "auto" | "exceptZer
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: currencyFractionDigits(currency),
+    maximumFractionDigits: currencyFractionDigits(currency),
     signDisplay: sign,
   }).format(amount);
 };
@@ -34,7 +35,7 @@ const formatAxisTick = (amount: number, currency: string, span: number): string 
   if (span >= 10_000) {
     return formatCurrencySmart(amount, currency);
   }
-  const digits = span < 50 ? 2 : 0;
+  const digits = span < 50 ? currencyFractionDigits(currency) : 0;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,

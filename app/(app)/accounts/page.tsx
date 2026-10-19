@@ -14,7 +14,7 @@ import { AccountCreateDialog } from "@/components/account-create-dialog";
 import { AccountMark } from "@/components/accounts/account-mark";
 import { CurrencySelector } from "@/components/currency-selector";
 import { useDisplayCurrencies } from "@/hooks/use-display-currencies";
-import { type SupportedCurrency } from "@/lib/currencies";
+import { currencyFractionDigits, type SupportedCurrency } from "@/lib/currencies";
 
 interface AccountWithBalance {
   id: string;
@@ -48,16 +48,17 @@ interface NetWorthData {
 }
 
 const formatCurrency = (amount: number, currency: string): string => {
+  const digits = currencyFractionDigits(currency);
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   }).format(amount);
 };
 
 const formatNetWorth = (amount: number, currency: string): string => {
-  const decimals = Math.abs(amount) >= 1_000_000 ? 0 : 2;
+  const decimals = Math.abs(amount) >= 1_000_000 ? 0 : currencyFractionDigits(currency);
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency,

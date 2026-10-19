@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type DashboardDateRange } from "./dashboard-date-selector";
 import { chartCobalt, chartCobaltSoft, chartInk, chartSlate } from "@/components/charts/palette";
+import { currencyFractionDigits } from "@/lib/currencies";
 
 interface CashFlowSankeyData {
   income: number;
@@ -25,8 +26,8 @@ const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: currencyFractionDigits(currency),
+    maximumFractionDigits: currencyFractionDigits(currency),
   }).format(amount);
 };
 

@@ -114,7 +114,7 @@ const MONTHS: Record<string, number> = {
 };
 
 const AMOUNT_PATTERN =
-  /(?<![A-Za-z0-9])(?:USD|EUR|GBP|AUD|CAD|HKD|SGD|JPY|CNY|CHF|NZD|[$£€¥])?\s*-?\(?\d+(?:,\d{3})*(?:\.\d{2})\)?(?:\s*(?:CR|DR))?|(?<![A-Za-z0-9])\(\s*\d+(?:,\d{3})*(?:\.\d{2})?\s*\)/gi;
+  /(?<![A-Za-z0-9])(?:USD|EUR|GBP|AUD|CAD|HKD|SGD|JPY|CNY|CHF|NZD|MYR|THB|TWD|KRW|[$£€¥])?\s*-?\(?\d+(?:,\d{3})*(?:\.\d{2})\)?(?:\s*(?:CR|DR))?|(?<![A-Za-z0-9])\(\s*\d+(?:,\d{3})*(?:\.\d{2})?\s*\)/gi;
 
 const SKIP_LINE =
   /opening balance|closing balance|statement period|running balance|\bpage\s+\d+\s+of\b|^page\s+\d+$/i;
@@ -294,7 +294,7 @@ const parseAmountToken = (raw: string): ParsedAmount | null => {
   const source = raw.trim();
   if (!source || !/\d/.test(source)) return null;
 
-  const letters = source.replace(/\b(CR|DR|USD|EUR|GBP|AUD|CAD|HKD|SGD|JPY|CNY|CHF|NZD)\b/gi, "");
+  const letters = source.replace(/\b(CR|DR|USD|EUR|GBP|AUD|CAD|HKD|SGD|JPY|CNY|CHF|NZD|MYR|THB|TWD|KRW)\b/gi, "");
   if (/[A-Za-z]/.test(letters)) return null;
 
   let marker: "debit" | "credit" | null = null;
@@ -312,7 +312,7 @@ const parseAmountToken = (raw: string): ParsedAmount | null => {
   }
 
   working = working.replace(/[$£€¥]/g, "");
-  working = working.replace(/\b(USD|EUR|GBP|AUD|CAD|HKD|SGD|JPY|CNY|CHF|NZD)\b/gi, "");
+  working = working.replace(/\b(USD|EUR|GBP|AUD|CAD|HKD|SGD|JPY|CNY|CHF|NZD|MYR|THB|TWD|KRW)\b/gi, "");
   working = normalizeSpace(working);
 
   if (/^\d[\d,]*-\s*$/.test(working)) {

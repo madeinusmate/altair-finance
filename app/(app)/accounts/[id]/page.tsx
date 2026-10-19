@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, use } from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
+import { currencyFractionDigits } from "@/lib/currencies";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -106,8 +107,8 @@ const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: currencyFractionDigits(currency),
+    maximumFractionDigits: currencyFractionDigits(currency),
   }).format(amount);
 };
 

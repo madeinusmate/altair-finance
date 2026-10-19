@@ -13,6 +13,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Filter } from "lucide-react";
+import { currencyFractionDigits } from "@/lib/currencies";
 import { type DashboardDateRange } from "./dashboard-date-selector";
 
 interface CashFlowSlice {
@@ -49,8 +50,8 @@ const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: currencyFractionDigits(currency),
+    maximumFractionDigits: currencyFractionDigits(currency),
   }).format(amount);
 };
 

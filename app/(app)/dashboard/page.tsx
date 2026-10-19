@@ -8,7 +8,7 @@ import { Wallet, AlertTriangle, Plus } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CurrencySelector } from "@/components/currency-selector";
-import { type SupportedCurrency } from "@/lib/currencies";
+import { currencyFractionDigits, type SupportedCurrency } from "@/lib/currencies";
 import { useDisplayCurrencies } from "@/hooks/use-display-currencies";
 import { startOfMonth, endOfDay, subMonths, startOfDay, format } from "date-fns";
 import { DashboardDateSelector, type DashboardDateRange } from "@/components/dashboard/dashboard-date-selector";
@@ -117,7 +117,7 @@ const formatCurrency = (amount: number, currency: string, decimals: number): str
 };
 
 const formatNetWorthCurrency = (amount: number, currency: string): string => {
-  const decimals = Math.abs(amount) >= 1_000_000 ? 0 : 2;
+  const decimals = Math.abs(amount) >= 1_000_000 ? 0 : currencyFractionDigits(currency);
   return formatCurrency(amount, currency, decimals);
 };
 

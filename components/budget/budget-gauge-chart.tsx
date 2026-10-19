@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { RadialBar, RadialBarChart } from "recharts";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import type { BudgetPace } from "@/lib/budget/resolve-month";
+import { currencyFractionDigits } from "@/lib/currencies";
 
 interface BudgetGaugeChartProps {
   remaining: number;
@@ -30,8 +31,8 @@ const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: currencyFractionDigits(currency),
+    maximumFractionDigits: currencyFractionDigits(currency),
   }).format(amount);
 };
 

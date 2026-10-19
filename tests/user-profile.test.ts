@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { SUPPORTED_CURRENCIES } from "../lib/currencies";
 import { MAX_AVATAR_DATA_URL_LENGTH, parseProfileInput } from "../lib/user-profile";
 
 describe("parseProfileInput", () => {
@@ -18,7 +19,7 @@ describe("parseProfileInput", () => {
         email: null,
         preferredCurrency: null,
         avatar: null,
-        enabledCurrencies: ["HKD", "USD", "SGD", "EUR", "GBP", "CHF"],
+        enabledCurrencies: [...SUPPORTED_CURRENCIES],
       });
     }
   });
