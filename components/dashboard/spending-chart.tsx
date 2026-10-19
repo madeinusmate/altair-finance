@@ -10,13 +10,14 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type DashboardDateRange } from "./dashboard-date-selector";
 import { chartInk, chartSlate, spendingFills } from "@/components/charts/palette";
 import type { SpendingCategoryComparison, SpendingComparison, SpendingDirection } from "@/lib/insights/spending";
+import { currencyFractionDigits } from "@/lib/currencies";
 
 const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: currencyFractionDigits(currency),
+    maximumFractionDigits: currencyFractionDigits(currency),
   }).format(amount);
 };
 

@@ -79,7 +79,7 @@ pnpm build
 ## Features
 
 - **Dashboard.** Net worth in each currency, and how it moved. Spending against the previous period, income and expenses, cash flow, savings rate, runway, investment performance, and the month's budgets.
-- **Accounts.** Balance, transaction, and investment accounts, each an asset or a liability, with an icon. Currencies are HKD, USD, SGD, EUR, and GBP. Totals across currencies use a cached USD rate from [open.er-api.com](https://open.er-api.com).
+- **Accounts.** Balance, transaction, and investment accounts, each an asset or a liability, with an icon. Currencies are HKD, USD, SGD, EUR, GBP, CHF, JPY, AUD, CNY, CAD, NZD, MYR, THB, TWD, and KRW. Totals across currencies use a cached USD rate from [open.er-api.com](https://open.er-api.com).
 - **Transactions and transfers.** Enter them by hand, or bring them in from a file. Rename a category and it keeps its identity.
 - **Budget.** One amount per category, per month. Spending on the Budget page is that month, so March stays in March.
 - **Payees.** A name, an icon, and a merge when two names are the same payee.

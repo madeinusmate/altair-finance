@@ -17,7 +17,7 @@ import {
 import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 import { BudgetEditDialog } from "./budget-edit-dialog";
-import { SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
+import { currencyFractionDigits, SUPPORTED_CURRENCIES, type SupportedCurrency } from "@/lib/currencies";
 import { budgetMonthLabel, type BudgetPace } from "@/lib/budget/resolve-month";
 
 interface BudgetWithSpending {
@@ -62,8 +62,8 @@ const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: currencyFractionDigits(currency),
+    maximumFractionDigits: currencyFractionDigits(currency),
   }).format(amount);
 };
 

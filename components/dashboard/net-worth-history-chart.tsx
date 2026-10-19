@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { NetWorthHistory } from "@/lib/insights/net-worth-series";
+import { currencyFractionDigits } from "@/lib/currencies";
 
 interface NetWorthHistoryChartProps {
   currency: string;
@@ -21,7 +22,7 @@ interface NetWorthHistoryChartProps {
 }
 
 const formatNetWorth = (amount: number, currency: string): string => {
-  const decimals = Math.abs(amount) >= 1_000_000 ? 0 : 2;
+  const decimals = Math.abs(amount) >= 1_000_000 ? 0 : currencyFractionDigits(currency);
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,

@@ -26,6 +26,16 @@ const rates: Record<SupportedCurrency, number> = {
   SGD: 1.35,
   EUR: 0.9,
   GBP: 0.78,
+  CHF: 0.88,
+  JPY: 150,
+  AUD: 1.5,
+  CNY: 7.2,
+  CAD: 1.35,
+  NZD: 1.65,
+  MYR: 4.4,
+  THB: 35,
+  TWD: 32,
+  KRW: 1350,
 };
 
 const checking: SpendingAccount = { id: "checking", type: "transaction", currency: "USD" };
@@ -391,19 +401,16 @@ describe("spending versus last period", () => {
         debit("Travel", 80, day(2026, 9, 6), "legacy"),
       ],
       october,
-      { accounts: [checking, { id: "legacy", type: "transaction", currency: "JPY" }] },
+      { accounts: [checking, { id: "legacy", type: "transaction", currency: "INR" }] },
     );
     assert.equal(result.hasUnsupportedCurrencies, true);
     assert.equal(result.total, 10);
     assert.equal(result.categories.length, 1);
     assert.equal(result.categories[0]?.category, "Food & Drink");
 
-    const withoutGbp = {
-      HKD: rates.HKD,
-      USD: rates.USD,
-      SGD: rates.SGD,
-      EUR: rates.EUR,
-    } as Record<SupportedCurrency, number>;
+    const withoutGbp = Object.fromEntries(
+      Object.entries(rates).filter(([currency]) => currency !== "GBP"),
+    ) as Record<SupportedCurrency, number>;
     const missingRate = compare(
       [
         debit("Food & Drink", 10, day(2026, 9, 5)),

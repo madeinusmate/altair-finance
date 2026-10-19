@@ -32,6 +32,16 @@ const rates: Record<SupportedCurrency, number> = {
   SGD: 1.25,
   HKD: 8,
   GBP: 0.75,
+  CHF: 0.9,
+  JPY: 150,
+  AUD: 1.5,
+  CNY: 7.2,
+  CAD: 1.35,
+  NZD: 1.65,
+  MYR: 4.4,
+  THB: 35,
+  TWD: 32,
+  KRW: 1350,
 };
 
 const rangeStart = new Date(2026, 7, 1, 0, 0, 0, 0);
@@ -200,11 +210,11 @@ describe("savings rate", () => {
     const flows = computeRangeFlows({
       accounts: [
         account({ id: "chk", type: "transaction", nature: "asset", category: "checking" }),
-        account({ id: "jpy", type: "transaction", nature: "asset", category: "checking", currency: "JPY" }),
+        account({ id: "inr", type: "transaction", nature: "asset", category: "checking", currency: "INR" }),
       ],
       transactions: [
         { accountId: "chk", type: "credit", amount: 100, date: new Date(2026, 7, 2) },
-        { accountId: "jpy", type: "credit", amount: 999, date: new Date(2026, 7, 2) },
+        { accountId: "inr", type: "credit", amount: 999, date: new Date(2026, 7, 2) },
       ],
       transfers: [],
       start: rangeStart,

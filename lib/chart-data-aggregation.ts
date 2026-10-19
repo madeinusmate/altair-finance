@@ -1,3 +1,4 @@
+import { currencyFractionDigits } from "@/lib/currencies";
 import { Transaction, Transfer, BalanceHistory, InvestmentHistory } from "@/lib/db/schema";
 import { calculateTransactionAccountBalance, calculateNetContributions } from "@/lib/accounting";
 import { startOfMonth, endOfMonth, endOfDay, format, eachMonthOfInterval, parseISO } from "date-fns";
@@ -49,11 +50,12 @@ export const formatCurrencySmart = (amount: number, currency: string): string =>
     }).format(thousands).replace(/\d+/, (match) => match) + "K";
   }
   
+  const digits = currencyFractionDigits(currency);
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   }).format(amount);
 };
 

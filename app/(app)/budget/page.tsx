@@ -11,6 +11,7 @@ import { useDisplayCurrencies } from "@/hooks/use-display-currencies";
 import { BudgetCategoryList } from "@/components/budget/budget-category-list";
 import { BudgetGaugeChart } from "@/components/budget/budget-gauge-chart";
 import { MonthSelector } from "@/components/budget/month-selector";
+import { currencyFractionDigits } from "@/lib/currencies";
 import { segmentedTrackClassName } from "@/lib/ui/segmented";
 import { cn } from "@/lib/utils";
 import type { BudgetPace } from "@/lib/budget/resolve-month";
@@ -54,8 +55,8 @@ const formatCurrency = (amount: number, currency: string): string => {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: currencyFractionDigits(currency),
+    maximumFractionDigits: currencyFractionDigits(currency),
   }).format(amount);
 };
 

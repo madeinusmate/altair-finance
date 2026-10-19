@@ -1,4 +1,20 @@
-export const SUPPORTED_CURRENCIES = ["HKD", "USD", "SGD", "EUR", "GBP"] as const;
+export const SUPPORTED_CURRENCIES = [
+  "HKD",
+  "USD",
+  "SGD",
+  "EUR",
+  "GBP",
+  "CHF",
+  "JPY",
+  "AUD",
+  "CNY",
+  "CAD",
+  "NZD",
+  "MYR",
+  "THB",
+  "TWD",
+  "KRW",
+] as const;
 
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
 
@@ -11,6 +27,22 @@ export const CURRENCY_LABELS: Record<SupportedCurrency, string> = {
   SGD: "Singapore dollar",
   EUR: "Euro",
   GBP: "British pound",
+  CHF: "Swiss franc",
+  JPY: "Japanese yen",
+  AUD: "Australian dollar",
+  CNY: "Chinese yuan",
+  CAD: "Canadian dollar",
+  NZD: "New Zealand dollar",
+  MYR: "Malaysian ringgit",
+  THB: "Thai baht",
+  TWD: "New Taiwan dollar",
+  KRW: "South Korean won",
+};
+
+const ZERO_DECIMAL_CURRENCIES = new Set<string>(["JPY", "KRW"]);
+
+export const currencyFractionDigits = (currency: string): number => {
+  return ZERO_DECIMAL_CURRENCIES.has(currency.trim().toUpperCase()) ? 0 : 2;
 };
 
 export const isSupportedCurrency = (currency: string): currency is SupportedCurrency => {

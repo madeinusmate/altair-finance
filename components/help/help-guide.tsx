@@ -313,7 +313,7 @@ export const HelpGuide = () => (
 
       <Section id="currencies" title="Currencies">
         <p>
-          Accounts can use Hong Kong dollar, US dollar, Singapore dollar, euro, or British pound. Totals on Home and Budget are converted into the currency you are viewing. The rate table is based on the US dollar and is fetched from open.er-api.com when the saved rates are older than a day. If that fetch fails, Altair keeps using the last rates it saved.
+          Accounts can use Hong Kong dollar, US dollar, Singapore dollar, euro, British pound, Swiss franc, Japanese yen, Australian dollar, Chinese yuan, Canadian dollar, New Zealand dollar, Malaysian ringgit, Thai baht, New Taiwan dollar, or South Korean won. Totals on Home and Budget are converted into the currency you are viewing. The rate table is based on the US dollar and is fetched from open.er-api.com when the saved rates are older than a day. If that fetch fails, Altair keeps using the last rates it saved. Japanese yen and South Korean won are shown without cents.
         </p>
         <p>
           A transfer across currencies stores the amount that left, the amount that arrived, and the rate on that transfer. Reports use the latest rate table, so a historical total can move slightly when rates update.
